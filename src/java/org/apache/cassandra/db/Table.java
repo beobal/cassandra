@@ -439,20 +439,32 @@ public class Table
                     continue;
                 }
                 // else mutatedIndexedColumns != null
-                synchronized (indexLockFor(mutation.key()))
+                
+                // if any of the indexes for this cfs are row based, we'll still need to lock, then read to get
+                // the old values to pass on to the indexmanager.
+                if (cfs.indexManager.hasPerRowSecondaryIndexes())
                 {
-                    // with the raw data CF, we can just apply every update in any order and let
-                    // read-time resolution throw out obsolete versions, thus avoiding read-before-write.
-                    // but for indexed data we need to make sure that we're not creating index entries
-                    // for obsolete writes.
-                    ColumnFamily oldIndexedColumns = readCurrentIndexedColumns(key, cfs, mutatedIndexedColumns);
-                    logger.debug("Pre-mutation index row is {}", oldIndexedColumns);
-                    ignoreObsoleteMutations(cf, mutatedIndexedColumns, oldIndexedColumns);
+                    synchronized (indexLockFor(mutation.key()))
+                    {
+                        // with the raw data CF, we can just apply every update in any order and let
+                        // read-time resolution throw out obsolete versions, thus avoiding read-before-write.
+                        // but for data indexed by a whole row at a time, we need to make sure that we're 
+                        // not creating index entries for obsolete writes.
+                        ColumnFamily oldIndexedColumns = readCurrentIndexedColumns(key, cfs, mutatedIndexedColumns);
+                        logger.debug("Pre-mutation index row is {}", oldIndexedColumns);
+                        ignoreObsoleteMutations(cf, mutatedIndexedColumns, oldIndexedColumns);
 
+                        cfs.apply(key, cf);
+
+                        // ignore full index memtables -- we flush those when the "master" one is full
+                        cfs.indexManager.applyIndexUpdates(mutation.key(), cf, mutatedIndexedColumns, oldIndexedColumns);
+                    }    
+                }
+                else
+                {
                     cfs.apply(key, cf);
-
                     // ignore full index memtables -- we flush those when the "master" one is full
-                    cfs.indexManager.applyIndexUpdates(mutation.key(), cf, mutatedIndexedColumns, oldIndexedColumns);
+                    cfs.indexManager.applyIndexUpdates(mutation.key(), cf, mutatedIndexedColumns, null);
                 }
             }
         }

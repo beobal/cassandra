@@ -25,6 +25,7 @@ import java.util.SortedSet;
 
 import com.google.common.base.Function;
 
+import org.apache.cassandra.db.ColumnFamily.SecondaryIndexCleaner;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.io.util.IIterableColumns;
 import org.apache.cassandra.utils.Allocator;
@@ -71,6 +72,12 @@ public interface ISortedColumns extends IIterableColumns
      */
     public void addAll(ISortedColumns cm, Allocator allocator, Function<IColumn, IColumn> transformation);
 
+    /**
+     * Adds all the columns of a given column map to this column map, and informs the
+     * uses a SecondaryIndexCleaner to purge any indexed columns whose values have been replaced 
+     */
+    public void addAll(ISortedColumns cm, Allocator allocator, Function<IColumn, IColumn> transformation, SecondaryIndexCleaner indexUpdater);
+    
     /**
      * Replace oldColumn if present by newColumn.
      * Returns true if oldColumn was present and thus replaced.

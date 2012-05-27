@@ -405,6 +405,61 @@ public class ColumnFamilyStoreTest extends SchemaLoader
         assert "k1".equals( key );
 
     }
+    
+    @Test
+    public void testDeleteOfInconsistentIndexedValues() throws Exception
+    {
+        Table table = Table.open("Keyspace2");
+        table.getColumnFamilyStore("Indexed1").truncate().get();
+
+
+        // create a row and update the birthdate value, test that the index query fetches this version
+        RowMutation rm;
+        rm = new RowMutation("Keyspace2", ByteBufferUtil.bytes("k1"));
+        rm.add(new QueryPath("Indexed1", null, ByteBufferUtil.bytes("birthdate")), ByteBufferUtil.bytes(1L), 1);
+        rm.apply();
+        IndexExpression expr = new IndexExpression(ByteBufferUtil.bytes("birthdate"), IndexOperator.EQ, ByteBufferUtil.bytes(1L));
+        List<IndexExpression> clause = Arrays.asList(expr);
+        IFilter filter = new IdentityQueryFilter();
+        Range<RowPosition> range = Util.range("", "");
+        List<Row> rows = table.getColumnFamilyStore("Indexed1").search(clause, range, 100, filter);
+        assert rows.size() == 1;
+
+        // force a flush, so our index isn't being read from a memtable
+        table.getColumnFamilyStore("Indexed1").forceBlockingFlush();
+        
+        // now apply another update, but force the index update to be skipped
+        rm = new RowMutation("Keyspace2", ByteBufferUtil.bytes("k1"));
+        rm.add(new QueryPath("Indexed1", null, ByteBufferUtil.bytes("birthdate")), ByteBufferUtil.bytes(2L), 2);
+        table.apply(rm, true, false);
+
+        // Now searching the index for either the old or new value should return 0 rows
+        // because the new value was not indexed and the old value should be ignored 
+        // (and in fact purged from the index cf)
+        // first check for the first value
+        rows = table.getColumnFamilyStore("Indexed1").search(clause, range, 100, filter);
+        assert rows.size() == 0;
+        // now check for the updated value
+        expr = new IndexExpression(ByteBufferUtil.bytes("birthdate"), IndexOperator.EQ, ByteBufferUtil.bytes(2L));
+        clause = Arrays.asList(expr);
+        filter = new IdentityQueryFilter();
+        range = Util.range("", "");
+        rows = table.getColumnFamilyStore("Indexed1").search(clause, range, 100, filter);
+        assert rows.size() == 0;
+        
+        // now, another update to the primary data. Set its value back to what it was originally, to 
+        // make sure the value was expunged from the index when it was discovered to be inconsistent
+        rm = new RowMutation("Keyspace2", ByteBufferUtil.bytes("k1"));
+        rm.add(new QueryPath("Indexed1", null, ByteBufferUtil.bytes("birthdate")), ByteBufferUtil.bytes(1L), 3);
+        table.apply(rm, true, false);
+
+        expr = new IndexExpression(ByteBufferUtil.bytes("birthdate"), IndexOperator.EQ, ByteBufferUtil.bytes(1L));
+        clause = Arrays.asList(expr);
+        filter = new IdentityQueryFilter();
+        range = Util.range("", "");
+        rows = table.getColumnFamilyStore("Indexed1").search(clause, range, 100, filter);
+        assert rows.size() == 0;
+    }
 
     // See CASSANDRA-2628
     @Test

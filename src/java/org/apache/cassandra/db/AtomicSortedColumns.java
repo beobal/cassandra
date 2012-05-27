@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import com.google.common.base.Function;
 import edu.stanford.ppl.concurrent.SnapTreeMap;
 
+import org.apache.cassandra.db.ColumnFamily.SecondaryIndexCleaner;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.utils.Allocator;
 
@@ -147,12 +148,16 @@ public class AtomicSortedColumns implements ISortedColumns
         {
             current = ref.get();
             modified = current.cloneMe();
-            modified.addColumn(column, allocator);
+            modified.addColumn(column, allocator, ColumnFamily.NullIndexCleaner);
         }
         while (!ref.compareAndSet(current, modified));
     }
 
-    public void addAll(ISortedColumns cm, Allocator allocator, Function<IColumn, IColumn> transformation)
+    public void addAll(ISortedColumns cm, Allocator allocator, Function<IColumn, IColumn> transformation){
+        addAll(cm, allocator, transformation, ColumnFamily.NullIndexCleaner);
+    }
+    
+    public void addAll(ISortedColumns cm, Allocator allocator, Function<IColumn, IColumn> transformation, SecondaryIndexCleaner indexUpdater)
     {
         /*
          * This operation needs to atomicity and isolation. To that end, we
@@ -177,7 +182,7 @@ public class AtomicSortedColumns implements ISortedColumns
 
             for (IColumn column : cm.getSortedColumns())
             {
-                modified.addColumn(transformation.apply(column), allocator);
+                modified.addColumn(transformation.apply(column), allocator, indexUpdater);
                 // bail early if we know we've been beaten
                 if (ref.get() != current)
                     continue main_loop;
@@ -329,7 +334,7 @@ public class AtomicSortedColumns implements ISortedColumns
             return new Holder(new SnapTreeMap<ByteBuffer, IColumn>(map.comparator()), deletionInfo);
         }
 
-        void addColumn(IColumn column, Allocator allocator)
+        void addColumn(IColumn column, Allocator allocator, SecondaryIndexCleaner indexUpdater)
         {
             ByteBuffer name = column.name();
             IColumn oldColumn;
@@ -346,8 +351,14 @@ public class AtomicSortedColumns implements ISortedColumns
                     // calculate reconciled col from old (existing) col and new col
                     IColumn reconciledColumn = column.reconcile(oldColumn, allocator);
                     if (map.replace(name, oldColumn, reconciledColumn))
+                    {
+                        if (reconciledColumn == column)
+                        {
+                            indexUpdater.removeIndexValueForColumn(oldColumn);
+                        }
                         break;
-
+                    }
+                    
                     // We failed to replace column due to a concurrent update or a concurrent removal. Keep trying.
                     // (Currently, concurrent removal should not happen (only updates), but let us support that anyway.)
                 }

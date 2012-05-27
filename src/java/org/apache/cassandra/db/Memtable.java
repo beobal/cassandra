@@ -31,12 +31,15 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.concurrent.DebuggableThreadPoolExecutor;
 import org.apache.cassandra.concurrent.NamedThreadFactory;
+import org.apache.cassandra.db.ColumnFamily.SecondaryIndexCleaner;
 import org.apache.cassandra.db.columniterator.IColumnIterator;
 import org.apache.cassandra.db.columniterator.SimpleAbstractColumnIterator;
 import org.apache.cassandra.db.commitlog.ReplayPosition;
 import org.apache.cassandra.db.filter.AbstractColumnIterator;
 import org.apache.cassandra.db.filter.NamesQueryFilter;
 import org.apache.cassandra.db.filter.SliceQueryFilter;
+import org.apache.cassandra.db.index.PerColumnSecondaryIndex;
+import org.apache.cassandra.db.index.SecondaryIndex;
 import org.apache.cassandra.io.sstable.SSTableReader;
 import org.apache.cassandra.io.sstable.SSTableWriter;
 import org.apache.cassandra.utils.FBUtilities;
@@ -224,7 +227,7 @@ public class Memtable
         meterExecutor.submit(runnable);
     }
 
-    private void resolve(DecoratedKey key, ColumnFamily cf)
+    private void resolve(final DecoratedKey key, ColumnFamily cf)
     {
         currentThroughput.addAndGet(cf.size());
         currentOperations.addAndGet((cf.getColumnCount() == 0)
@@ -244,7 +247,32 @@ public class Memtable
                 previous = empty;
         }
 
-        previous.addAll(cf, allocator, localCopyFunction);
+        // If any of the columns being replaced are used by a SecondaryIndex, we'll want to
+        // issue a delete to that index. This helper acts as a closure around the indexManager
+        // and row key to ensure that down in Memtable's ColumnFamily implementation, the index
+        // can get updated. Note: only a CF backed by AtomicSortedColumns implements this behaviour
+        // fully, other types simply ignore the index updater 
+        SecondaryIndexCleaner indexUpdater = new SecondaryIndexCleaner()
+        {
+            @Override
+            public void removeIndexValueForColumn(IColumn column)
+            {
+                SecondaryIndex index = cfs.indexManager.getIndexForColumn(column.name());
+                if (null != index && index instanceof PerColumnSecondaryIndex)
+                {
+                    DecoratedKey indexKey = cfs.indexManager.getIndexKeyFor(column.name(), column.value());
+                    try
+                    {
+                        ((PerColumnSecondaryIndex)index).deleteColumn(indexKey, key.key, column);
+                    }catch(IOException e)
+                    {
+                        logger.warn("IOException when issuing index delete for updated, indexed column {}", column);   
+                    }
+                }
+            }
+        };
+        
+        previous.addAll(cf, allocator, localCopyFunction, indexUpdater);
     }
 
     // for debugging

@@ -37,6 +37,8 @@ import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.HeapAllocator;
 
+import com.google.common.base.Function;
+
 public class ColumnFamily extends AbstractColumnContainer implements IRowCacheEntry
 {
     public static final ColumnFamilySerializer serializer = new ColumnFamilySerializer();
@@ -156,6 +158,18 @@ public class ColumnFamily extends AbstractColumnContainer implements IRowCacheEn
         {
             addAll(cf, allocator);
         }
+    }
+    
+    /**
+     * Same as addAll, but provides an SecondaryIndexCleaner to cleanup when indexed columns are replaced
+     * @param cc
+     * @param allocator
+     * @param transformation
+     * @param indexUpdater
+     */
+    public void addAll(ColumnFamily cf, Allocator allocator, Function<IColumn, IColumn> transformation, SecondaryIndexCleaner indexUpdater)
+    {
+        columns.addAll(cf.columns, allocator, transformation, indexUpdater);
     }
 
     public void addColumn(QueryPath path, ByteBuffer value, long timestamp)
@@ -385,4 +399,19 @@ public class ColumnFamily extends AbstractColumnContainer implements IRowCacheEn
             column.validateFields(metadata);
         }
     }
+    
+    public static interface SecondaryIndexCleaner
+    {
+        public void removeIndexValueForColumn(IColumn column);
+    }
+    
+    public static final SecondaryIndexCleaner NullIndexCleaner = new SecondaryIndexCleaner()
+    {   
+        @Override
+        public void removeIndexValueForColumn(IColumn column)
+        {
+            // no-op            
+        }
+    };
+    
 }

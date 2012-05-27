@@ -254,6 +254,14 @@ public class SecondaryIndexManager
     }
 
     /**
+     * @return true if any PerRowSecondaryIndex implementations are registered for this CF
+     */
+    public boolean hasPerRowSecondaryIndexes()
+    {
+        return !rowLevelIndexMap.isEmpty();
+    }
+    
+    /**
      *
      * @param column the name of indexes column
      * @return the index

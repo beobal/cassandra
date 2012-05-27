@@ -23,6 +23,7 @@ import java.util.*;
 
 import org.apache.cassandra.db.*;
 import org.apache.cassandra.db.filter.*;
+import org.apache.cassandra.db.index.PerColumnSecondaryIndex;
 import org.apache.cassandra.db.index.SecondaryIndex;
 import org.apache.cassandra.db.index.SecondaryIndexManager;
 import org.apache.cassandra.db.index.SecondaryIndexSearcher;
@@ -31,6 +32,7 @@ import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.thrift.IndexExpression;
 import org.apache.cassandra.thrift.IndexOperator;
 import org.apache.cassandra.utils.ByteBufferUtil;
+import org.apache.cassandra.utils.HeapAllocator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -191,16 +193,55 @@ public class KeysSearcher extends SecondaryIndexSearcher
                             continue;
                         }
 
-                        logger.debug("Returning index hit for {}", dk);
+                        logger.debug("Returning index hit for {}", dk);                                                      
                         ColumnFamily data = baseCfs.getColumnFamily(new QueryFilter(dk, path, filter.initialFilter()));
-                        // While the column family we'll get in the end should contains the primary clause column, the initialFilter may not have found it and can thus be null
                         if (data == null)
                             data = ColumnFamily.create(baseCfs.metadata);
-                        return new Row(dk, data);
+
+                        // now check that the value for the indexed column in the real row 
+                        // matches the column name from the index cf. 
+                        // if not, delete the index entry (with timestamp of original insert, 
+                        // so a new update w/ the same value doesn't get clobbered) so we don't 
+                        // keep making the same mistake and don't include the row in results
+                        if (indexValueIsStale(dk, data))
+                        {
+                            try
+                            {
+                                ((PerColumnSecondaryIndex)index).deleteColumn(indexKey, column.name(), column);
+                            }
+                            catch(Exception e){
+                                logger.warn("IOException when issuing index delete for updated, indexed column {}", column);
+                            }
+                        }
+                        else
+                        {
+                            return new Row(dk, data);
+                        }
                     }
                  }
              }
-
+       
+            private boolean indexValueIsStale(DecoratedKey dk, ColumnFamily data)
+            {
+                // as in CFS.filter - extend the filter to ensure we include the columns 
+                // from the index expressions, just in case they weren't included in the initialFilter
+                IFilter extraFilter = filter.getExtraFilter(data);
+                if (extraFilter != null)
+                {
+                    ColumnFamily cf = baseCfs.getColumnFamily(new QueryFilter(dk, path, extraFilter));
+                    if (cf != null)
+                        data.addAll(cf, HeapAllocator.instance);
+                    
+                }
+                IColumn liveColumn = data.getColumn(primary.column_name);
+                if (null == liveColumn)
+                    return true;
+                
+                ByteBuffer liveValue = liveColumn.value();
+                ByteBuffer indexedValue = indexKey.key;
+                return 0 != data.metadata().getValueValidator(primary.column_name).compare(indexedValue, liveValue);
+            }
+            
             public void close() throws IOException {}
         };
     }

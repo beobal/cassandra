@@ -21,6 +21,7 @@ import java.util.Iterator;
 
 import com.google.common.base.Function;
 
+import org.apache.cassandra.db.ColumnFamily.SecondaryIndexCleaner;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.utils.Allocator;
 
@@ -97,6 +98,13 @@ public abstract class AbstractThreadUnsafeSortedColumns implements ISortedColumn
     {
         addAllColumns(columns, allocator, transformation);
         delete(columns.getDeletionInfo());
+    }
+    
+    // Only AtomicSortedColumns actually needs this method,  
+    // so here we just drop the index updater
+    public void addAll(ISortedColumns columns, Allocator allocator, Function<IColumn, IColumn> transformation, SecondaryIndexCleaner indexUpdater)
+    {
+        addAll(columns, allocator, transformation);
     }
 
     public boolean isEmpty()
