@@ -53,7 +53,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.datastax.driver.core.DataType;
-import org.apache.cassandra.concurrent.JMXEnabledThreadPoolExecutor;
 import org.apache.cassandra.concurrent.NamedThreadFactory;
 import org.apache.cassandra.cql3.ColumnIdentifier;
 import org.apache.cassandra.db.marshal.AbstractType;
@@ -78,12 +77,14 @@ final class JavaBasedUDFunction extends UDFunction
 
     private static final AtomicInteger classSequence = new AtomicInteger();
 
-    private static final JMXEnabledThreadPoolExecutor executor =
-    new JMXEnabledThreadPoolExecutor(new NamedThreadFactory("UserDefinedFunctions",
-                                                            Thread.MIN_PRIORITY,
-                                                            udfClassLoader,
-                                                            new SecurityThreadGroup("UserDefinedFunctions", null)),
-                                     "userfunction");
+    // use a JVM standard ExecutorService as DebuggableThreadPoolExecutor references internal
+    // classes, which triggers AccessControlException from the UDF sandbox
+    private static final ExecutorService executor =
+        Executors.newSingleThreadExecutor(
+            new NamedThreadFactory("UserDefinedFunctions",
+                                   Thread.MIN_PRIORITY,
+                                   udfClassLoader,
+                                   new SecurityThreadGroup("UserDefinedFunctions", null)));
 
     private static final EcjTargetClassLoader targetClassLoader = new EcjTargetClassLoader();
 
