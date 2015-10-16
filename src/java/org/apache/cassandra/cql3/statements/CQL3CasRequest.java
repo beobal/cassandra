@@ -170,6 +170,8 @@ public class CQL3CasRequest implements CASRequest
         for (RowUpdate upd : updates)
             upd.applyUpdates(current, update);
 
+        Keyspace.openAndGetStore(cfm).indexManager.validate(update);
+
         if (isBatch)
             BatchStatement.verifyBatchSize(Collections.singleton(update));
 
@@ -200,7 +202,7 @@ public class CQL3CasRequest implements CASRequest
         public void applyUpdates(FilteredPartition current, PartitionUpdate updates) throws InvalidRequestException
         {
             Map<DecoratedKey, Partition> map = stmt.requiresRead() ? Collections.<DecoratedKey, Partition>singletonMap(key, current) : null;
-            UpdateParameters params = new UpdateParameters(cfm, updates.columns(), options, timestamp, stmt.getTimeToLive(options), map, true);
+            UpdateParameters params = new UpdateParameters(cfm, updates.columns(), options, timestamp, stmt.getTimeToLive(options), map);
             stmt.addUpdateForKey(updates, clustering, params);
         }
     }

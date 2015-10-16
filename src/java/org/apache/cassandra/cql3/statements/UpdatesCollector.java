@@ -27,6 +27,7 @@ import org.apache.cassandra.db.partitions.PartitionUpdate;
 import org.apache.cassandra.db.PartitionColumns;
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.db.*;
+import org.apache.cassandra.index.SecondaryIndexManager;
 
 /**
  * Utility class to collect updates.
@@ -78,6 +79,18 @@ final class UpdatesCollector
             mut.add(upd);
         }
         return upd;
+    }
+
+    /**
+     * Check all partition updates contain only valid values for any
+     * indexed columns.
+     */
+    public void validateIndexedColumns()
+    {
+        for (Map<ByteBuffer, IMutation> perKsMutations : mutations.values())
+            for (IMutation mutation : perKsMutations.values())
+                for (PartitionUpdate update : mutation.getPartitionUpdates())
+                    Keyspace.openAndGetStore(update.metadata()).indexManager.validate(update);
     }
 
     private Mutation getMutation(CFMetaData cfm, DecoratedKey dk, ConsistencyLevel consistency)
