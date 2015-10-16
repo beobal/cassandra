@@ -242,6 +242,7 @@ public class BatchStatement implements CQLStatement
                                             .getMessage());
         }
 
+        collector.validateIndexedColumns();
         return collector.toMutations();
     }
 

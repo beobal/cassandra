@@ -216,8 +216,7 @@ public class CQLSSTableWriter implements Closeable
                                                        options,
                                                        insert.getTimestamp(now, options),
                                                        insert.getTimeToLive(options),
-                                                       Collections.<DecoratedKey, Partition>emptyMap(),
-                                                       false);
+                                                       Collections.<DecoratedKey, Partition>emptyMap());
 
         try
         {

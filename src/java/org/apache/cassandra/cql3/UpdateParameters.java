@@ -22,14 +22,23 @@ import java.util.Map;
 
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.config.ColumnDefinition;
-import org.apache.cassandra.db.*;
+import org.apache.cassandra.db.Clustering;
+import org.apache.cassandra.db.ClusteringComparator;
+import org.apache.cassandra.db.DecoratedKey;
+import org.apache.cassandra.db.DeletionTime;
+import org.apache.cassandra.db.LivenessInfo;
+import org.apache.cassandra.db.PartitionColumns;
+import org.apache.cassandra.db.RangeTombstone;
+import org.apache.cassandra.db.Slice;
 import org.apache.cassandra.db.context.CounterContext;
 import org.apache.cassandra.db.filter.ColumnFilter;
 import org.apache.cassandra.db.partitions.Partition;
-import org.apache.cassandra.db.partitions.PartitionUpdate;
-import org.apache.cassandra.db.rows.*;
+import org.apache.cassandra.db.rows.BTreeRow;
+import org.apache.cassandra.db.rows.BufferCell;
+import org.apache.cassandra.db.rows.Cell;
+import org.apache.cassandra.db.rows.CellPath;
+import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.exceptions.InvalidRequestException;
-import org.apache.cassandra.index.SecondaryIndexManager;
 import org.apache.cassandra.utils.FBUtilities;
 
 /**
@@ -47,8 +56,6 @@ public class UpdateParameters
 
     private final DeletionTime deletionTime;
 
-    private final SecondaryIndexManager indexManager;
-
     // For lists operation that require a read-before-write. Will be null otherwise.
     private final Map<DecoratedKey, Partition> prefetchedRows;
 
@@ -63,8 +70,7 @@ public class UpdateParameters
                             QueryOptions options,
                             long timestamp,
                             int ttl,
-                            Map<DecoratedKey, Partition> prefetchedRows,
-                            boolean validateIndexedColumns)
+                            Map<DecoratedKey, Partition> prefetchedRows)
     throws InvalidRequestException
     {
         this.metadata = metadata;
@@ -79,30 +85,10 @@ public class UpdateParameters
 
         this.prefetchedRows = prefetchedRows;
 
-        // Index column validation triggers a call to Keyspace.open() which we want
-        // to be able to avoid in some case (e.g. when using CQLSSTableWriter)
-        if (validateIndexedColumns)
-        {
-            SecondaryIndexManager manager = Keyspace.openAndGetStore(metadata).indexManager;
-            indexManager = manager.hasIndexes() ? manager : null;
-        }
-        else
-        {
-            indexManager = null;
-        }
-
         // We use MIN_VALUE internally to mean the absence of of timestamp (in Selection, in sstable stats, ...), so exclude
         // it to avoid potential confusion.
         if (timestamp == Long.MIN_VALUE)
             throw new InvalidRequestException(String.format("Out of bound timestamp, must be in [%d, %d]", Long.MIN_VALUE + 1, Long.MAX_VALUE));
-    }
-
-    public void validateIndexedColumns(PartitionUpdate update)
-    {
-        if (indexManager == null)
-            return;
-
-        indexManager.validate(update);
     }
 
     public void newRow(Clustering clustering) throws InvalidRequestException
