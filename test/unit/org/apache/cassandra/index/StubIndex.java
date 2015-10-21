@@ -51,6 +51,8 @@ public class StubIndex implements Index
     public List<Row> rowsInserted = new ArrayList<>();
     public List<Row> rowsDeleted = new ArrayList<>();
     public List<Pair<Row,Row>> rowsUpdated = new ArrayList<>();
+    public int searchersProvided = 0;
+    public int expressionsEvaluated = 0;
     private IndexMetadata indexMetadata;
     private ColumnFamilyStore baseCfs;
 
@@ -61,6 +63,8 @@ public class StubIndex implements Index
         rowsUpdated.clear();
         partitionDeletions.clear();
         rangeTombstones.clear();
+        searchersProvided = 0;
+        expressionsEvaluated = 0;
     }
 
     public StubIndex(ColumnFamilyStore baseCfs, IndexMetadata metadata)
@@ -86,6 +90,8 @@ public class StubIndex implements Index
 
     public boolean supportsExpression(ColumnDefinition column, Operator operator)
     {
+        new Exception("TRACE").printStackTrace();
+        expressionsEvaluated++;
         return operator == Operator.EQ;
     }
 
@@ -202,6 +208,7 @@ public class StubIndex implements Index
 
     public Searcher searcherFor(final ReadCommand command)
     {
+        searchersProvided++;
         return orderGroup -> new InternalPartitionRangeReadCommand((PartitionRangeReadCommand)command)
                              .queryStorageInternal(baseCfs, orderGroup);
     }

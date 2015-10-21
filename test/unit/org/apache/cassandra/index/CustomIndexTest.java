@@ -536,7 +536,6 @@ public class CustomIndexTest extends CQLTester
 
     public static final class SettableSelectivityIndex extends StubIndex
     {
-        private int searchersProvided = 0;
         private long estimatedResultRows = 0;
 
         public SettableSelectivityIndex(ColumnFamilyStore baseCfs, IndexMetadata metadata)
@@ -552,12 +551,6 @@ public class CustomIndexTest extends CQLTester
         public long getEstimatedResultRows()
         {
             return estimatedResultRows;
-        }
-
-        public Searcher searcherFor(ReadCommand command)
-        {
-                searchersProvided++;
-                return super.searcherFor(command);
         }
     }
 
