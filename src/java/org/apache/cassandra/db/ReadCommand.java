@@ -79,10 +79,11 @@ public abstract class ReadCommand extends MonitorableImpl implements ReadQuery
     // the lifetime of the command.
     protected Optional<IndexMetadata> index = Optional.empty();
 
-    // Flag to indicate whether the index manager has been queried to select an index for this
-    // command. This is necessary as the result of that lookup may be null, in which case we
-    // still don't want to repeat it.
-    private boolean indexManagerQueried = false;
+    // Flag to indicate whether the index manager should be queried to select an index for this
+    // command. This prevents the lookup being (re)performed when we already know that no
+    // index should be used for this command; either because it's a single partition read, or
+    // because the lookup was already performed and no suitable index found.
+    protected boolean queryIndexManager = true;
 
     private boolean isDigestQuery;
     // if a digest query, the version for which the digest is expected. Ignored if not a digest.
@@ -306,12 +307,12 @@ public abstract class ReadCommand extends MonitorableImpl implements ReadQuery
 
         // if no cached index is present, but we've already consulted the index manager
         // then no registered index is suitable for this command, so just return null.
-        if (indexManagerQueried)
+        if (!queryIndexManager)
             return null;
 
         // do the lookup, set the flag to indicate so and cache the result if not null
         Index selected = cfs.indexManager.getBestIndexFor(this);
-        indexManagerQueried = true;
+        queryIndexManager = false;
 
         if (selected == null)
             return null;

@@ -25,6 +25,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import com.google.common.collect.ImmutableMap;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -39,6 +40,7 @@ import org.apache.cassandra.db.partitions.*;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.index.Index;
+import org.apache.cassandra.index.StubIndex;
 import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.schema.KeyspaceParams;
 import org.apache.cassandra.utils.ByteBufferUtil;
@@ -483,6 +485,38 @@ public class SecondaryIndexTest
         assertIndexedCount(cfs, ByteBufferUtil.bytes("birthdate"), 1l, 10);
         cfs.forceBlockingFlush();
         assertIndexedCount(cfs, ByteBufferUtil.bytes("birthdate"), 1l, 10);
+    }
+
+    @Test
+    public void testNoIndexLookupForSinglePartitionReads() throws Throwable
+    {
+        // verify that an unnecessary lookup isn't performed for single partition
+        // reads (as these don't currently support 2i
+        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE1).getColumnFamilyStore(WITH_COMPOSITE_INDEX);
+        cfs.indexManager.addIndex(IndexMetadata.fromSchemaMetadata("custom_index",
+                                                                   IndexMetadata.Kind.CUSTOM,
+                                                                   ImmutableMap.of(IndexTarget.CUSTOM_INDEX_OPTION_NAME,
+                                                                                   StubIndex.class.getName())));
+        StubIndex index = (StubIndex)cfs.indexManager.getIndexByName("custom_index");
+
+        ReadCommand partitionCommand = Util.cmd(cfs, "key1").filterOn("birthdate", Operator.EQ, 0l).build();
+        assertTrue(partitionCommand instanceof SinglePartitionReadCommand);
+        assertNull(partitionCommand.getIndex(cfs));
+        // SIM::getBestIndexFor checks for which expressions in the command's row filter
+        // have supporting indexes and as we expect SIM not to be used here, no checks
+        // should have been performed
+        assertEquals(0, index.expressionsEvaluated);
+
+        // for a range read, we should lookup the best index
+        ReadCommand rangeCommand  = Util.cmd(cfs).filterOn("birthdate", Operator.EQ, 0l).build();
+        assertTrue(rangeCommand instanceof PartitionRangeReadCommand);
+        assertNotNull(rangeCommand.getIndex(cfs));
+        // here SIM should have been used to find the best index, so the stub index should
+        // have been inspected to see whether it supports the filter expressions
+        assertEquals(1, index.expressionsEvaluated);
+
+        // doesn't hurt to clean up after ourselves
+        cfs.indexManager.removeIndex("custom_index");
     }
 
     private void assertIndexedNone(ColumnFamilyStore cfs, ByteBuffer col, Object val)

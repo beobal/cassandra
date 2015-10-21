@@ -71,6 +71,7 @@ public abstract class SinglePartitionReadCommand<F extends ClusteringIndexFilter
         assert partitionKey.getPartitioner() == metadata.partitioner;
         this.partitionKey = partitionKey;
         this.clusteringIndexFilter = clusteringIndexFilter;
+        this.queryIndexManager = false;
     }
 
     /**
