@@ -159,7 +159,10 @@ public class SecondaryIndexManager implements IndexRegistry
     {
         Index index = createInstance(indexDef);
         index.register(this);
-        final Callable<?> initialBuildTask = index.getInitializationTask();
+        // if the index didn't register itself, we can probably assume that no initialization needs to happen
+        final Callable<?> initialBuildTask = indexes.containsKey(indexDef.name)
+                                           ? index.getInitializationTask()
+                                           : null;
         return initialBuildTask == null
                ? Futures.immediateFuture(null)
                : asyncExecutor.submit(initialBuildTask);
