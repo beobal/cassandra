@@ -226,7 +226,7 @@ public class SecondaryIndexManager implements IndexRegistry
     public void rebuildIndexesBlocking(Collection<SSTableReader> sstables, Set<String> indexNames)
     {
         Set<Index> toRebuild = indexes.values().stream()
-                                               .filter(index -> indexNames.contains(index.getIndexName()))
+                                               .filter(index -> indexNames.contains(index.getIndexMetadata().name))
                                                .filter(Index::shouldBuildBlocking)
                                                .collect(Collectors.toSet());
         if (toRebuild.isEmpty())
@@ -235,11 +235,11 @@ public class SecondaryIndexManager implements IndexRegistry
             return;
         }
 
-        toRebuild.forEach(indexer -> markIndexRemoved(indexer.getIndexName()));
+        toRebuild.forEach(indexer -> markIndexRemoved(indexer.getIndexMetadata().name));
 
         buildIndexesBlocking(sstables, toRebuild);
 
-        toRebuild.forEach(indexer -> markIndexBuilt(indexer.getIndexName()));
+        toRebuild.forEach(indexer -> markIndexBuilt(indexer.getIndexMetadata().name));
     }
 
     public void buildAllIndexesBlocking(Collection<SSTableReader> sstables)
@@ -259,7 +259,7 @@ public class SecondaryIndexManager implements IndexRegistry
                  Refs<SSTableReader> sstables = viewFragment.refs)
             {
                 buildIndexesBlocking(sstables, Collections.singleton(index));
-                markIndexBuilt(index.getIndexName());
+                markIndexBuilt(index.getIndexMetadata().name);
             }
         }
     }
@@ -341,7 +341,7 @@ public class SecondaryIndexManager implements IndexRegistry
             return;
 
         logger.info("Submitting index build of {} for data in {}",
-                    indexes.stream().map(Index::getIndexName).collect(Collectors.joining(",")),
+                    indexes.stream().map(i -> i.getIndexMetadata().name).collect(Collectors.joining(",")),
                     sstables.stream().map(SSTableReader::toString).collect(Collectors.joining(",")));
 
         SecondaryIndexBuilder builder = new SecondaryIndexBuilder(baseCfs,
@@ -352,7 +352,7 @@ public class SecondaryIndexManager implements IndexRegistry
 
         flushIndexesBlocking(indexes);
         logger.info("Index build of {} complete",
-                    indexes.stream().map(Index::getIndexName).collect(Collectors.joining(",")));
+                    indexes.stream().map(i -> i.getIndexMetadata().name).collect(Collectors.joining(",")));
     }
 
     private void markIndexBuilt(String indexName)
@@ -464,7 +464,7 @@ public class SecondaryIndexManager implements IndexRegistry
     {
         Set<String> allIndexNames = new HashSet<>();
         indexes.values().stream()
-                .map(Index::getIndexName)
+                .map(i -> i.getIndexMetadata().name)
                 .forEach(allIndexNames::add);
         return SystemKeyspace.getBuiltIndexes(baseCfs.keyspace.getName(), allIndexNames);
     }
@@ -621,9 +621,9 @@ public class SecondaryIndexManager implements IndexRegistry
         if (Tracing.isTracing())
         {
             Tracing.trace("Index mean cardinalities are {}. Scanning with {}.",
-                          searchableIndexes.stream().map(i -> i.getIndexName() + ':' + i.getEstimatedResultRows())
+                          searchableIndexes.stream().map(i -> i.getIndexMetadata().name + ':' + i.getEstimatedResultRows())
                                            .collect(Collectors.joining(",")),
-                          selected.getIndexName());
+                          selected.getIndexMetadata().name);
         }
         return selected;
     }
