@@ -181,7 +181,6 @@ public abstract class CassandraIndex implements Index
     public Callable<?> getInvalidateTask()
     {
         return () -> {
-            markRemoved();
             invalidate();
             return null;
         };
@@ -637,16 +636,6 @@ public abstract class CassandraIndex implements Index
         return SystemKeyspace.isIndexBuilt(baseCfs.keyspace.getName(), getIndexName());
     }
 
-    private void markBuilt()
-    {
-        SystemKeyspace.setIndexBuilt(baseCfs.keyspace.getName(), getIndexName());
-    }
-
-    private void markRemoved()
-    {
-        SystemKeyspace.setIndexRemoved(baseCfs.keyspace.getName(), getIndexName());
-    }
-
     private boolean isPrimaryKeyIndex()
     {
         return indexedColumn.isPrimaryKeyColumn();
@@ -673,7 +662,7 @@ public abstract class CassandraIndex implements Index
                             baseCfs.metadata.ksName,
                             baseCfs.metadata.cfName,
                             getIndexName());
-                markBuilt();
+                baseCfs.indexManager.markIndexBuilt(metadata.name);
                 return;
             }
 
@@ -687,7 +676,7 @@ public abstract class CassandraIndex implements Index
             Future<?> future = CompactionManager.instance.submitIndexBuild(builder);
             FBUtilities.waitOnFuture(future);
             indexCfs.forceBlockingFlush();
-            markBuilt();
+            baseCfs.indexManager.markIndexBuilt(metadata.name);
         }
         logger.info("Index build of {} complete", getIndexName());
     }
