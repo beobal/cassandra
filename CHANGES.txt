@@ -5,6 +5,7 @@
 
 
 3.0
+ * Execute the metadata reload task of all registered indexes on CFS::reload (CASSANDRA-10604)
  * Fix marking of indexes as built and removed (CASSANDRA-10601)
  * Skip initialization of non-registered 2i instances, remove Index::getIndexName (CASSANDRA-10595)
  * Fix batches on multiple tables (CASSANDRA-10554)
