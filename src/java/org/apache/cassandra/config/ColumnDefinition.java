@@ -69,10 +69,10 @@ public class ColumnDefinition extends ColumnSpecification implements Comparable<
     public final Kind kind;
 
     /*
-     * If the column is a partition key (resp. clustering column), it's position relative to
-     * other partition keys (resp. clustering columns). Otherwise,  NO_POSITION (-1).
+     * If the column is a partition key or clustering column, its position relative to
+     * other columns of the same kind. Otherwise,  NO_POSITION (-1).
      *
-     * Note that partition key and clustering columns are numbered separatly so
+     * Note that partition key and clustering columns are numbered separately so
      * the first clustering column is 0.
      */
     private final int position;
