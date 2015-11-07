@@ -5,7 +5,7 @@
  * Added graphing option to cassandra-stress (CASSANDRA-7918)
  * Abort in-progress queries that time out (CASSANDRA-7392)
  * Add transparent data encryption core classes (CASSANDRA-9945)
-
+ * Add sstable flush observer (CASSANDRA-10678)
 
 3.1
 Merged from 3.0:
