@@ -1,5 +1,7 @@
 package org.apache.cassandra.index;
 
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.function.BiFunction;
@@ -15,6 +17,8 @@ import org.apache.cassandra.db.partitions.UnfilteredPartitionIterator;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.index.transactions.IndexTransaction;
+import org.apache.cassandra.io.sstable.ReducingKeyIterator;
+import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.utils.concurrent.OpOrder;
 
@@ -185,6 +189,19 @@ public interface Index
      */
     public boolean shouldBuildBlocking();
 
+    /**
+     * Similar to get{Invalidate, Truncate}Task returns an index build task to use
+     * when building index for a specific collection of SSTables.
+     *
+     * @param cfs store which backs provided sstables.
+     * @param sstables The SSTables to rebuild index for.
+     *
+     * @return Index build task.
+     */
+    default IndexBuildTask getIndexBuildTask(ColumnFamilyStore cfs, Collection<SSTableReader> sstables)
+    {
+        return new SecondaryIndexBuilder(cfs, Collections.singleton(this), new ReducingKeyIterator(sstables));
+    }
 
     /*
      * Index selection

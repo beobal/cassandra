@@ -17,7 +17,6 @@
  */
 package org.apache.cassandra.index;
 
-import java.io.IOException;
 import java.util.Set;
 import java.util.UUID;
 
@@ -33,7 +32,7 @@ import org.apache.cassandra.utils.UUIDGen;
 /**
  * Manages building an entire index from column family data. Runs on to compaction manager.
  */
-public class SecondaryIndexBuilder extends CompactionInfo.Holder
+public class SecondaryIndexBuilder extends IndexBuildTask
 {
     private final ColumnFamilyStore cfs;
     private final Set<Index> indexers;

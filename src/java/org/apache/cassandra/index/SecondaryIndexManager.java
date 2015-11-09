@@ -338,11 +338,12 @@ public class SecondaryIndexManager implements IndexRegistry
                     indexes.stream().map(i -> i.getIndexMetadata().name).collect(Collectors.joining(",")),
                     sstables.stream().map(SSTableReader::toString).collect(Collectors.joining(",")));
 
-        SecondaryIndexBuilder builder = new SecondaryIndexBuilder(baseCfs,
-                                                                  indexes,
-                                                                  new ReducingKeyIterator(sstables));
-        Future<?> future = CompactionManager.instance.submitIndexBuild(builder);
-        FBUtilities.waitOnFuture(future);
+        List<Future<?>> promises = indexes.stream()
+                                          .map(index -> index.getIndexBuildTask(baseCfs, sstables))
+                                          .map(CompactionManager.instance::submitIndexBuild)
+                                          .collect(Collectors.toList());
+
+        FBUtilities.waitOnFutures(promises);
 
         flushIndexesBlocking(indexes);
         logger.info("Index build of {} complete",

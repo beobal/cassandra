@@ -49,7 +49,7 @@ import org.apache.cassandra.db.view.ViewBuilder;
 import org.apache.cassandra.dht.Bounds;
 import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.dht.Token;
-import org.apache.cassandra.index.SecondaryIndexBuilder;
+import org.apache.cassandra.index.IndexBuildTask;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.ISSTableScanner;
 import org.apache.cassandra.io.sstable.SSTableRewriter;
@@ -1257,7 +1257,7 @@ public class CompactionManager implements CompactionManagerMBean
     /**
      * Is not scheduled, because it is performing disjoint work from sstable compaction.
      */
-    public Future<?> submitIndexBuild(final SecondaryIndexBuilder builder)
+    public Future<?> submitIndexBuild(final IndexBuildTask builder)
     {
         Runnable runnable = new Runnable()
         {
@@ -1274,6 +1274,7 @@ public class CompactionManager implements CompactionManagerMBean
                 }
             }
         };
+
         if (executor.isShutdown())
         {
             logger.info("Compaction executor has shut down, not submitting index build");
