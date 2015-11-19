@@ -56,6 +56,16 @@ public abstract class CassandraIndex implements Index
 
     public static final Pattern TARGET_REGEX = Pattern.compile("^(keys|entries|values|full)\\((.+)\\)$");
 
+    public static class CassandraIndexSupport implements TableWideSupport
+    {
+        public SecondaryIndexBuilder getIndexBuildTask(ColumnFamilyStore cfs, Set<Index> indexes, Collection<SSTableReader> sstables)
+        {
+            return new CassandraIndexBuilder(cfs, indexes, new ReducingKeyIterator(sstables));
+        }
+    }
+
+    private static TableWideSupport SUPPORT = new CassandraIndexSupport();
+
     public final ColumnFamilyStore baseCfs;
     protected IndexMetadata metadata;
     protected ColumnFamilyStore indexCfs;
@@ -66,6 +76,11 @@ public abstract class CassandraIndex implements Index
     {
         this.baseCfs = baseCfs;
         setMetadata(indexDef);
+    }
+
+    public TableWideSupport getSupport()
+    {
+        return SUPPORT;
     }
 
     /**
@@ -664,7 +679,7 @@ public abstract class CassandraIndex implements Index
                         metadata.name,
                         getSSTableNames(sstables));
 
-            SecondaryIndexBuilder builder = new SecondaryIndexBuilder(baseCfs,
+            SecondaryIndexBuilder builder = new CassandraIndexBuilder(baseCfs,
                                                                       Collections.singleton(this),
                                                                       new ReducingKeyIterator(sstables));
             Future<?> future = CompactionManager.instance.submitIndexBuild(builder);

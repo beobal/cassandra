@@ -50,6 +50,16 @@ public class CustomCassandraIndex implements Index
 {
     private static final Logger logger = LoggerFactory.getLogger(CassandraIndex.class);
 
+    public static class CassandraIndexSupport implements TableWideSupport
+    {
+        public SecondaryIndexBuilder getIndexBuildTask(ColumnFamilyStore cfs, Set<Index> indexes, Collection<SSTableReader> sstables)
+        {
+            return new CassandraIndexBuilder(cfs, indexes, new ReducingKeyIterator(sstables));
+        }
+    }
+
+    private static TableWideSupport SUPPORT = new CassandraIndexSupport();
+
     public final ColumnFamilyStore baseCfs;
     protected IndexMetadata metadata;
     protected ColumnFamilyStore indexCfs;
@@ -60,6 +70,11 @@ public class CustomCassandraIndex implements Index
     {
         this.baseCfs = baseCfs;
         setMetadata(indexDef);
+    }
+
+    public TableWideSupport getSupport()
+    {
+        return SUPPORT;
     }
 
     /**
@@ -622,7 +637,7 @@ public class CustomCassandraIndex implements Index
                         metadata.name,
                         getSSTableNames(sstables));
 
-            SecondaryIndexBuilder builder = new SecondaryIndexBuilder(baseCfs,
+            SecondaryIndexBuilder builder = new CassandraIndexBuilder(baseCfs,
                                                                       Collections.singleton(this),
                                                                       new ReducingKeyIterator(sstables));
             Future<?> future = CompactionManager.instance.submitIndexBuild(builder);

@@ -1,6 +1,8 @@
 package org.apache.cassandra.index;
 
+import java.util.Collection;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.function.BiFunction;
 
@@ -15,6 +17,7 @@ import org.apache.cassandra.db.partitions.UnfilteredPartitionIterator;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.index.transactions.IndexTransaction;
+import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.utils.concurrent.OpOrder;
 
@@ -104,9 +107,16 @@ import org.apache.cassandra.utils.concurrent.OpOrder;
 public interface Index
 {
 
+    interface TableWideSupport
+    {
+        SecondaryIndexBuilder getIndexBuildTask(ColumnFamilyStore cfs, Set<Index> indexes, Collection<SSTableReader> sstables);
+    }
+
     /*
      * Management functions
      */
+
+    public TableWideSupport getSupport();
 
     /**
      * Return a task to perform any initialization work when a new index instance is created.
