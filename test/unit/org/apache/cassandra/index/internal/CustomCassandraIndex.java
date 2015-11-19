@@ -25,9 +25,7 @@ import org.apache.cassandra.db.partitions.PartitionIterator;
 import org.apache.cassandra.db.partitions.PartitionUpdate;
 import org.apache.cassandra.db.rows.*;
 import org.apache.cassandra.exceptions.InvalidRequestException;
-import org.apache.cassandra.index.Index;
-import org.apache.cassandra.index.IndexRegistry;
-import org.apache.cassandra.index.SecondaryIndexBuilder;
+import org.apache.cassandra.index.*;
 import org.apache.cassandra.index.transactions.IndexTransaction;
 import org.apache.cassandra.index.transactions.UpdateTransaction;
 import org.apache.cassandra.io.sstable.ReducingKeyIterator;
@@ -622,10 +620,7 @@ public class CustomCassandraIndex implements Index
                         metadata.name,
                         getSSTableNames(sstables));
 
-            SecondaryIndexBuilder builder = new SecondaryIndexBuilder(baseCfs,
-                                                                      Collections.singleton(this),
-                                                                      new ReducingKeyIterator(sstables));
-            Future<?> future = CompactionManager.instance.submitIndexBuild(builder);
+            Future<?> future = CompactionManager.instance.submitIndexBuild(getIndexBuildTask(baseCfs, sstables));
             FBUtilities.waitOnFuture(future);
             indexCfs.forceBlockingFlush();
             baseCfs.indexManager.markIndexBuilt(metadata.name);

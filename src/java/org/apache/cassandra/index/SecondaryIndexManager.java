@@ -51,7 +51,6 @@ import org.apache.cassandra.db.rows.*;
 import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.index.internal.CassandraIndex;
 import org.apache.cassandra.index.transactions.*;
-import org.apache.cassandra.io.sstable.ReducingKeyIterator;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.schema.Indexes;
@@ -338,14 +337,24 @@ public class SecondaryIndexManager implements IndexRegistry
                     indexes.stream().map(i -> i.getIndexMetadata().name).collect(Collectors.joining(",")),
                     sstables.stream().map(SSTableReader::toString).collect(Collectors.joining(",")));
 
-        List<Future<?>> promises = indexes.stream()
-                                          .map(index -> index.getIndexBuildTask(baseCfs, sstables))
-                                          .map(CompactionManager.instance::submitIndexBuild)
-                                          .collect(Collectors.toList());
+        Map<Class<? extends IndexBuildTask>, IndexBuildTask> buildTasks = new HashMap<>();
+        for (Index index : indexes)
+        {
+            IndexBuildTask task = index.getIndexBuildTask(baseCfs, sstables);
+            // if we've already created a task of the same type, we can just add this index to it
+            if (buildTasks.containsKey(task.getClass()))
+                buildTasks.get(task.getClass()).withIndex(index);
+            else
+                buildTasks.put(task.getClass(), task);
+        }
 
+        List<Future<?>> promises = buildTasks.values()
+                                             .stream()
+                                             .map(CompactionManager.instance::submitIndexBuild)
+                                             .collect(Collectors.toList());
         FBUtilities.waitOnFutures(promises);
-
         flushIndexesBlocking(indexes);
+
         logger.info("Index build of {} complete",
                     indexes.stream().map(i -> i.getIndexMetadata().name).collect(Collectors.joining(",")));
     }

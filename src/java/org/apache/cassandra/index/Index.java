@@ -191,7 +191,11 @@ public interface Index
 
     /**
      * Similar to get{Invalidate, Truncate}Task returns an index build task to use
-     * when building index for a specific collection of SSTables.
+     * when building index for a specific collection of SSTables. The default task, {@code SecondaryIndexBuilder},
+     * builds indexes from a collated view of the SSTable data.
+     *
+     * {@code SecondaryIndexManager} aggregates tasks of the same type to combine the building of multiple
+     * indexes into a single task where possible.
      *
      * @param cfs store which backs provided sstables.
      * @param sstables The SSTables to rebuild index for.
@@ -200,7 +204,7 @@ public interface Index
      */
     default IndexBuildTask getIndexBuildTask(ColumnFamilyStore cfs, Collection<SSTableReader> sstables)
     {
-        return new SecondaryIndexBuilder(cfs, Collections.singleton(this), new ReducingKeyIterator(sstables));
+        return new SecondaryIndexBuilder(cfs, sstables).withIndex(this);
     }
 
     /*

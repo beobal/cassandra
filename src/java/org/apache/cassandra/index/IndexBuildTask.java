@@ -17,9 +17,33 @@
  */
 package org.apache.cassandra.index;
 
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
+
+import com.google.common.collect.ImmutableSet;
+
+import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.compaction.CompactionInfo;
+import org.apache.cassandra.io.sstable.format.SSTableReader;
 
 public abstract class IndexBuildTask extends CompactionInfo.Holder
 {
+    protected final ColumnFamilyStore cfs;
+    protected final Set<SSTableReader> sstables;
+    protected final Set<Index> indexes = new HashSet<>();
+
+    protected IndexBuildTask(ColumnFamilyStore baseCfs, Collection<SSTableReader> ssTables)
+    {
+        cfs = baseCfs;
+        sstables = ImmutableSet.copyOf(ssTables);
+    }
+
+    public IndexBuildTask withIndex(Index index)
+    {
+        indexes.add(index);
+        return this;
+    }
+
     public abstract void build();
 }

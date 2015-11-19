@@ -17,7 +17,7 @@
  */
 package org.apache.cassandra.index;
 
-import java.util.Set;
+import java.util.Collection;
 import java.util.UUID;
 
 import org.apache.cassandra.db.ColumnFamilyStore;
@@ -27,6 +27,7 @@ import org.apache.cassandra.db.compaction.CompactionInfo;
 import org.apache.cassandra.db.compaction.CompactionInterruptedException;
 import org.apache.cassandra.db.compaction.OperationType;
 import org.apache.cassandra.io.sstable.ReducingKeyIterator;
+import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.utils.UUIDGen;
 
 /**
@@ -34,17 +35,14 @@ import org.apache.cassandra.utils.UUIDGen;
  */
 public class SecondaryIndexBuilder extends IndexBuildTask
 {
-    private final ColumnFamilyStore cfs;
-    private final Set<Index> indexers;
     private final ReducingKeyIterator iter;
     private final UUID compactionId;
 
-    public SecondaryIndexBuilder(ColumnFamilyStore cfs, Set<Index> indexers, ReducingKeyIterator iter)
+    public SecondaryIndexBuilder(ColumnFamilyStore baseCfs, Collection<SSTableReader> sstables)
     {
-        this.cfs = cfs;
-        this.indexers = indexers;
-        this.iter = iter;
+        super(baseCfs, sstables);
         this.compactionId = UUIDGen.getTimeUUID();
+        this.iter = new ReducingKeyIterator(sstables);
     }
 
     public CompactionInfo getCompactionInfo()
@@ -65,7 +63,7 @@ public class SecondaryIndexBuilder extends IndexBuildTask
                 if (isStopRequested())
                     throw new CompactionInterruptedException(getCompactionInfo());
                 DecoratedKey key = iter.next();
-                Keyspace.indexPartition(key, cfs, indexers);
+                Keyspace.indexPartition(key, cfs, indexes);
             }
         }
         finally
