@@ -33,10 +33,7 @@ import org.apache.cassandra.db.partitions.PartitionUpdate;
 import org.apache.cassandra.db.partitions.UnfilteredPartitionIterator;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.exceptions.InvalidRequestException;
-import org.apache.cassandra.index.internal.CassandraIndexBuilder;
 import org.apache.cassandra.index.transactions.IndexTransaction;
-import org.apache.cassandra.io.sstable.ReducingKeyIterator;
-import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.concurrent.OpOrder;
@@ -49,16 +46,6 @@ import org.apache.cassandra.utils.concurrent.OpOrder;
  */
 public class StubIndex implements Index
 {
-    public static class CassandraIndexSupport implements TableWideSupport
-    {
-        public SecondaryIndexBuilder getIndexBuildTask(ColumnFamilyStore cfs, Set<Index> indexes, Collection<SSTableReader> sstables)
-        {
-            return new CassandraIndexBuilder(cfs, indexes, new ReducingKeyIterator(sstables));
-        }
-    }
-
-    private static TableWideSupport SUPPORT = new CassandraIndexSupport();
-
     public List<DeletionTime> partitionDeletions = new ArrayList<>();
     public List<RangeTombstone> rangeTombstones = new ArrayList<>();
     public List<Row> rowsInserted = new ArrayList<>();
@@ -80,11 +67,6 @@ public class StubIndex implements Index
     {
         this.baseCfs = baseCfs;
         this.indexMetadata = metadata;
-    }
-
-    public TableWideSupport getSupport()
-    {
-        return SUPPORT;
     }
 
     public boolean indexes(PartitionColumns columns)

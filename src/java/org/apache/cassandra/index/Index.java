@@ -16,7 +16,9 @@ import org.apache.cassandra.db.partitions.PartitionUpdate;
 import org.apache.cassandra.db.partitions.UnfilteredPartitionIterator;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.exceptions.InvalidRequestException;
+import org.apache.cassandra.index.internal.CollatedViewIndexBuilder;
 import org.apache.cassandra.index.transactions.IndexTransaction;
+import org.apache.cassandra.io.sstable.ReducingKeyIterator;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.utils.concurrent.OpOrder;
@@ -107,16 +109,55 @@ import org.apache.cassandra.utils.concurrent.OpOrder;
 public interface Index
 {
 
-    interface TableWideSupport
+    /*
+     * Helpers for building indexes from SSTable data
+     */
+
+    /**
+     * Provider of {@code SecondaryIndexBuilder} instances. See {@code getBuildTaskSupport} and
+     * {@code SecondaryIndexManager.buildIndexesBlocking} for more detail.
+     */
+    interface IndexBuildingSupport
     {
         SecondaryIndexBuilder getIndexBuildTask(ColumnFamilyStore cfs, Set<Index> indexes, Collection<SSTableReader> sstables);
     }
+
+    /**
+     * Default implementation of {@code IndexBuildingSupport} which uses a {@code ReducingKeyIterator} to obtain a
+     * collated view of the data in the SSTables.
+     */
+    public static class CollatedViewIndexBuildingSupport implements IndexBuildingSupport
+    {
+        public SecondaryIndexBuilder getIndexBuildTask(ColumnFamilyStore cfs, Set<Index> indexes, Collection<SSTableReader> sstables)
+        {
+            return new CollatedViewIndexBuilder(cfs, indexes, new ReducingKeyIterator(sstables));
+        }
+    }
+
+    /**
+     * Singleton instance of {@code CollatedViewIndexBuildingSupport}, which may be used by any {@code Index}
+     * implementation.
+     */
+    public static final CollatedViewIndexBuildingSupport INDEX_BUILDER_SUPPORT = new CollatedViewIndexBuildingSupport();
 
     /*
      * Management functions
      */
 
-    public TableWideSupport getSupport();
+    /**
+     * Get an instance of a helper to provide tasks for building the index from a set of SSTable data.
+     * When processing a number of indexes to be rebuilt, {@code SecondaryIndexManager.buildIndexesBlocking} groups
+     * those with the same {@code IndexBuildingSupport} instance, allowing multiple indexes to be built with a
+     * single pass through the data. The singleton instance returned from the default method implementation builds
+     * indexes using a {@code ReducingKeyIterator} to provide a collated view of the SSTable data.
+     *
+     * @return an instance of the index build taski helper. Index implementations which return <b>the same instance</b>
+     * will be built using a single task.
+     */
+    default IndexBuildingSupport getBuildTaskSupport()
+    {
+        return INDEX_BUILDER_SUPPORT;
+    }
 
     /**
      * Return a task to perform any initialization work when a new index instance is created.

@@ -337,10 +337,10 @@ public class SecondaryIndexManager implements IndexRegistry
                     indexes.stream().map(i -> i.getIndexMetadata().name).collect(Collectors.joining(",")),
                     sstables.stream().map(SSTableReader::toString).collect(Collectors.joining(",")));
 
-        Map<Index.TableWideSupport, Set<Index>> byType = new HashMap<>();
+        Map<Index.IndexBuildingSupport, Set<Index>> byType = new HashMap<>();
         for (Index index : indexes)
         {
-            Set<Index> stored = byType.putIfAbsent(index.getSupport(), new HashSet<>());
+            Set<Index> stored = byType.computeIfAbsent(index.getBuildTaskSupport(), i -> new HashSet<>());
             stored.add(index);
         }
 

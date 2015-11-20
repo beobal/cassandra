@@ -34,14 +34,14 @@ import org.apache.cassandra.utils.UUIDGen;
 /**
  * Manages building an entire index from column family data. Runs on to compaction manager.
  */
-public class CassandraIndexBuilder extends SecondaryIndexBuilder
+public class CollatedViewIndexBuilder extends SecondaryIndexBuilder
 {
     private final ColumnFamilyStore cfs;
     private final Set<Index> indexers;
     private final ReducingKeyIterator iter;
     private final UUID compactionId;
 
-    public CassandraIndexBuilder(ColumnFamilyStore cfs, Set<Index> indexers, ReducingKeyIterator iter)
+    public CollatedViewIndexBuilder(ColumnFamilyStore cfs, Set<Index> indexers, ReducingKeyIterator iter)
     {
         this.cfs = cfs;
         this.indexers = indexers;
