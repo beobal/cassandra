@@ -48,6 +48,8 @@ import io.netty.util.concurrent.EventExecutor;
 import io.netty.util.concurrent.GlobalEventExecutor;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
+import org.apache.cassandra.auth.IAuthenticator;
+import org.apache.cassandra.auth.ICertificateAuthenticator;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.config.EncryptionOptions;
 import org.apache.cassandra.db.marshal.AbstractType;
@@ -91,7 +93,7 @@ public class Server implements CassandraDaemon.Server
     private Server (Builder builder)
     {
         this.socket = builder.getSocket();
-        this.useSSL = builder.useSSL;
+        this.useSSL = builder.getUsingSSL();
         if (builder.workerGroup != null)
         {
             workerGroup = builder.workerGroup;
@@ -243,6 +245,14 @@ public class Server implements CassandraDaemon.Server
                 return this.socket;
             }
         }
+
+        private boolean getUsingSSL()
+        {
+            IAuthenticator authenticator = DatabaseDescriptor.getAuthenticator();
+            if ((authenticator instanceof ICertificateAuthenticator) && authenticator.requireAuthentication() && !useSSL)
+                throw new IllegalStateException("SSL required if ICertificateAuthenticator requiring authentication is in use");
+            return useSSL;
+        }
     }
 
     public static class ConnectionTracker implements Connection.Tracker
@@ -347,7 +357,9 @@ public class Server implements CassandraDaemon.Server
             this.encryptionOptions = encryptionOptions;
             try
             {
-                this.sslContext = SSLFactory.createSSLContext(encryptionOptions, encryptionOptions.require_client_auth);
+                final boolean buildTruststore = (encryptionOptions.require_client_auth ||
+                                                 DatabaseDescriptor.getAuthenticator() instanceof ICertificateAuthenticator);
+                this.sslContext = SSLFactory.createSSLContext(encryptionOptions, buildTruststore);
             }
             catch (IOException e)
             {
@@ -360,7 +372,10 @@ public class Server implements CassandraDaemon.Server
             sslEngine.setUseClientMode(false);
             String[] suites = SSLFactory.filterCipherSuites(sslEngine.getSupportedCipherSuites(), encryptionOptions.cipher_suites);
             sslEngine.setEnabledCipherSuites(suites);
-            sslEngine.setNeedClientAuth(encryptionOptions.require_client_auth);
+            if (encryptionOptions.require_client_auth)
+                sslEngine.setNeedClientAuth(true);
+            else
+                sslEngine.setWantClientAuth(DatabaseDescriptor.getAuthenticator() instanceof ICertificateAuthenticator);
             sslEngine.setEnabledProtocols(SSLFactory.ACCEPTED_PROTOCOLS);
             return new SslHandler(sslEngine);
         }

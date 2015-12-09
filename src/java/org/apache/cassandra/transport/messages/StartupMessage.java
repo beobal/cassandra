@@ -17,12 +17,19 @@
  */
 package org.apache.cassandra.transport.messages;
 
+import java.security.cert.Certificate;
 import java.util.HashMap;
 import java.util.Map;
+import javax.net.ssl.SSLPeerUnverifiedException;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.handler.ssl.SslHandler;
 
+import org.apache.cassandra.auth.AuthenticatedUser;
+import org.apache.cassandra.auth.IAuthenticator;
+import org.apache.cassandra.auth.ICertificateAuthenticator;
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.exceptions.AuthenticationException;
 import org.apache.cassandra.service.QueryState;
 import org.apache.cassandra.transport.*;
 import org.apache.cassandra.utils.CassandraVersion;
@@ -97,10 +104,38 @@ public class StartupMessage extends Message.Request
             }
         }
 
-        if (DatabaseDescriptor.getAuthenticator().requireAuthentication())
+        IAuthenticator authenticator = DatabaseDescriptor.getAuthenticator();
+        if (authenticator instanceof ICertificateAuthenticator)
+        {
+            try
+            {
+                handleCertificateAuthentication(state, (ICertificateAuthenticator)authenticator);
+            }
+            catch (AuthenticationException e)
+            {
+                return ErrorMessage.fromException(e);
+            }
+        }
+        else if (authenticator.requireAuthentication())
             return new AuthenticateMessage(DatabaseDescriptor.getAuthenticator().getClass().getName());
-        else
-            return new ReadyMessage();
+        return new ReadyMessage();
+    }
+
+    private void handleCertificateAuthentication(QueryState state, ICertificateAuthenticator authenticator)
+        throws AuthenticationException
+    {
+        SslHandler handler = (SslHandler)connection.channel().pipeline().get("ssl");
+        try
+        {
+            Certificate[] certs = handler.engine().getSession().getPeerCertificates();
+            AuthenticatedUser user = authenticator.authenticate(certs);
+            state.getClientState().login(user);
+        }
+        catch (SSLPeerUnverifiedException|NullPointerException e)
+        {
+            if (authenticator.requireAuthentication())
+                throw new AuthenticationException("You must present a valid certificate to authenticate");
+        }
     }
 
     private static Map<String, String> upperCaseKeys(Map<String, String> options)
