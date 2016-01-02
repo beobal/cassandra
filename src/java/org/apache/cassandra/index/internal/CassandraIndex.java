@@ -13,7 +13,6 @@ import java.util.stream.StreamSupport;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.config.ColumnDefinition;
 import org.apache.cassandra.cql3.ColumnIdentifier;
@@ -809,6 +808,7 @@ public abstract class CassandraIndex implements Index
             case CLUSTERING:
                 return CassandraIndexFunctions.CLUSTERING_COLUMN_INDEX_FUNCTIONS;
             case REGULAR:
+            case STATIC:
                 return CassandraIndexFunctions.REGULAR_COLUMN_INDEX_FUNCTIONS;
             case PARTITION_KEY:
                 return CassandraIndexFunctions.PARTITION_KEY_INDEX_FUNCTIONS;
