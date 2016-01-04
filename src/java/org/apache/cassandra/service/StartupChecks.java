@@ -230,6 +230,11 @@ public class StartupChecks
         public void execute() throws StartupException
         {
             final Set<String> invalid = new HashSet<>();
+            final Set<Path> nonSSTablePaths = new HashSet<>();
+            nonSSTablePaths.add(Paths.get(DatabaseDescriptor.getCommitLogLocation()));
+            nonSSTablePaths.add(Paths.get(DatabaseDescriptor.getSavedCachesLocation()));
+            nonSSTablePaths.add(DatabaseDescriptor.getHintsDirectory().toPath());
+
             FileVisitor<Path> sstableVisitor = new SimpleFileVisitor<Path>()
             {
                 public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException
@@ -253,7 +258,8 @@ public class StartupChecks
                 {
                     String name = dir.getFileName().toString();
                     return (name.equals(Directories.SNAPSHOT_SUBDIR)
-                            || name.equals(Directories.BACKUPS_SUBDIR))
+                            || name.equals(Directories.SNAPSHOT_SUBDIR)
+                            || nonSSTablePaths.contains(dir))
                            ? FileVisitResult.SKIP_SUBTREE
                            : FileVisitResult.CONTINUE;
                 }
