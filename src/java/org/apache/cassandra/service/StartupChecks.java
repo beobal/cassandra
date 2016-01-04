@@ -36,6 +36,7 @@ import org.apache.cassandra.db.*;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.exceptions.StartupException;
 import org.apache.cassandra.io.sstable.Descriptor;
+import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.utils.*;
 
 /**
@@ -233,9 +234,9 @@ public class StartupChecks
         public void execute() throws StartupException
         {
             final Set<String> invalid = new HashSet<>();
-            final Set<Path> nonSSTablePaths = new HashSet<>();
-            nonSSTablePaths.add(Paths.get(DatabaseDescriptor.getCommitLogLocation()));
-            nonSSTablePaths.add(Paths.get(DatabaseDescriptor.getSavedCachesLocation()));
+            final Set<String> nonSSTablePaths = new HashSet<>();
+            nonSSTablePaths.add(FileUtils.getCanonicalPath(DatabaseDescriptor.getCommitLogLocation()));
+            nonSSTablePaths.add(FileUtils.getCanonicalPath(DatabaseDescriptor.getSavedCachesLocation()));
 
             FileVisitor<Path> sstableVisitor = new SimpleFileVisitor<Path>()
             {
@@ -261,7 +262,7 @@ public class StartupChecks
                     String name = dir.getFileName().toString();
                     return (name.equals("snapshots")
                             || name.equals("backups")
-                            || nonSSTablePaths.contains(dir))
+                            || nonSSTablePaths.contains(dir.toFile().getCanonicalPath()))
                            ? FileVisitResult.SKIP_SUBTREE
                            : FileVisitResult.CONTINUE;
                 }
