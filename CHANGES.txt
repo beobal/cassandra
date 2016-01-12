@@ -1,5 +1,6 @@
 3.3
 Merged from 3.0:
+ * Support passing base table metadata to custom 2i validation (CASSANDRA-10924)
  * Fix UnsupportedOperationException when reading old sstable with range
    tombstone (CASSANDRA-10743)
  * MV should use the maximum timestamp of the primary key (CASSANDRA-10910)
