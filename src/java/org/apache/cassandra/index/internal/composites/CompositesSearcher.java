@@ -162,7 +162,6 @@ public class CompositesSearcher extends CassandraIndexSearcher
                     // by the next caller of next, or through closing this iterator is this come before.
                     UnfilteredRowIterator dataIter = filterStaleEntries(
                         dataCmd.queryMemtableAndDisk(index.baseCfs, executionController.baseReadOpOrderGroup()),
-                        partitionKey,
                         indexKey.getKey(),
                         entries,
                         executionController.writeOpOrderGroup(),
@@ -204,7 +203,6 @@ public class CompositesSearcher extends CassandraIndexSearcher
 
     // We assume all rows in dataIter belong to the same partition.
     private UnfilteredRowIterator filterStaleEntries(UnfilteredRowIterator dataIter,
-                                                     final DecoratedKey partitionKey,
                                                      final ByteBuffer indexValue,
                                                      final List<IndexEntry> entries,
                                                      final OpOrder.Group writeOp,
@@ -224,29 +222,35 @@ public class CompositesSearcher extends CassandraIndexSearcher
             });
         }
 
-        UnfilteredRowIterator iteratorToReturn = null;
-        ClusteringComparator comparator = dataIter.metadata().comparator;
         if (isStaticColumn())
         {
-            if (entries.size() != 1) {
+            if (entries.size() != 1)
                 throw new AssertionError("A partition should have at most one index within a static column index");
-            }
-            iteratorToReturn = dataIter;
+
             if (index.isStale(dataIter.staticRow(), indexValue, nowInSec))
             {
-                // The entry is staled, we return no rows in this partition.
+                // The entry is stale, we return no rows in this partition.
                 staleEntries.addAll(entries);
-                iteratorToReturn = UnfilteredRowIterators.noRowsIterator(dataIter.metadata(),
-                        dataIter.partitionKey(), dataIter.staticRow(),
-                        dataIter.partitionLevelDeletion(), dataIter.isReverseOrder());
+                deleteAllEntries(staleEntries, writeOp, nowInSec);
+
+                return UnfilteredRowIterators.noRowsIterator(dataIter.metadata(),
+                                                             dataIter.partitionKey(),
+                                                             Rows.EMPTY_STATIC_ROW,
+                                                             dataIter.partitionLevelDeletion(),
+                                                             dataIter.isReverseOrder());
+            }
+            else
+            {
+                return dataIter;
             }
         }
         else
         {
+            ClusteringComparator comparator = dataIter.metadata().comparator;
             class Transform extends Transformation
             {
                 private int entriesIdx;
-    
+
                 @Override
                 public Row applyToRow(Row row)
                 {
@@ -257,7 +261,7 @@ public class CompositesSearcher extends CassandraIndexSearcher
                     staleEntries.add(entry);
                     return null;
                 }
-    
+
                 private IndexEntry findEntry(Clustering clustering)
                 {
                     assert entriesIdx < entries.size();
@@ -268,8 +272,6 @@ public class CompositesSearcher extends CassandraIndexSearcher
                         // next entry, the one at 'entriesIdx'. However, we can have stale entries, entries
                         // that have no corresponding row in the base table typically because of a range
                         // tombstone or partition level deletion. Delete such stale entries.
-                        // For static column, we only need to compare the partition key, otherwise we compare
-                        // the whole clustering.
                         int cmp = comparator.compare(entry.indexedEntryClustering, clustering);
                         assert cmp <= 0; // this would means entries are not in clustering order, which shouldn't happen
                         if (cmp == 0)
@@ -280,11 +282,14 @@ public class CompositesSearcher extends CassandraIndexSearcher
                     // entries correspond to the rows we've queried, so we shouldn't have a row that has no corresponding entry.
                     throw new AssertionError();
                 }
-            }
-            iteratorToReturn = Transformation.apply(dataIter, new Transform());
-        }
-        deleteAllEntries(staleEntries, writeOp, nowInSec);
 
-        return iteratorToReturn;
+                @Override
+                public void onPartitionClose()
+                {
+                    deleteAllEntries(staleEntries, writeOp, nowInSec);
+                }
+            }
+            return Transformation.apply(dataIter, new Transform());
+        }
     }
 }
