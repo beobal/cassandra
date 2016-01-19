@@ -74,16 +74,24 @@ public class RegularColumnIndex extends CassandraIndex
     public IndexEntry decodeEntry(DecoratedKey indexedValue, Row indexEntry)
     {
         Clustering clustering = indexEntry.clustering();
-        ClusteringComparator baseComparator = baseCfs.getComparator();
-        CBuilder builder = CBuilder.create(baseComparator);
-        for (int i = 0; i < baseComparator.size(); i++)
-            builder.add(clustering.get(i + 1));
+
+        Clustering indexedEntryClustering = null;
+        if (getIndexedColumn().isStatic())
+            indexedEntryClustering = Clustering.STATIC_CLUSTERING;
+        else
+        {
+            ClusteringComparator baseComparator = baseCfs.getComparator();
+            CBuilder builder = CBuilder.create(baseComparator);
+            for (int i = 0; i < baseComparator.size(); i++)
+                builder.add(clustering.get(i + 1));
+            indexedEntryClustering = builder.build();
+        }
 
         return new IndexEntry(indexedValue,
                                 clustering,
                                 indexEntry.primaryKeyLivenessInfo().timestamp(),
                                 clustering.get(0),
-                                builder.build());
+                                indexedEntryClustering);
     }
 
     public boolean isStale(Row data, ByteBuffer indexValue, int nowInSec)
