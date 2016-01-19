@@ -344,7 +344,8 @@ public final class StatementRestrictions
         return this.isKeyRange;
     }
 
-    public boolean hasRegularColumnsRestriction() {
+    public boolean hasRegularColumnsRestriction()
+    {
         return hasRegularColumnsRestriction;
     }
 

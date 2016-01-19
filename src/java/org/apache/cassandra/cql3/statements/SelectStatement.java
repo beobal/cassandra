@@ -686,7 +686,8 @@ public class SelectStatement implements CQLStatement
         // we want to include static columns and we're done.
         if (!partition.hasNext())
         {
-            if (!staticRow.isEmpty() && (!restrictions.hasClusteringColumnsRestriction() || cfm.isStaticCompactTable())
+            if (!staticRow.isEmpty()
+                && (!restrictions.hasClusteringColumnsRestriction() || cfm.isStaticCompactTable())
                 && !restrictions.hasRegularColumnsRestriction())
             {
                 result.newRow(protocolVersion);

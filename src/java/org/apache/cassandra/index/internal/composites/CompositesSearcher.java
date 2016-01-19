@@ -118,10 +118,12 @@ public class CompositesSearcher extends CassandraIndexSearcher
                         // If the index is on a static column, we just need to do a full read on the partition.
                         // Note that we want to re-use the command.columnFilter() in case of future change.
                         dataCmd = SinglePartitionReadCommand.create(index.baseCfs.metadata,
-                                                                    command.nowInSec(), command.columnFilter(),
-                                                                    RowFilter.NONE, DataLimits.NONE,  partitionKey,
+                                                                    command.nowInSec(),
+                                                                    command.columnFilter(),
+                                                                    RowFilter.NONE,
+                                                                    DataLimits.NONE,
+                                                                    partitionKey,
                                                                     new ClusteringIndexSliceFilter(Slices.ALL, false));
-
                         entries.add(nextEntry);
                         nextEntry = indexHits.hasNext() ? index.decodeEntry(indexKey, indexHits.next()) : null;
                     }
@@ -148,9 +150,7 @@ public class CompositesSearcher extends CassandraIndexSearcher
 
                         // Because we've eliminated entries that don't match the clustering columns, it's possible we added nothing
                         if (clusterings.isEmpty())
-                        {
                             continue;
-                        }
 
                         // Query the gathered index hits. We still need to filter stale hits from the resulting query.
                         ClusteringIndexNamesFilter filter = new ClusteringIndexNamesFilter(clusterings.build(), false);
@@ -228,17 +228,19 @@ public class CompositesSearcher extends CassandraIndexSearcher
         ClusteringComparator comparator = dataIter.metadata().comparator;
         if (isStaticColumn())
         {
-            if (entries.size() != 1) {
+            if (entries.size() != 1)
                 throw new AssertionError("A partition should have at most one index within a static column index");
-            }
+
             iteratorToReturn = dataIter;
             if (index.isStale(dataIter.staticRow(), indexValue, nowInSec))
             {
                 // The entry is staled, we return no rows in this partition.
                 staleEntries.addAll(entries);
                 iteratorToReturn = UnfilteredRowIterators.noRowsIterator(dataIter.metadata(),
-                    dataIter.partitionKey(), Rows.EMPTY_STATIC_ROW,
-                    dataIter.partitionLevelDeletion(), dataIter.isReverseOrder());
+                                                                         dataIter.partitionKey(),
+                                                                         Rows.EMPTY_STATIC_ROW,
+                                                                         dataIter.partitionLevelDeletion(),
+                                                                         dataIter.isReverseOrder());
             }
             deleteAllEntries(staleEntries, writeOp, nowInSec);
         }
