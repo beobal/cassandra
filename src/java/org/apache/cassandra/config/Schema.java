@@ -607,7 +607,7 @@ public class Schema
         assert getCFMetaData(cfm.ksName, cfm.cfName) == null;
 
         // Make sure the keyspace is initialized and initialize the table.
-        Keyspace.open(cfm.ksName).initCf(cfm, true);
+        Keyspace.open(cfm.ksName);
         // Update the keyspaces map with the updated metadata
         update(cfm.ksName, ks -> ks.withSwapped(ks.tables.with(cfm)));
         // Update the table ID <-> table name map (cfIdMap)
