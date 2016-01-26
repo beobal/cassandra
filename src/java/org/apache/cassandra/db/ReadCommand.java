@@ -87,6 +87,9 @@ public abstract class ReadCommand extends MonitorableImpl implements ReadQuery
     // still don't want to repeat it.
     private boolean indexManagerQueried = false;
 
+    // Transformation which may be performed on read results following resolution on the coordinator
+    private final PostReconciliationProcessor postProcessor;
+
     private boolean isDigestQuery;
     // if a digest query, the version for which the digest is expected. Ignored if not a digest.
     private int digestVersion;
@@ -97,10 +100,16 @@ public abstract class ReadCommand extends MonitorableImpl implements ReadQuery
         public abstract ReadCommand deserialize(DataInputPlus in, int version, boolean isDigest, int digestVersion, boolean isForThrift, CFMetaData metadata, int nowInSec, ColumnFilter columnFilter, RowFilter rowFilter, DataLimits limits, Optional<IndexMetadata> index) throws IOException;
     }
 
+    public interface PostReconciliationProcessor
+    {
+        PartitionIterator apply(PartitionIterator input);
+        PostReconciliationProcessor DEFAULT = input -> input;
+    }
+
     protected enum Kind
     {
-        SINGLE_PARTITION (SinglePartitionReadCommand.selectionDeserializer),
-        PARTITION_RANGE  (PartitionRangeReadCommand.selectionDeserializer);
+        SINGLE_PARTITION(SinglePartitionReadCommand.selectionDeserializer),
+        PARTITION_RANGE(PartitionRangeReadCommand.selectionDeserializer);
 
         private final SelectionDeserializer selectionDeserializer;
 
@@ -120,6 +129,21 @@ public abstract class ReadCommand extends MonitorableImpl implements ReadQuery
                           RowFilter rowFilter,
                           DataLimits limits)
     {
+        this(kind, isDigestQuery, digestVersion, isForThrift, metadata,
+             nowInSec, columnFilter, rowFilter, limits, PostReconciliationProcessor.DEFAULT);
+    }
+
+    protected ReadCommand(Kind kind,
+                          boolean isDigestQuery,
+                          int digestVersion,
+                          boolean isForThrift,
+                          CFMetaData metadata,
+                          int nowInSec,
+                          ColumnFilter columnFilter,
+                          RowFilter rowFilter,
+                          DataLimits limits,
+                          PostReconciliationProcessor postProcessor)
+    {
         this.kind = kind;
         this.isDigestQuery = isDigestQuery;
         this.digestVersion = digestVersion;
@@ -129,6 +153,7 @@ public abstract class ReadCommand extends MonitorableImpl implements ReadQuery
         this.columnFilter = columnFilter;
         this.rowFilter = rowFilter;
         this.limits = limits;
+        this.postProcessor = postProcessor;
     }
 
     protected abstract void serializeSelection(DataOutputPlus out, int version) throws IOException;
@@ -321,6 +346,11 @@ public abstract class ReadCommand extends MonitorableImpl implements ReadQuery
 
         index = Optional.of(selected.getIndexMetadata());
         return selected;
+    }
+
+    public PostReconciliationProcessor postProcessor()
+    {
+        return postProcessor;
     }
 
     /**
@@ -563,6 +593,26 @@ public abstract class ReadCommand extends MonitorableImpl implements ReadQuery
             }
         }
         return Transformation.apply(iterator, new WithoutPurgeableTombstones());
+    }
+
+    /**
+     * Allow to post-process the result of the query after it has been reconciled on the coordinator
+     * but before it is passed to the CQL layer to return the ResultSet.
+     *
+     * See CASSANDRA-8717 for why this existed originally.
+     * Further to 8717, given that secondary indexes gained the ability to specify post-processing
+     * before it became generally available to all read commands, there is an order of precedence in
+     * post-reconcilliation processing. In the case of a ReadCommand which uses an Index, and both
+     * supply a post processing function, the index's is applied first and the command's is applied
+     * to the result.
+     */
+    public PartitionIterator doPostReconciliationProcessing(PartitionIterator result)
+    {
+        ColumnFamilyStore cfs = Keyspace.open(metadata().ksName).getColumnFamilyStore(metadata().cfName);
+        Index index = getIndex(cfs);
+        return postProcessor.apply(index == null
+                                   ? result
+                                   : index.postProcessorFor(this).apply(result, this));
     }
 
     /**

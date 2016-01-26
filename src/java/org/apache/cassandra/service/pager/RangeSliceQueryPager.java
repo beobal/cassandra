@@ -93,7 +93,14 @@ public class RangeSliceQueryPager extends AbstractQueryPager
 
         Index index = command.getIndex(Keyspace.openAndGetStore(command.metadata()));
         Optional<IndexMetadata> indexMetadata = index != null ? Optional.of(index.getIndexMetadata()) : Optional.empty();
-        return new PartitionRangeReadCommand(command.metadata(), command.nowInSec(), command.columnFilter(), command.rowFilter(), limits, pageRange, indexMetadata);
+        return new PartitionRangeReadCommand(command.metadata(),
+                                             command.nowInSec(),
+                                             command.columnFilter(),
+                                             command.rowFilter(),
+                                             limits,
+                                             pageRange,
+                                             indexMetadata,
+                                             command.postProcessor());
     }
 
     protected void recordLast(DecoratedKey key, Row last)

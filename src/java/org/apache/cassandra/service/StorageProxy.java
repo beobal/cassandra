@@ -2163,7 +2163,7 @@ public class StorageProxy implements StorageProxyMBean
 
         // Note that in general, a RangeCommandIterator will honor the command limit for each range, but will not enforce it globally.
 
-        return command.limits().filter(command.postReconciliationProcessing(new RangeCommandIterator(ranges, command, concurrencyFactor, keyspace, consistencyLevel)), command.nowInSec());
+        return command.limits().filter(command.doPostReconciliationProcessing(new RangeCommandIterator(ranges, command, concurrencyFactor, keyspace, consistencyLevel)), command.nowInSec());
     }
 
     public Map<String, List<String>> getSchemaVersions()

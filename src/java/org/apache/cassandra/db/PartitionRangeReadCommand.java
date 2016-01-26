@@ -34,7 +34,6 @@ import org.apache.cassandra.db.rows.BaseRowIterator;
 import org.apache.cassandra.db.transform.Transformation;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.exceptions.RequestExecutionException;
-import org.apache.cassandra.index.Index;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.cassandra.io.util.DataOutputPlus;
@@ -70,7 +69,22 @@ public class PartitionRangeReadCommand extends ReadCommand
                                      DataRange dataRange,
                                      Optional<IndexMetadata> index)
     {
-        super(Kind.PARTITION_RANGE, isDigest, digestVersion, isForThrift, metadata, nowInSec, columnFilter, rowFilter, limits);
+        this(isDigest, digestVersion, isForThrift, metadata, nowInSec, columnFilter, rowFilter, limits, dataRange, index, PostReconciliationProcessor.DEFAULT);
+    }
+
+    public PartitionRangeReadCommand(boolean isDigest,
+                                     int digestVersion,
+                                     boolean isForThrift,
+                                     CFMetaData metadata,
+                                     int nowInSec,
+                                     ColumnFilter columnFilter,
+                                     RowFilter rowFilter,
+                                     DataLimits limits,
+                                     DataRange dataRange,
+                                     Optional<IndexMetadata> index,
+                                     PostReconciliationProcessor postProcessor)
+    {
+        super(Kind.PARTITION_RANGE, isDigest, digestVersion, isForThrift, metadata, nowInSec, columnFilter, rowFilter, limits, postProcessor);
         this.dataRange = dataRange;
         this.index = index;
     }
@@ -81,9 +95,10 @@ public class PartitionRangeReadCommand extends ReadCommand
                                      RowFilter rowFilter,
                                      DataLimits limits,
                                      DataRange dataRange,
-                                     Optional<IndexMetadata> index)
+                                     Optional<IndexMetadata> index,
+                                     PostReconciliationProcessor postProcessor)
     {
-        this(false, 0, false, metadata, nowInSec, columnFilter, rowFilter, limits, dataRange, index);
+        this(false, 0, false, metadata, nowInSec, columnFilter, rowFilter, limits, dataRange, index, postProcessor);
     }
 
     /**
@@ -102,7 +117,8 @@ public class PartitionRangeReadCommand extends ReadCommand
                                              RowFilter.NONE,
                                              DataLimits.NONE,
                                              DataRange.allData(metadata.partitioner),
-                                             Optional.empty());
+                                             Optional.empty(),
+                                             PostReconciliationProcessor.DEFAULT);
     }
 
     public DataRange dataRange()
@@ -122,17 +138,17 @@ public class PartitionRangeReadCommand extends ReadCommand
 
     public PartitionRangeReadCommand forSubRange(AbstractBounds<PartitionPosition> range)
     {
-        return new PartitionRangeReadCommand(isDigestQuery(), digestVersion(), isForThrift(), metadata(), nowInSec(), columnFilter(), rowFilter(), limits(), dataRange().forSubRange(range), index);
+        return new PartitionRangeReadCommand(isDigestQuery(), digestVersion(), isForThrift(), metadata(), nowInSec(), columnFilter(), rowFilter(), limits(), dataRange().forSubRange(range), index, postProcessor());
     }
 
     public PartitionRangeReadCommand copy()
     {
-        return new PartitionRangeReadCommand(isDigestQuery(), digestVersion(), isForThrift(), metadata(), nowInSec(), columnFilter(), rowFilter(), limits(), dataRange(), index);
+        return new PartitionRangeReadCommand(isDigestQuery(), digestVersion(), isForThrift(), metadata(), nowInSec(), columnFilter(), rowFilter(), limits(), dataRange(), index, postProcessor());
     }
 
     public PartitionRangeReadCommand withUpdatedLimit(DataLimits newLimits)
     {
-        return new PartitionRangeReadCommand(metadata(), nowInSec(), columnFilter(), rowFilter(), newLimits, dataRange(), index);
+        return new PartitionRangeReadCommand(metadata(), nowInSec(), columnFilter(), rowFilter(), newLimits, dataRange(), index, postProcessor());
     }
 
     public long getTimeout()
@@ -281,19 +297,6 @@ public class PartitionRangeReadCommand extends ReadCommand
             sb.append(dataRange.toCQLString(metadata()));
     }
 
-    /**
-     * Allow to post-process the result of the query after it has been reconciled on the coordinator
-     * but before it is passed to the CQL layer to return the ResultSet.
-     *
-     * See CASSANDRA-8717 for why this exists.
-     */
-    public PartitionIterator postReconciliationProcessing(PartitionIterator result)
-    {
-        ColumnFamilyStore cfs = Keyspace.open(metadata().ksName).getColumnFamilyStore(metadata().cfName);
-        Index index = getIndex(cfs);
-        return index == null ? result : index.postProcessorFor(this).apply(result, this);
-    }
-
     @Override
     public String toString()
     {
@@ -322,7 +325,7 @@ public class PartitionRangeReadCommand extends ReadCommand
         throws IOException
         {
             DataRange range = DataRange.serializer.deserialize(in, version, metadata);
-            return new PartitionRangeReadCommand(isDigest, digestVersion, isForThrift, metadata, nowInSec, columnFilter, rowFilter, limits, range, index);
+            return new PartitionRangeReadCommand(isDigest, digestVersion, isForThrift, metadata, nowInSec, columnFilter, rowFilter, limits, range, index, PostReconciliationProcessor.DEFAULT);
         }
     }
 }

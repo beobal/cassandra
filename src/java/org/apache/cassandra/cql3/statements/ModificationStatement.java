@@ -147,6 +147,12 @@ public abstract class ModificationStatement implements CQLStatement
                                 conditions.getFunctions());
     }
 
+    // may be used by custom QueryHandlers
+    public StatementRestrictions getRestrictions()
+    {
+        return restrictions;
+    }
+
     public abstract void addUpdateForKey(PartitionUpdate update, Clustering clustering, UpdateParameters params);
 
     public abstract void addUpdateForKey(PartitionUpdate update, Slice slice, UpdateParameters params);

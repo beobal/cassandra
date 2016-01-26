@@ -20,6 +20,7 @@ package org.apache.cassandra.db;
 
 import java.nio.ByteBuffer;
 import java.util.*;
+import java.util.function.Function;
 
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.config.ColumnDefinition;
@@ -28,6 +29,7 @@ import org.apache.cassandra.cql3.Operator;
 import org.apache.cassandra.db.filter.*;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.marshal.CollectionType;
+import org.apache.cassandra.db.partitions.PartitionIterator;
 import org.apache.cassandra.dht.*;
 import org.apache.cassandra.utils.FBUtilities;
 
@@ -47,6 +49,8 @@ public abstract class AbstractReadCommandBuilder
     private Slice.Bound upperClusteringBound;
 
     private NavigableSet<Clustering> clusterings;
+
+    protected ReadCommand.PostReconciliationProcessor postProcessor = ReadCommand.PostReconciliationProcessor.DEFAULT;
 
     // Use Util.cmd() instead of this ctor directly
     AbstractReadCommandBuilder(ColumnFamilyStore cfs)
@@ -125,6 +129,18 @@ public abstract class AbstractReadCommandBuilder
 
         for (String column : columns)
             this.columns.add(ColumnIdentifier.getInterned(column, true));
+        return this;
+    }
+
+    public AbstractReadCommandBuilder withPostProcessor(ReadCommand.PostReconciliationProcessor postProcessor)
+    {
+        this.postProcessor = postProcessor;
+        return this;
+    }
+
+    public AbstractReadCommandBuilder withPostProcessor(Function<PartitionIterator, PartitionIterator> postProcessor)
+    {
+        this.postProcessor = postProcessor::apply;
         return this;
     }
 
@@ -224,7 +240,7 @@ public abstract class AbstractReadCommandBuilder
         @Override
         public ReadCommand build()
         {
-            return SinglePartitionReadCommand.create(cfs.metadata, nowInSeconds, makeColumnFilter(), filter, makeLimits(), partitionKey, makeFilter());
+            return SinglePartitionReadCommand.create(false, cfs.metadata, nowInSeconds, makeColumnFilter(), filter, makeLimits(), partitionKey, makeFilter(), postProcessor);
         }
     }
 
@@ -255,7 +271,7 @@ public abstract class AbstractReadCommandBuilder
         @Override
         public ReadCommand build()
         {
-            return SinglePartitionReadCommand.create(cfs.metadata, nowInSeconds, makeColumnFilter(), filter, makeLimits(), partitionKey, makeFilter());
+            return SinglePartitionReadCommand.create(false, cfs.metadata, nowInSeconds, makeColumnFilter(), filter, makeLimits(), partitionKey, makeFilter(), postProcessor);
         }
     }
 
@@ -329,7 +345,14 @@ public abstract class AbstractReadCommandBuilder
             else
                 bounds = new ExcludingBounds<>(start, end);
 
-            return new PartitionRangeReadCommand(cfs.metadata, nowInSeconds, makeColumnFilter(), filter, makeLimits(), new DataRange(bounds, makeFilter()), Optional.empty());
+            return new PartitionRangeReadCommand(cfs.metadata,
+                                                 nowInSeconds,
+                                                 makeColumnFilter(),
+                                                 filter,
+                                                 makeLimits(),
+                                                 new DataRange(bounds, makeFilter()),
+                                                 Optional.empty(),
+                                                 postProcessor);
         }
 
         static DecoratedKey makeKey(CFMetaData metadata, Object... partitionKey)

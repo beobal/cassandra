@@ -48,7 +48,8 @@ public class DigestResolver extends ResponseResolver
     public PartitionIterator getData()
     {
         assert isDataPresent();
-        return UnfilteredPartitionIterators.filter(dataResponse.makeIterator(command), command.nowInSec());
+        return command.doPostReconciliationProcessing(
+                    UnfilteredPartitionIterators.filter(dataResponse.makeIterator(command), command.nowInSec()));
     }
 
     /*

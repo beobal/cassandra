@@ -463,7 +463,7 @@ public class SelectStatement implements CQLStatement
         {
             QueryProcessor.validateKey(key);
             DecoratedKey dk = cfm.decorateKey(ByteBufferUtil.clone(key));
-            commands.add(SinglePartitionReadCommand.create(cfm, nowInSec, queriedColumns, rowFilter, limit, dk, filter));
+            commands.add(SinglePartitionReadCommand.create(false, cfm, nowInSec, queriedColumns, rowFilter, limit, dk, filter, options.getPostProcessor()));
         }
 
         return new SinglePartitionReadCommand.Group(commands, limit);
@@ -500,7 +500,8 @@ public class SelectStatement implements CQLStatement
                                                                           rowFilter,
                                                                           limit,
                                                                           new DataRange(keyBounds, clusteringIndexFilter),
-                                                                          Optional.empty());
+                                                                          Optional.empty(),
+                                                                          options.getPostProcessor());
         // If there's a secondary index that the command can use, have it validate
         // the request parameters. Note that as a side effect, if a viable Index is
         // identified by the CFS's index manager, it will be cached in the command

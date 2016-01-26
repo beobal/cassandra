@@ -19,20 +19,20 @@ package org.apache.cassandra.cql3;
 
 import java.nio.ByteBuffer;
 import java.util.*;
+import java.util.function.Function;
 
 import com.google.common.collect.ImmutableList;
-import io.netty.buffer.ByteBuf;
 
+import io.netty.buffer.ByteBuf;
 import org.apache.cassandra.config.ColumnDefinition;
 import org.apache.cassandra.db.ConsistencyLevel;
+import org.apache.cassandra.db.ReadCommand;
 import org.apache.cassandra.db.marshal.UTF8Type;
+import org.apache.cassandra.db.partitions.PartitionIterator;
 import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.service.QueryState;
 import org.apache.cassandra.service.pager.PagingState;
-import org.apache.cassandra.transport.CBCodec;
-import org.apache.cassandra.transport.CBUtil;
-import org.apache.cassandra.transport.ProtocolException;
-import org.apache.cassandra.transport.Server;
+import org.apache.cassandra.transport.*;
 import org.apache.cassandra.utils.Pair;
 
 /**
@@ -79,6 +79,19 @@ public abstract class QueryOptions
     public static QueryOptions addColumnSpecifications(QueryOptions options, List<ColumnSpecification> columnSpecs)
     {
         return new OptionsWithColumnSpecifications(options, columnSpecs);
+    }
+
+    public static QueryOptions withPostReconciliationProcessing(QueryOptions options,
+                                                                Function<PartitionIterator, PartitionIterator> processing)
+    {
+        ReadCommand.PostReconciliationProcessor processor = processing::apply;
+        return new OptionsWithPostReconciliationProcessor(options, processor);
+    }
+
+    public static QueryOptions withPostReconciliationProcessing(QueryOptions options,
+                                                                 ReadCommand.PostReconciliationProcessor processor)
+    {
+        return new OptionsWithPostReconciliationProcessor(options, processor);
     }
 
     public abstract ConsistencyLevel getConsistency();
@@ -190,6 +203,16 @@ public abstract class QueryOptions
         return this;
     }
 
+    /**
+     * A transformation to be applied to the results of a read. This is performed
+     * on the coordinator, after reconciliation of results from replicas.
+     * See QueryOptionsWithPostReconciliationProcessing
+     */
+    public ReadCommand.PostReconciliationProcessor getPostProcessor()
+    {
+        return ReadCommand.PostReconciliationProcessor.DEFAULT;
+    }
+
     static class DefaultQueryOptions extends QueryOptions
     {
         private final ConsistencyLevel consistency;
@@ -274,6 +297,22 @@ public abstract class QueryOptions
         {
             wrapped.prepare(specs);
             return this;
+        }
+    }
+
+    static class OptionsWithPostReconciliationProcessor extends QueryOptionsWrapper
+    {
+        private final ReadCommand.PostReconciliationProcessor processor;
+
+        OptionsWithPostReconciliationProcessor(QueryOptions wrapped, ReadCommand.PostReconciliationProcessor processor)
+        {
+            super(wrapped);
+            this.processor = processor;
+        }
+
+        public ReadCommand.PostReconciliationProcessor getPostProcessor()
+        {
+            return processor;
         }
     }
 

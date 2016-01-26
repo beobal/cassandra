@@ -743,7 +743,8 @@ public class CassandraServer implements Cassandra.Iface
                                           cState,
                                           pageSize,
                                           nowInSec,
-                                          true);
+                                          true,
+                                          ReadCommand.PostReconciliationProcessor.DEFAULT);
         }
         catch (IllegalArgumentException e)
         {

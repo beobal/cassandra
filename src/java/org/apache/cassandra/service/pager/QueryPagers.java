@@ -45,9 +45,19 @@ public class QueryPagers
                                  ClientState state,
                                  final int pageSize,
                                  int nowInSec,
-                                 boolean isForThrift) throws RequestValidationException, RequestExecutionException
+                                 boolean isForThrift,
+                                 ReadCommand.PostReconciliationProcessor postProcessor)
+    throws RequestValidationException, RequestExecutionException
     {
-        SinglePartitionReadCommand command = SinglePartitionReadCommand.create(isForThrift, metadata, nowInSec, columnFilter, RowFilter.NONE, limits, key, filter);
+        SinglePartitionReadCommand command = SinglePartitionReadCommand.create(isForThrift,
+                                                                               metadata,
+                                                                               nowInSec,
+                                                                               columnFilter,
+                                                                               RowFilter.NONE,
+                                                                               limits,
+                                                                               key,
+                                                                               filter,
+                                                                               postProcessor);
         final SinglePartitionPager pager = new SinglePartitionPager(command, null, Server.CURRENT_VERSION);
 
         int count = 0;

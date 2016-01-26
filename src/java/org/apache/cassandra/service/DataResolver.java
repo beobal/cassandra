@@ -51,7 +51,8 @@ public class DataResolver extends ResponseResolver
     public PartitionIterator getData()
     {
         ReadResponse response = responses.iterator().next().payload;
-        return UnfilteredPartitionIterators.filter(response.makeIterator(command), command.nowInSec());
+        return command.doPostReconciliationProcessing(
+                    UnfilteredPartitionIterators.filter(response.makeIterator(command), command.nowInSec()));
     }
 
     public PartitionIterator resolve()
@@ -71,7 +72,8 @@ public class DataResolver extends ResponseResolver
         // Even though every responses should honor the limit, we might have more than requested post reconciliation,
         // so ensure we're respecting the limit.
         DataLimits.Counter counter = command.limits().newCounter(command.nowInSec(), true);
-        return counter.applyTo(mergeWithShortReadProtection(iters, sources, counter));
+        return command.doPostReconciliationProcessing(counter.applyTo(mergeWithShortReadProtection(iters, sources, counter)));
+
     }
 
     private PartitionIterator mergeWithShortReadProtection(List<UnfilteredPartitionIterator> results, InetAddress[] sources, DataLimits.Counter resultCounter)

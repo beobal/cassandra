@@ -80,7 +80,23 @@ public class SinglePartitionReadCommand extends ReadCommand
                                       DecoratedKey partitionKey,
                                       ClusteringIndexFilter clusteringIndexFilter)
     {
-        super(Kind.SINGLE_PARTITION, isDigest, digestVersion, isForThrift, metadata, nowInSec, columnFilter, rowFilter, limits);
+        this(isDigest, digestVersion, isForThrift, metadata, nowInSec, columnFilter,
+             rowFilter, limits, partitionKey, clusteringIndexFilter, PostReconciliationProcessor.DEFAULT);
+    }
+
+    private SinglePartitionReadCommand(boolean isDigest,
+                                      int digestVersion,
+                                      boolean isForThrift,
+                                      CFMetaData metadata,
+                                      int nowInSec,
+                                      ColumnFilter columnFilter,
+                                      RowFilter rowFilter,
+                                      DataLimits limits,
+                                      DecoratedKey partitionKey,
+                                      ClusteringIndexFilter clusteringIndexFilter,
+                                      PostReconciliationProcessor postProcessor)
+    {
+        super(Kind.SINGLE_PARTITION, isDigest, digestVersion, isForThrift, metadata, nowInSec, columnFilter, rowFilter, limits, postProcessor);
         assert partitionKey.getPartitioner() == metadata.partitioner;
         this.partitionKey = partitionKey;
         this.clusteringIndexFilter = clusteringIndexFilter;
@@ -133,7 +149,36 @@ public class SinglePartitionReadCommand extends ReadCommand
                                                     DecoratedKey partitionKey,
                                                     ClusteringIndexFilter clusteringIndexFilter)
     {
-        return new SinglePartitionReadCommand(false, 0, isForThrift, metadata, nowInSec, columnFilter, rowFilter, limits, partitionKey, clusteringIndexFilter);
+        return create(isForThrift, metadata, nowInSec, columnFilter, rowFilter, limits, partitionKey, clusteringIndexFilter, PostReconciliationProcessor.DEFAULT);
+    }
+
+    /**
+     * Creates a new read command on a single partition for thrift or for paging.
+     * Takes a transformation to be executed on the coordinator after reconciliation
+     *
+     * @param isForThrift whether the query is for thrift or not.
+     * @param metadata the table to query.
+     * @param nowInSec the time in seconds to use are "now" for this query.
+     * @param columnFilter the column filter to use for the query.
+     * @param rowFilter the row filter to use for the query.
+     * @param limits the limits to use for the query.
+     * @param partitionKey the partition key for the partition to query.
+     * @param clusteringIndexFilter the clustering index filter to use for the query.
+     * @param postProcessor transformation to apply to the results on the coordinator.
+     *
+     * @return a newly created read command.
+     */
+    public static SinglePartitionReadCommand create(boolean isForThrift,
+                                                    CFMetaData metadata,
+                                                    int nowInSec,
+                                                    ColumnFilter columnFilter,
+                                                    RowFilter rowFilter,
+                                                    DataLimits limits,
+                                                    DecoratedKey partitionKey,
+                                                    ClusteringIndexFilter clusteringIndexFilter,
+                                                    PostReconciliationProcessor postProcessor)
+    {
+        return new SinglePartitionReadCommand(false, 0, isForThrift, metadata, nowInSec, columnFilter, rowFilter, limits, partitionKey, clusteringIndexFilter, postProcessor);
     }
 
     /**
@@ -179,7 +224,6 @@ public class SinglePartitionReadCommand extends ReadCommand
     {
         return SinglePartitionReadCommand.create(metadata, nowInSec, metadata.decorateKey(key), Slices.ALL);
     }
-
     /**
      * Creates a new single partition slice command for the provided single slice.
      *
@@ -210,7 +254,7 @@ public class SinglePartitionReadCommand extends ReadCommand
     public static SinglePartitionReadCommand create(CFMetaData metadata, int nowInSec, DecoratedKey key, Slices slices)
     {
         ClusteringIndexSliceFilter filter = new ClusteringIndexSliceFilter(slices, false);
-        return SinglePartitionReadCommand.create(metadata, nowInSec, ColumnFilter.all(metadata), RowFilter.NONE, DataLimits.NONE, key, filter);
+        return create(metadata, nowInSec, ColumnFilter.all(metadata), RowFilter.NONE, DataLimits.NONE, key, filter);
     }
 
     /**
@@ -231,7 +275,7 @@ public class SinglePartitionReadCommand extends ReadCommand
 
     public SinglePartitionReadCommand copy()
     {
-        return new SinglePartitionReadCommand(isDigestQuery(), digestVersion(), isForThrift(), metadata(), nowInSec(), columnFilter(), rowFilter(), limits(), partitionKey(), clusteringIndexFilter());
+        return new SinglePartitionReadCommand(isDigestQuery(), digestVersion(), isForThrift(), metadata(), nowInSec(), columnFilter(), rowFilter(), limits(), partitionKey(), clusteringIndexFilter(), postProcessor());
     }
 
     public DecoratedKey partitionKey()
@@ -294,7 +338,8 @@ public class SinglePartitionReadCommand extends ReadCommand
                       rowFilter(),
                       limits().forPaging(pageSize),
                       partitionKey(),
-                      lastReturned == null ? clusteringIndexFilter() : clusteringIndexFilter.forPaging(metadata().comparator, lastReturned, false));
+                      lastReturned == null ? clusteringIndexFilter() : clusteringIndexFilter.forPaging(metadata().comparator, lastReturned, false),
+                      postProcessor());
     }
 
     public PartitionIterator execute(ConsistencyLevel consistency, ClientState clientState) throws RequestExecutionException

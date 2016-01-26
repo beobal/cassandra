@@ -1271,7 +1271,8 @@ public class SASIIndexTest
                                                             filter,
                                                             DataLimits.NONE,
                                                             DataRange.allData(store.metadata.partitioner),
-                                                            Optional.empty());
+                                                            Optional.empty(),
+                                                            ReadCommand.PostReconciliationProcessor.DEFAULT);
 
         try
         {
@@ -1958,7 +1959,8 @@ public class SASIIndexTest
                                                                           RowFilter.NONE,
                                                                           DataLimits.NONE,
                                                                           DataRange.allData(store.getPartitioner()),
-                                                                          Optional.empty());
+                                                                          Optional.empty(),
+                                                                          ReadCommand.PostReconciliationProcessor.DEFAULT);
 
         QueryController controller = new QueryController(store, command, Integer.MAX_VALUE);
         org.apache.cassandra.index.sasi.plan.Expression expression =
@@ -2098,7 +2100,8 @@ public class SASIIndexTest
                                                             filter,
                                                             DataLimits.thriftLimits(maxResults, DataLimits.NO_LIMIT),
                                                             range,
-                                                            Optional.empty());
+                                                            Optional.empty(),
+                                                            ReadCommand.PostReconciliationProcessor.DEFAULT);
 
         return command.executeLocally(command.executionController());
     }
