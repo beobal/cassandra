@@ -1367,7 +1367,12 @@ public abstract class ReadCommand extends MonitorableImpl implements ReadQuery
                                     "Fill name in filter (hex): " + ByteBufferUtil.bytesToHex(buffer), metadata.cfId);
                 }
 
-                if (!cellName.clustering.equals(Clustering.STATIC_CLUSTERING))
+                if (cellName.clustering.equals(Clustering.STATIC_CLUSTERING))
+                {
+                    clusterings.add(Clustering.make(cellName.column.name.bytes));
+                    selectionBuilder.add(metadata.compactValueColumn());
+                }
+                else
                     clusterings.add(cellName.clustering);
 
                 selectionBuilder.add(cellName.column);
