@@ -20,6 +20,8 @@ New features
 ------------
     - Internal authentication now supports caching of encrypted credentials.
       Reference cassandra.yaml:credentials_validity_in_ms
+    - Remote configuration of auth caches via JMX can be disabled using the
+      the system property cassandra.disable_auth_caches_remote_configuration
 
 Upgrading
 ---------

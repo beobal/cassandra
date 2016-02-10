@@ -115,6 +115,9 @@ public class AuthCache<K, V> implements AuthCacheMBean
 
     public void setValidity(int validityPeriod)
     {
+        if (Boolean.getBoolean("cassandra.disable_auth_caches_remote_configuration"))
+            throw new UnsupportedOperationException("Remote configuration of auth caches is disabled");
+
         setValidityDelegate.accept(validityPeriod);
         cache = initCache(cache);
     }
@@ -126,6 +129,9 @@ public class AuthCache<K, V> implements AuthCacheMBean
 
     public void setUpdateInterval(int updateInterval)
     {
+        if (Boolean.getBoolean("cassandra.disable_auth_caches_remote_configuration"))
+            throw new UnsupportedOperationException("Remote configuration of auth caches is disabled");
+
         setUpdateIntervalDelegate.accept(updateInterval);
         cache = initCache(cache);
     }
@@ -137,6 +143,9 @@ public class AuthCache<K, V> implements AuthCacheMBean
 
     public void setMaxEntries(int maxEntries)
     {
+        if (Boolean.getBoolean("cassandra.disable_auth_caches_remote_configuration"))
+            throw new UnsupportedOperationException("Remote configuration of auth caches is disabled");
+
         setMaxEntriesDelegate.accept(maxEntries);
         cache = initCache(cache);
     }
