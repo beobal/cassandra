@@ -26,6 +26,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import javax.management.MBeanServer;
+import javax.management.MalformedObjectNameException;
 import javax.management.ObjectName;
 
 import com.google.common.cache.CacheBuilder;
@@ -86,12 +87,17 @@ public class AuthCache<K, V> implements AuthCacheMBean
         try
         {
             MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
-            mbs.registerMBean(this, new ObjectName(MBEAN_NAME_BASE + name));
+            mbs.registerMBean(this, getObjectName());
         }
         catch (Exception e)
         {
             throw new RuntimeException(e);
         }
+    }
+
+    protected ObjectName getObjectName() throws MalformedObjectNameException
+    {
+        return new ObjectName(MBEAN_NAME_BASE + name);
     }
 
     public V get(K k) throws ExecutionException
