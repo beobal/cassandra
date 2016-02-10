@@ -134,7 +134,7 @@ roles_validity_in_ms: 2000
 # completes. If roles_validity_in_ms is non-zero, then this must be
 # also.
 # Defaults to the same value as roles_validity_in_ms.
-# roles_update_interval_in_ms: 1000
+# roles_update_interval_in_ms: 2000
 
 # Validity period for permissions cache (fetching permissions can be an
 # expensive operation depending on the authorizer, CassandraAuthorizer is
@@ -148,7 +148,7 @@ permissions_validity_in_ms: 2000
 # completes. If permissions_validity_in_ms is non-zero, then this must be
 # also.
 # Defaults to the same value as permissions_validity_in_ms.
-# permissions_update_interval_in_ms: 1000
+# permissions_update_interval_in_ms: 2000
 
 # Validity period for credentials cache. This cache is tightly coupled to
 # the provided PasswordAuthenticator implementation of IAuthenticator. If
@@ -167,7 +167,7 @@ credentials_validity_in_ms: 2000
 # completes. If credentials_validity_in_ms is non-zero, then this must be
 # also.
 # Defaults to the same value as credentials_validity_in_ms.
-# credentials_update_interval_in_ms: 1000
+# credentials_update_interval_in_ms: 2000
 
 # The partitioner is responsible for distributing groups of rows (by
 # partition key) across nodes in the cluster.  You should leave this
