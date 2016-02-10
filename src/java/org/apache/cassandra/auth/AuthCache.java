@@ -107,6 +107,12 @@ public class AuthCache<K, V> implements AuthCacheMBean
         cache = initCache(null);
     }
 
+    public void invalidate(K k)
+    {
+        if (cache != null)
+            cache.invalidate(k);
+    }
+
     public void setValidity(int validityPeriod)
     {
         setValidityDelegate.accept(validityPeriod);

@@ -231,9 +231,8 @@ public class PasswordAuthenticator implements IAuthenticator
          * a user being authorized to act on behalf of another with this IAuthenticator).
          *
          * @param bytes encoded credentials string sent by the client
-         * @return map containing the username/password pairs in the form an IAuthenticator
-         * would expect
-         * @throws javax.security.sasl.SaslException
+         * @throws org.apache.cassandra.exceptions.AuthenticationException if either the
+         *         authnId or password is null
          */
         private void decodeCredentials(byte[] bytes) throws AuthenticationException
         {
@@ -263,7 +262,7 @@ public class PasswordAuthenticator implements IAuthenticator
         }
     }
 
-    private static class CredentialsCache extends AuthCache<String, String>
+    private static class CredentialsCache extends AuthCache<String, String> implements CredentialsCacheMBean
     {
         private CredentialsCache(PasswordAuthenticator authenticator)
         {
@@ -277,6 +276,16 @@ public class PasswordAuthenticator implements IAuthenticator
                   authenticator::queryHashedPassword,
                   () -> true);
         }
+
+        public void invalidateCredentials(String roleName)
+        {
+            invalidate(roleName);
+        }
+    }
+
+    public static interface CredentialsCacheMBean extends AuthCacheMBean
+    {
+        public void invalidateCredentials(String roleName);
     }
 
     // Just a marker so we can identify that invalid credentials were the
