@@ -19,10 +19,15 @@ package org.apache.cassandra.cql3.validation.operations;
 
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
+
 import org.apache.cassandra.cql3.CQLTester;
+import org.apache.cassandra.utils.ByteBufferUtil;
 
 public class SelectMultiColumnRelationTest extends CQLTester
 {
+    private static final ByteBuffer TOO_BIG = ByteBuffer.allocate(1024 * 65);
+
     @Test
     public void testSingleClusteringInvalidQueries() throws Throwable
     {
@@ -871,6 +876,24 @@ public class SelectMultiColumnRelationTest extends CQLTester
         assertRows(execute("SELECT * FROM %s WHERE (b, c) >= (?, ?) AND e = ? ALLOW FILTERING", 1, 1, 2),
                    row(0, 1, 1, 1, 2));
 
+        assertInvalidMessage("Unsupported null value for column e",
+                             "SELECT * FROM %s WHERE (b, c) >= (?, ?) AND e = ?  ALLOW FILTERING", 1, 1, null);
+
+        assertInvalidMessage("Unsupported unset value for column e",
+                             "SELECT * FROM %s WHERE (b, c) >= (?, ?) AND e = ?  ALLOW FILTERING", 1, 1, unset());
+    }
+
+    @Test
+    public void testMultipleClusteringWithIndexAndValueOver64K() throws Throwable
+    {
+        createTable("CREATE TABLE %s (a int, b blob, c int, d int, PRIMARY KEY (a, b, c))");
+        createIndex("CREATE INDEX ON %s (b)");
+
+        execute("INSERT INTO %s (a, b, c, d) VALUES (?, ?, ?, ?)", 0, ByteBufferUtil.bytes(1), 0, 0);
+        execute("INSERT INTO %s (a, b, c, d) VALUES (?, ?, ?, ?)", 0, ByteBufferUtil.bytes(2), 1, 0);
+
+        assertInvalidMessage("Index expression values may not be larger than 64K",
+                             "SELECT * FROM %s WHERE (b, c) = (?, ?) AND d = ?  ALLOW FILTERING", TOO_BIG, 1, 2);
     }
 
     @Test

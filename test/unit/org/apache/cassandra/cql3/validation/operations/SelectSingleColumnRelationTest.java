@@ -17,14 +17,12 @@
  */
 package org.apache.cassandra.cql3.validation.operations;
 
-import java.util.Arrays;
-
-import org.junit.Test;
-
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.apache.cassandra.cql3.CQLTester;
+import org.junit.Test;
 
 public class SelectSingleColumnRelationTest extends CQLTester
 {
@@ -301,6 +299,25 @@ public class SelectSingleColumnRelationTest extends CQLTester
     }
 
     @Test
+    public void testAllowFilteringWithIndexedColumnAndStaticColumns() throws Throwable
+    {
+        createTable("CREATE TABLE %s (a int, b int, c int, s int static, PRIMARY KEY(a, b))");
+        createIndex("CREATE INDEX ON %s(c)");
+
+        execute("INSERT INTO %s(a, b, c, s) VALUES(?, ?, ?, ?)", 1, 1, 1, 1);
+        execute("INSERT INTO %s(a, b, c) VALUES(?, ?, ?)", 1, 2, 1);
+        execute("INSERT INTO %s(a, s) VALUES(?, ?)", 3, 3);
+        execute("INSERT INTO %s(a, b, c, s) VALUES(?, ?, ?, ?)", 2, 1, 1, 2);
+
+        assertRows(execute("SELECT * FROM %s WHERE c = ? AND s > ? ALLOW FILTERING", 1, 1),
+                   row(2, 1, 2, 1));
+
+        assertRows(execute("SELECT * FROM %s WHERE c = ? AND s < ? ALLOW FILTERING", 1, 2),
+                   row(1, 1, 1, 1),
+                   row(1, 2, 1, 1));
+    }
+
+    @Test
     public void testIndexQueriesOnComplexPrimaryKey() throws Throwable
     {
         createTable("CREATE TABLE %s (pk0 int, pk1 int, ck0 int, ck1 int, ck2 int, value int, PRIMARY KEY ((pk0, pk1), ck0, ck1, ck2))");
@@ -560,7 +577,7 @@ public class SelectSingleColumnRelationTest extends CQLTester
         assertInvalidMessage("Invalid unset value for column i", "SELECT * from %s WHERE k = 1 AND i IN(?,?)", 1, unset());
         assertInvalidMessage("Invalid unset value for column i", "SELECT * from %s WHERE i = ? ALLOW FILTERING", unset());
         // indexed column
-        assertInvalidMessage("Unsupported unset value for indexed column s", "SELECT * from %s WHERE s = ?", unset());
+        assertInvalidMessage("Unsupported unset value for column s", "SELECT * from %s WHERE s = ?", unset());
         // range
         assertInvalidMessage("Invalid unset value for column i", "SELECT * from %s WHERE k = 1 AND i > ?", unset());
     }
