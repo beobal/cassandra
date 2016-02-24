@@ -138,17 +138,44 @@ public class PartitionRangeReadCommand extends ReadCommand
 
     public PartitionRangeReadCommand forSubRange(AbstractBounds<PartitionPosition> range)
     {
-        return new PartitionRangeReadCommand(isDigestQuery(), digestVersion(), isForThrift(), metadata(), nowInSec(), columnFilter(), rowFilter(), limits(), dataRange().forSubRange(range), index, postProcessor());
+        return new PartitionRangeReadCommand(isDigestQuery(),
+                                             digestVersion(),
+                                             isForThrift(),
+                                             metadata(),
+                                             nowInSec(),
+                                             columnFilter(),
+                                             rowFilter(),
+                                             limits(),
+                                             dataRange().forSubRange(range),
+                                             index,
+                                             postProcessor());
     }
 
     public PartitionRangeReadCommand copy()
     {
-        return new PartitionRangeReadCommand(isDigestQuery(), digestVersion(), isForThrift(), metadata(), nowInSec(), columnFilter(), rowFilter(), limits(), dataRange(), index, postProcessor());
+        return new PartitionRangeReadCommand(isDigestQuery(),
+                                             digestVersion(),
+                                             isForThrift(),
+                                             metadata(),
+                                             nowInSec(),
+                                             columnFilter(),
+                                             rowFilter(),
+                                             limits(),
+                                             dataRange(),
+                                             index,
+                                             postProcessor());
     }
 
     public PartitionRangeReadCommand withUpdatedLimit(DataLimits newLimits)
     {
-        return new PartitionRangeReadCommand(metadata(), nowInSec(), columnFilter(), rowFilter(), newLimits, dataRange(), index, postProcessor());
+        return new PartitionRangeReadCommand(metadata(),
+                                             nowInSec(),
+                                             columnFilter(),
+                                             rowFilter(),
+                                             newLimits,
+                                             dataRange(),
+                                             index,
+                                             postProcessor());
     }
 
     public long getTimeout()
@@ -325,7 +352,17 @@ public class PartitionRangeReadCommand extends ReadCommand
         throws IOException
         {
             DataRange range = DataRange.serializer.deserialize(in, version, metadata);
-            return new PartitionRangeReadCommand(isDigest, digestVersion, isForThrift, metadata, nowInSec, columnFilter, rowFilter, limits, range, index, PostReconciliationProcessor.DEFAULT);
+            return new PartitionRangeReadCommand(isDigest,
+                                                 digestVersion,
+                                                 isForThrift,
+                                                 metadata,
+                                                 nowInSec,
+                                                 columnFilter,
+                                                 rowFilter,
+                                                 limits,
+                                                 range,
+                                                 index,
+                                                 PostReconciliationProcessor.DEFAULT);
         }
     }
 }

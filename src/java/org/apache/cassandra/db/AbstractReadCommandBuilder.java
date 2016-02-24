@@ -240,7 +240,15 @@ public abstract class AbstractReadCommandBuilder
         @Override
         public ReadCommand build()
         {
-            return SinglePartitionReadCommand.create(false, cfs.metadata, nowInSeconds, makeColumnFilter(), filter, makeLimits(), partitionKey, makeFilter(), postProcessor);
+            return SinglePartitionReadCommand.create(false,
+                                                     cfs.metadata,
+                                                     nowInSeconds,
+                                                     makeColumnFilter(),
+                                                     filter,
+                                                     makeLimits(),
+                                                     partitionKey,
+                                                     makeFilter(),
+                                                     postProcessor);
         }
     }
 
@@ -271,7 +279,15 @@ public abstract class AbstractReadCommandBuilder
         @Override
         public ReadCommand build()
         {
-            return SinglePartitionReadCommand.create(false, cfs.metadata, nowInSeconds, makeColumnFilter(), filter, makeLimits(), partitionKey, makeFilter(), postProcessor);
+            return SinglePartitionReadCommand.create(false,
+                                                     cfs.metadata,
+                                                     nowInSeconds,
+                                                     makeColumnFilter(),
+                                                     filter,
+                                                     makeLimits(),
+                                                     partitionKey,
+                                                     makeFilter(),
+                                                     postProcessor);
         }
     }
 

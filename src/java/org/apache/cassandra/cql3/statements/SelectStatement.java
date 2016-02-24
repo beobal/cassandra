@@ -463,7 +463,15 @@ public class SelectStatement implements CQLStatement
         {
             QueryProcessor.validateKey(key);
             DecoratedKey dk = cfm.decorateKey(ByteBufferUtil.clone(key));
-            commands.add(SinglePartitionReadCommand.create(false, cfm, nowInSec, queriedColumns, rowFilter, limit, dk, filter, options.getPostProcessor()));
+            commands.add(SinglePartitionReadCommand.create(false,
+                                                           cfm,
+                                                           nowInSec,
+                                                           queriedColumns,
+                                                           rowFilter,
+                                                           limit,
+                                                           dk,
+                                                           filter,
+                                                           options.getPostProcessor()));
         }
 
         return new SinglePartitionReadCommand.Group(commands, limit);
