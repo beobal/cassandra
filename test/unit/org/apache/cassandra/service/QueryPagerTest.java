@@ -427,8 +427,10 @@ public class QueryPagerTest
         for (int i = 0; i < 5; i++)
             executeInternal(String.format("INSERT INTO %s.%s (k, c, v) VALUES ('k%d', 'c%d', null)", keyspace, table, 0, i));
 
-        ReadCommand command = SinglePartitionReadCommand.create(cfs.metadata, nowInSec, Util.dk("k0"), Slice.ALL);
-
+        ReadCommand command = SinglePartitionReadCommand.create(cfs.metadata,
+                                                                nowInSec,
+                                                                Util.dk("k0"),
+                                                                Slices.with(cfs.metadata.comparator, Slice.ALL));
         QueryPager pager = command.getPager(null, Server.CURRENT_VERSION);
 
         for (int i = 0; i < 5; i++)

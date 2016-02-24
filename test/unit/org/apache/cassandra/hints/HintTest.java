@@ -319,7 +319,9 @@ public class HintTest
     private static SinglePartitionReadCommand cmd(String key, String table)
     {
         CFMetaData meta = Schema.instance.getCFMetaData(KEYSPACE, table);
-        return SinglePartitionReadCommand.fullPartitionRead(meta, FBUtilities.nowInSeconds(), bytes(key));
+        return SinglePartitionReadCommand.fullPartitionRead(meta,
+                                                            FBUtilities.nowInSeconds(),
+                                                            meta.decorateKey(bytes(key)));
     }
 
     private static FilteredPartition readPartition(String key, String table)
