@@ -272,6 +272,12 @@ public final class StatementRestrictions
                                 nonPrimaryKeyRestrictions.getFunctions());
     }
 
+    // may be used by QueryHandler implementations
+    public IndexRestrictions getIndexRestrictions()
+    {
+        return indexRestrictions;
+    }
+
     private void addSingleColumnRestriction(SingleColumnRestriction restriction)
     {
         ColumnDefinition def = restriction.columnDef;
