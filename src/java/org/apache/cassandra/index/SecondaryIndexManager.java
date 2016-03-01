@@ -623,7 +623,7 @@ public class SecondaryIndexManager implements IndexRegistry
         Set<Index> searchableIndexes = new HashSet<>();
         for (RowFilter.Expression expression : command.rowFilter())
         {
-            if (expression.isCustom())
+            if (expression.isCustom() && ((RowFilter.CustomExpression)expression).getTargetIndex() != null)
             {
                 // Only a single custom expression is allowed per query and, if present,
                 // we want to always favour the index specified in such an expression

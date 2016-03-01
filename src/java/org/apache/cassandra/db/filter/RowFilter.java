@@ -22,13 +22,16 @@ import java.nio.ByteBuffer;
 import java.util.*;
 
 import com.google.common.base.Objects;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.config.ColumnDefinition;
 import org.apache.cassandra.cql3.Operator;
 import org.apache.cassandra.db.*;
 import org.apache.cassandra.db.marshal.*;
-import org.apache.cassandra.db.partitions.*;
+import org.apache.cassandra.db.partitions.ImmutableBTreePartition;
+import org.apache.cassandra.db.partitions.UnfilteredPartitionIterator;
 import org.apache.cassandra.db.rows.*;
 import org.apache.cassandra.db.transform.Transformation;
 import org.apache.cassandra.exceptions.InvalidRequestException;
@@ -53,6 +56,8 @@ import static org.apache.cassandra.cql3.statements.RequestValidations.checkNotNu
  */
 public abstract class RowFilter implements Iterable<RowFilter.Expression>
 {
+    private static final Logger logger = LoggerFactory.getLogger(RowFilter.class);
+
     public static final Serializer serializer = new Serializer();
     public static final RowFilter NONE = new CQLFilter(Collections.emptyList());
 
@@ -97,6 +102,11 @@ public abstract class RowFilter implements Iterable<RowFilter.Expression>
     public void addCustomIndexExpression(CFMetaData cfm, IndexMetadata targetIndex, ByteBuffer value)
     {
         expressions.add(new CustomExpression(cfm, targetIndex, value));
+    }
+
+    public void addExpression(Expression e)
+    {
+        expressions.add(e);
     }
 
     public List<Expression> getExpressions()
@@ -234,12 +244,13 @@ public abstract class RowFilter implements Iterable<RowFilter.Expression>
                 DecoratedKey pk;
                 public UnfilteredRowIterator applyToPartition(UnfilteredRowIterator partition)
                 {
+                    pk = partition.partitionKey();
+
                     // The filter might be on static columns, so need to check static row first.
                     Row staticRow = applyToRow(partition.staticRow());
                     if (staticRow == null)
                         return null;
 
-                    pk = partition.partitionKey();
                     return Transformation.apply(partition, this);
                 }
 
@@ -445,8 +456,7 @@ public abstract class RowFilter implements Iterable<RowFilter.Expression>
                 if (expression.kind() == Kind.CUSTOM)
                 {
                     assert version >= MessagingService.VERSION_30;
-                    IndexMetadata.serializer.serialize(((CustomExpression)expression).targetIndex, out, version);
-                    ByteBufferUtil.writeWithShortLength(expression.value, out);
+                    CustomExpression.serializer.serialize(((CustomExpression)expression), out, version);
                     return;
                 }
 
@@ -489,9 +499,7 @@ public abstract class RowFilter implements Iterable<RowFilter.Expression>
                     // custom expressions (3.0+ only) do not contain a column or operator, only a value
                     if (kind == Kind.CUSTOM)
                     {
-                        return new CustomExpression(metadata,
-                                                    IndexMetadata.serializer.deserialize(in, version, metadata),
-                                                    ByteBufferUtil.readWithShortLength(in));
+                        return CustomExpression.serializer.deserialize(in, version, metadata);
                     }
                 }
 
@@ -542,7 +550,9 @@ public abstract class RowFilter implements Iterable<RowFilter.Expression>
                 // version 3.0+ includes a byte for Kind
                 long size = version >= MessagingService.VERSION_30 ? 1 : 0;
 
-                // custom expressions don't include a column or operator, all other expressions do
+                // all non-custom expressions include a column and operator, but the
+                // custom expression serializer is pluggable, so leave everything to
+                // the implementation
                 if (expression.kind() != Kind.CUSTOM)
                     size += ByteBufferUtil.serializedSizeWithShortLength(expression.column().name.bytes)
                             + expression.operator.serializedSize();
@@ -565,8 +575,7 @@ public abstract class RowFilter implements Iterable<RowFilter.Expression>
                         break;
                     case CUSTOM:
                         if (version >= MessagingService.VERSION_30)
-                            size += IndexMetadata.serializer.serializedSize(((CustomExpression)expression).targetIndex, version)
-                                  + ByteBufferUtil.serializedSizeWithShortLength(expression.value);
+                            size += CustomExpression.serializer.serializedSize(((CustomExpression)expression), version);
                         break;
                 }
                 return size;
@@ -852,8 +861,33 @@ public abstract class RowFilter implements Iterable<RowFilter.Expression>
      * A custom index expression for use with 2i implementations which support custom syntax and which are not
      * necessarily linked to a single column in the base table.
      */
-    public static final class CustomExpression extends Expression
+    public static class CustomExpression extends Expression
     {
+        private static final Serializer serializer;
+        static
+        {
+            Serializer s = new Serializer();
+            String customSerializerClass = System.getProperty("cassandra.custom_expression_serializer_class");
+            if (customSerializerClass != null)
+            {
+                try
+                {
+                    s = FBUtilities.construct(customSerializerClass, "CustomExpression Serializer");
+                    logger.info("Using {} as serializer for custom query expressions " +
+                                "(as requested with -Dcassandra.custom_expression_serializer_class)",
+                                customSerializerClass);
+                }
+                catch (Exception e)
+                {
+                    logger.info("Cannot use class {} as custom expression serializer ({})," +
+                                "queries using custom expressions may not work as expected",
+                                customSerializerClass,
+                                e.getMessage());
+                }
+            }
+            serializer = s;
+        }
+
         private final IndexMetadata targetIndex;
         private final CFMetaData cfm;
 
@@ -901,6 +935,28 @@ public abstract class RowFilter implements Iterable<RowFilter.Expression>
         public boolean isSatisfiedBy(CFMetaData metadata, DecoratedKey partitionKey, Row row)
         {
             return true;
+        }
+
+        public static class Serializer
+        {
+            public CustomExpression deserialize(DataInputPlus in, int version, CFMetaData metadata) throws IOException
+            {
+                return new CustomExpression(metadata,
+                                            IndexMetadata.serializer.deserialize(in, version, metadata),
+                                            ByteBufferUtil.readWithShortLength(in));
+            }
+
+            public void serialize(CustomExpression expression, DataOutputPlus out, int version) throws IOException
+            {
+                IndexMetadata.serializer.serialize(expression.targetIndex, out, version);
+                ByteBufferUtil.writeWithShortLength(expression.value, out);
+            }
+
+            public long serializedSize(CustomExpression expression, int version)
+            {
+                return IndexMetadata.serializer.serializedSize(expression.targetIndex, version)
+                        + ByteBufferUtil.serializedSizeWithShortLength(expression.value);
+            }
         }
     }
 
