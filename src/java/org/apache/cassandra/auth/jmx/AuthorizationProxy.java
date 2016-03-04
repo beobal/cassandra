@@ -180,7 +180,9 @@ public class AuthorizationProxy implements InvocationHandler
     @VisibleForTesting
     boolean authorize(Subject subject, String methodName, Object[] args)
     {
-        logger.trace("Authorizing JMX method invocation {} for {}", methodName, subject);
+        logger.trace("Authorizing JMX method invocation {} for {}",
+                     methodName,
+                     subject == null ? "" :subject.toString().replaceAll("\\n", " "));
 
         // Permissive authorization is enabled
         if (!isAuthzRequired.get())
