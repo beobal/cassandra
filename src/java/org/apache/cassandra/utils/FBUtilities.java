@@ -28,7 +28,6 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.zip.CRC32;
 import java.util.zip.Checksum;
-
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
@@ -37,9 +36,8 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.cassandra.auth.IAuthenticator;
-import org.apache.cassandra.auth.IAuthorizer;
-import org.apache.cassandra.auth.IRoleManager;
+import org.apache.cassandra.auth.*;
+import org.apache.cassandra.auth.cert.ICertificateAuthenticator;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.dht.IPartitioner;
@@ -47,12 +45,11 @@ import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.io.IVersionedSerializer;
-import org.apache.cassandra.schema.CompressionParams;
 import org.apache.cassandra.io.util.DataOutputBuffer;
 import org.apache.cassandra.io.util.DataOutputBufferFixed;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.net.AsyncOneResponse;
-
+import org.apache.cassandra.schema.CompressionParams;
 import org.codehaus.jackson.JsonFactory;
 import org.codehaus.jackson.map.ObjectMapper;
 
@@ -414,6 +411,13 @@ public class FBUtilities
         if (!className.contains("."))
             className = "org.apache.cassandra.auth." + className;
         return FBUtilities.construct(className, "authenticator");
+    }
+
+    public static ICertificateAuthenticator newCertificateAuthenticator(String className) throws ConfigurationException
+    {
+        if (!className.contains("."))
+            className = "org.apache.cassandra.auth.cert." + className;
+        return FBUtilities.construct(className, "certificate authenticator");
     }
 
     public static IRoleManager newRoleManager(String className) throws ConfigurationException

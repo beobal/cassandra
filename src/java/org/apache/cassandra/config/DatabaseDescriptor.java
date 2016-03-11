@@ -36,6 +36,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.auth.*;
+import org.apache.cassandra.auth.cert.ICertificateAuthenticator;
+import org.apache.cassandra.auth.cert.NoOpCertificateAuthenticator;
 import org.apache.cassandra.config.Config.CommitLogSync;
 import org.apache.cassandra.config.Config.RequestSchedulerId;
 import org.apache.cassandra.config.EncryptionOptions.ClientEncryptionOptions;
@@ -87,6 +89,7 @@ public class DatabaseDescriptor
     private static SSTableFormat.Type sstable_format = SSTableFormat.Type.BIG;
 
     private static IAuthenticator authenticator = new AllowAllAuthenticator();
+    private static ICertificateAuthenticator certificateAuthenticator = new NoOpCertificateAuthenticator();
     private static IAuthorizer authorizer = new AllowAllAuthorizer();
     // Don't initialize the role manager until applying config. The options supported by CassandraRoleManager
     // depend on the configured IAuthenticator, so defer creating it until that's been set.
@@ -346,8 +349,6 @@ public class DatabaseDescriptor
         if (conf.authorizer != null)
             authorizer = FBUtilities.newAuthorizer(conf.authorizer);
 
-        if (!authenticator.requireAuthentication() && authorizer.requireAuthorization())
-            throw new ConfigurationException(conf.authenticator + " can't be used with " +  conf.authorizer, false);
 
         if (conf.role_manager != null)
             roleManager = FBUtilities.newRoleManager(conf.role_manager);
@@ -722,6 +723,39 @@ public class DatabaseDescriptor
         {
             throw new ConfigurationException("Encryption must be enabled in client_encryption_options for native_transport_port_ssl", false);
         }
+
+        if (conf.client_encryption_options.enabled)
+        {
+            if (conf.client_encryption_options.authentication.authenticator != null)
+                certificateAuthenticator =
+                   FBUtilities.newCertificateAuthenticator(conf.client_encryption_options.authentication.authenticator);
+
+            try
+            {
+                // defaults to NOT_REQUIRED
+                ICertificateAuthenticator.Requirement requirement =
+                   ICertificateAuthenticator.Requirement.valueOf(config.client_encryption_options.authentication.requirement);
+                certificateAuthenticator.setRequirement(requirement);
+            }
+            catch (IllegalArgumentException e)
+            {
+                throw new ConfigurationException(config.client_encryption_options.authentication.requirement +
+                                                 " is not a valid requirement_level for client certficate authentication");
+            }
+            certificateAuthenticator.validateConfiguration();
+        }
+
+        // check that the authn config can satisfy the requirements of the authorizer
+        if (authorizer.requireAuthorization() &&
+            !(authenticator.requireAuthentication() || ICertificateAuthenticator.willAuthenticate()))
+            throw new ConfigurationException(String.format("%s requires authorization, but neither %s" +
+                                                           " nor the configured client certificate authentication " +
+                                                           " settings ( authenticator: %s, requirement: %s) will " +
+                                                           "perform authentication",
+                                                           conf.authorizer,
+                                                           conf.authenticator,
+                                                           conf.client_encryption_options.authentication.authenticator,
+                                                           conf.client_encryption_options.authentication.requirement));
     }
 
     private static FileStore guessFileStore(String dir) throws IOException
@@ -2038,5 +2072,10 @@ public class DatabaseDescriptor
     public static int searchConcurrencyFactor()
     {
         return Integer.valueOf(System.getProperty("cassandra.search_concurrency_factor", "1"));
+    }
+
+    public static ICertificateAuthenticator getCertificateAuthenticator()
+    {
+        return certificateAuthenticator;
     }
 }

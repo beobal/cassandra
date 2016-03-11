@@ -17,6 +17,8 @@
  */
 package org.apache.cassandra.config;
 
+import org.apache.cassandra.auth.cert.ICertificateAuthenticator;
+
 public abstract class EncryptionOptions
 {
     public String keystore = "conf/.keystore";
@@ -37,6 +39,23 @@ public abstract class EncryptionOptions
     {
         public boolean enabled = false;
         public boolean optional = false;
+        public AuthenticationOptions authentication = new AuthenticationOptions();
+
+        public static class AuthenticationOptions
+        {
+            public String authenticator;
+            public String requirement = ICertificateAuthenticator.Requirement.NOT_REQUIRED.name();
+
+            public AuthenticationOptions()
+            {
+            }
+
+            public AuthenticationOptions(String authenticator, String requirement)
+            {
+                this.authenticator = authenticator;
+                this.requirement = requirement;
+            }
+        }
     }
 
     public static class ServerEncryptionOptions extends EncryptionOptions

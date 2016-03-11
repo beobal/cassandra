@@ -15,19 +15,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.cassandra.auth;
 
+package org.apache.cassandra.auth.cert;
+
+import org.apache.cassandra.auth.AuthenticatedUser;
 import org.apache.cassandra.exceptions.AuthenticationException;
 
-import java.net.InetAddress;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
-import java.util.Collections;
-import java.util.Map;
-import java.util.Set;
 import javax.naming.InvalidNameException;
 import javax.naming.ldap.LdapName;
 import javax.naming.ldap.Rdn;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * CommonNameCertificateAuthenticator is an ICertificateAuthenticator
@@ -39,31 +40,22 @@ import javax.naming.ldap.Rdn;
  * This implementation only accepts {@link java.security.cert.X509Certificate}
  * chains.
  */
-public class CommonNameCertificateAuthenticator implements ICertificateAuthenticator {
+public class CommonNameCertificateAuthenticator implements ICertificateAuthenticator
+{
+    private static final Logger logger = LoggerFactory.getLogger(CommonNameCertificateAuthenticator.class);
 
-    @Override
-    public boolean requireAuthentication()
+    private Requirement requirement = Requirement.NOT_REQUIRED;
+
+    public void setRequirement(Requirement requirement)
     {
-        return false;
+        assert requirement != null;
+        this.requirement = requirement;
     }
 
-    @Override
-    public AuthenticatedUser legacyAuthenticate(Map<String, String> credentials)
+    public Requirement getRequirement()
     {
-        throw new UnsupportedOperationException();
+        return requirement;
     }
-
-    @Override
-    public Set<? extends IResource> protectedResources()
-    {
-        return Collections.emptySet();
-    }
-
-    @Override
-    public void validateConfiguration() {}
-
-    @Override
-    public void setup() {}
 
     @Override
     public AuthenticatedUser authenticate(Certificate[] chain) throws AuthenticationException
@@ -99,12 +91,7 @@ public class CommonNameCertificateAuthenticator implements ICertificateAuthentic
         for (Rdn r : subject.getRdns())
             if ("CN".equals(r.getType()))
                 return new AuthenticatedUser(r.getValue().toString());
-        throw new AuthenticationException("Common name field required but not present in certificate subject");
-    }
 
-    @Override
-    public SaslNegotiator newSaslNegotiator(InetAddress clientAddress)
-    {
-        throw new UnsupportedOperationException();
+        throw new AuthenticationException("Common name field required but not present in certificate subject");
     }
 }

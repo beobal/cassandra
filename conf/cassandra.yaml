@@ -910,8 +910,27 @@ client_encryption_options:
     optional: false
     keystore: conf/.keystore
     keystore_password: cassandra
+    # If true, clients must supply a certificate which can be validated using the configured trustore
     # require_client_auth: false
-    # Set trustore and truststore_password if require_client_auth is true
+    # The following settings configure Cassandra client auth via ssl certificates.
+    # an ICertificateAuthenticator can be used to obtain Cassandra role information directly from
+    # the SSL certificate chain, providing an alternative authentication mechanism to SASL. To use,
+    # specify an authenticator implementation and a requirement level. Client supplied certificates
+    # must be present in the configured truststore when using this authentication
+    # mechanism
+    # Valid levels are:
+    # REQUIRED     : valid user identity *must* be obtained from the SSL cert chain, otherwise
+    #                the connection is refused. If a valid identity *is* obtained, no further
+    #                authentication is required.
+    # OPTIONAL     : the server attempts to obtain user identity from certs, falling back to the
+    #                configured SASL authenticator if this is unsuccessful. If it is successful,
+    #                no further authentication is required.
+    # NOT_REQUIRED : no attempt is made to obtain user identity from the cert chain. Authentication
+    #                will proceed to use the configured SASL authenticator.
+    # authentication:
+    #    authenticator: CommonNameCertificateAuthenticator
+    #    requirement: OPTIONAL
+    # Set trustore and truststore_password if require_client_auth is true or if client cert auth is enabled
     # truststore: conf/.truststore
     # truststore_password: cassandra
     # More advanced defaults below:

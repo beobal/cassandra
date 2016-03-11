@@ -15,9 +15,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.cassandra.auth;
 
+package org.apache.cassandra.auth.cert;
+
+import org.apache.cassandra.auth.AuthenticatedUser;
 import org.apache.cassandra.exceptions.AuthenticationException;
+
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -27,14 +30,15 @@ import java.security.KeyStore;
 import java.security.PublicKey;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
-import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-public class CommonNameCertificateAuthenticatorTest {
+public class CommonNameCertificateAuthenticatorTest
+{
 
     private ICertificateAuthenticator authenticator;
     private static KeyStore testCertificates;
@@ -56,9 +60,22 @@ public class CommonNameCertificateAuthenticatorTest {
     }
 
     @Test
-    public void testShouldNotRequireAuthentication()
+    public void testGetAndSetRequirement()
     {
-        assertFalse(authenticator.requireAuthentication());
+        // default value of NOT_REQUIRED - this is always overriden in DatabaseDescriptor.applyConfig
+        assertEquals(ICertificateAuthenticator.Requirement.NOT_REQUIRED, authenticator.getRequirement());
+        authenticator.setRequirement(ICertificateAuthenticator.Requirement.REQUIRED);
+        assertEquals(ICertificateAuthenticator.Requirement.REQUIRED, authenticator.getRequirement());
+
+        try
+        {
+            authenticator.setRequirement(null);
+            fail();
+        }
+        catch(AssertionError e)
+        {
+            // expected
+        }
     }
 
     @Test
@@ -67,23 +84,6 @@ public class CommonNameCertificateAuthenticatorTest {
         assertTrue(authenticator.protectedResources().isEmpty());
         authenticator.validateConfiguration();
         authenticator.setup();
-    }
-
-    @Test
-    public void testShouldNotSupportOtherAuthenticationMechanisms() throws Exception
-    {
-        try
-        {
-            authenticator.legacyAuthenticate(null);
-            fail("expected exception");
-        }
-        catch (UnsupportedOperationException e) {}
-        try
-        {
-            authenticator.newSaslNegotiator(null);
-            fail("expected exception");
-        }
-        catch (UnsupportedOperationException e) {}
     }
 
     @Test
@@ -138,7 +138,7 @@ public class CommonNameCertificateAuthenticatorTest {
         assertEquals(username, user.getName());
     }
 
-    private void assertAuthenticationFailure(Certificate[] chain)
+    private void assertAuthenticationFailure(Certificate[] chain) throws Exception
     {
         try
         {

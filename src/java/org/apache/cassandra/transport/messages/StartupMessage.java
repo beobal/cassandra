@@ -24,10 +24,7 @@ import javax.net.ssl.SSLPeerUnverifiedException;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.ssl.SslHandler;
-
 import org.apache.cassandra.auth.AuthenticatedUser;
-import org.apache.cassandra.auth.IAuthenticator;
-import org.apache.cassandra.auth.ICertificateAuthenticator;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.exceptions.AuthenticationException;
 import org.apache.cassandra.service.QueryState;
@@ -75,7 +72,7 @@ public class StartupMessage extends Message.Request
         if (cqlVersion == null)
             throw new ProtocolException("Missing value CQL_VERSION in STARTUP message");
 
-        try 
+        try
         {
             if (new CassandraVersion(cqlVersion).compareTo(new CassandraVersion("2.99.0")) < 0)
                 throw new ProtocolException(String.format("CQL version %s is not supported by the binary protocol (supported version are >= 3.0.0)", cqlVersion));
@@ -104,37 +101,54 @@ public class StartupMessage extends Message.Request
             }
         }
 
-        IAuthenticator authenticator = DatabaseDescriptor.getAuthenticator();
-        if (authenticator instanceof ICertificateAuthenticator)
+        switch (DatabaseDescriptor.getCertificateAuthenticator().getRequirement())
         {
-            try
-            {
-                handleCertificateAuthentication(state, (ICertificateAuthenticator)authenticator);
-            }
-            catch (AuthenticationException e)
-            {
-                return ErrorMessage.fromException(e);
-            }
+            case NOT_REQUIRED:
+                // don't attempt cert-based auth, fall through to SASL if necessary
+                break;
+            case REQUIRED:
+                // fail fast on any exception when extracting creds from certs or logging in
+                return loginWithCredentialsFromCertificateChain(state);
+            case OPTIONAL:
+                // if unable to login using creds from certs, carry on to the configured SASL authenticator
+                try
+                {
+                    return loginWithCredentialsFromCertificateChain(state);
+                }
+                catch(AuthenticationException e)
+                {
+                    // either no creds could be extracted from the cert chain, or the user
+                    // identified doesn't exist, or does not have the LOGIN privilege
+                    logger.debug("Unable to login using credentials from certificate chain", e);
+                }
+                break;
+            default:
+                return ErrorMessage.fromException(new IllegalStateException("Invalid certificate authenticator"));
         }
-        else if (authenticator.requireAuthentication())
+
+        if (DatabaseDescriptor.getAuthenticator().requireAuthentication())
             return new AuthenticateMessage(DatabaseDescriptor.getAuthenticator().getClass().getName());
+
         return new ReadyMessage();
     }
 
-    private void handleCertificateAuthentication(QueryState state, ICertificateAuthenticator authenticator)
-        throws AuthenticationException
+    private ReadyMessage loginWithCredentialsFromCertificateChain(QueryState state) throws AuthenticationException
     {
         SslHandler handler = (SslHandler)connection.channel().pipeline().get("ssl");
+        if (handler == null)
+            throw new AuthenticationException("No SSL handler configured for connection");
+
         try
         {
             Certificate[] certs = handler.engine().getSession().getPeerCertificates();
-            AuthenticatedUser user = authenticator.authenticate(certs);
+            AuthenticatedUser user = DatabaseDescriptor.getCertificateAuthenticator().authenticate(certs);
             state.getClientState().login(user);
+            return new ReadyMessage();
         }
-        catch (SSLPeerUnverifiedException|NullPointerException e)
+        catch (SSLPeerUnverifiedException e)
         {
-            if (authenticator.requireAuthentication())
-                throw new AuthenticationException("You must present a valid certificate to authenticate");
+            logger.debug("No valid peer certificates found for authentication", e);
+            throw new AuthenticationException("No valid peer certificates found for authentication");
         }
     }
 
