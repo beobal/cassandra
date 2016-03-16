@@ -123,6 +123,7 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
     private final Map<InetAddress, Long> expireTimeEndpointMap = new ConcurrentHashMap<InetAddress, Long>();
 
     private volatile boolean inShadowRound = false;
+    private final Set<InetAddress> seedsInShadowRound = new ConcurrentSkipListSet<>(inetcomparator);
 
     private volatile long lastProcessedMessageAt = System.currentTimeMillis();
 
@@ -1318,11 +1319,22 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
 
     /**
      *  Do a single 'shadow' round of gossip, where we do not modify any state
-     *  Only used when replacing a node, to get and assume its states
+     *  Used when preparing to join the ring:
+     *      * when replacing a node, to get and assume its tokens
+     *      * when joining, to check that the local host id matches any previous id for the endpoint address
      */
     public void doShadowRound()
     {
         buildSeedsList();
+        // it may be that the local address is the only entry in the seed
+        // list in which case, attempting a shadow round is pointless
+        if (seeds.isEmpty())
+            return;
+
+        if (!MessagingService.instance().isListening())
+            MessagingService.instance().listen();
+
+        seedsInShadowRound.clear();
         // send a completely empty syn
         List<GossipDigest> gDigests = new ArrayList<GossipDigest>();
         GossipDigestSyn digestSynMessage = new GossipDigestSyn(DatabaseDescriptor.getClusterName(),
@@ -1341,6 +1353,7 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
                 if (slept % 5000 == 0)
                 { // CASSANDRA-8072, retry at the beginning and every 5 seconds
                     logger.trace("Sending shadow round GOSSIP DIGEST SYN to seeds {}", seeds);
+
                     for (InetAddress seed : seeds)
                         MessagingService.instance().sendOneWay(message, seed);
                 }
@@ -1351,7 +1364,15 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
 
                 slept += 1000;
                 if (slept > StorageService.RING_DELAY)
-                    throw new RuntimeException("Unable to gossip with any seeds");
+                {
+                    // if we don't consider ourself to be a seed, fail out
+                    if (!DatabaseDescriptor.getSeeds().contains(FBUtilities.getBroadcastAddress()))
+                        throw new RuntimeException("Unable to gossip with any seeds");
+
+                    logger.warn("Unable to gossip with any seeds but continuing since node is in its own seed list");
+                    inShadowRound = false;
+                    break;
+                }
             }
         }
         catch (InterruptedException wtf)
@@ -1478,10 +1499,33 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
         return (scheduledGossipTask != null) && (!scheduledGossipTask.isCancelled());
     }
 
-    protected void finishShadowRound()
+    protected void maybeFinishShadowRound(InetAddress respondent, boolean isInShadowRound)
     {
         if (inShadowRound)
-            inShadowRound = false;
+        {
+            if (!isInShadowRound)
+            {
+                logger.trace("Received a regular ack from {}, can now exit shadow round", respondent);
+                // respondent sent back a full ack, so we can exit our shadow round
+                inShadowRound = false;
+                seedsInShadowRound.clear();
+            }
+            else
+            {
+                // respondent indicates it too is in a shadow round, if all seeds
+                // are in this state then we can exit our shadow round. Otherwise,
+                // we keep retrying the SR until one responds with a full ACK or
+                // we learn that all seeds are in SR.
+                logger.trace("Received an ack from {} indicating it is also in shadow round", respondent);
+                seedsInShadowRound.add(respondent);
+                if (seedsInShadowRound.containsAll(seeds))
+                {
+                    logger.trace("All seeds are in a shadow round, clearing this node to exit its own");
+                    inShadowRound = false;
+                    seedsInShadowRound.clear();
+                }
+            }
+        }
     }
 
     protected boolean isInShadowRound()
