@@ -23,15 +23,20 @@ import java.lang.management.ManagementFactory;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
 import java.net.InetAddress;
+import java.rmi.NoSuchObjectException;
+import java.rmi.Remote;
+import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.server.RMIClientSocketFactory;
 import java.rmi.server.RMIServerSocketFactory;
+import java.rmi.server.UnicastRemoteObject;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 import javax.management.remote.*;
 import javax.management.remote.rmi.RMIConnectorServer;
+import javax.management.remote.rmi.RMIJRMPServerImpl;
 import javax.rmi.ssl.SslRMIClientSocketFactory;
 import javax.rmi.ssl.SslRMIServerSocketFactory;
 import javax.security.auth.Subject;
@@ -41,8 +46,10 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.sun.jmx.remote.internal.RMIExporter;
 import com.sun.jmx.remote.security.JMXPluggableAuthenticator;
 import org.apache.cassandra.auth.jmx.AuthenticationProxy;
+import sun.rmi.server.UnicastServerRef2;
 
 public class JMXServerUtils
 {
@@ -98,6 +105,10 @@ public class JMXServerUtils
         // return value is null, and an entry is added to the env map detailing that location
         // If neither method is specified, no access control is applied
         MBeanServerForwarder authzProxy = configureJmxAuthorization(env);
+
+        // Make sure we use our custom exporter so a full GC doesn't get scheduled every
+        // sun.rmi.dgc.server.gcInterval millis (default is 3600000ms/1 hour)
+        env.put(RMIExporter.EXPORTER_ATTRIBUTE, new Exporter());
 
         JMXConnectorServer jmxServer =
             JMXConnectorServerFactory.newJMXConnectorServer(new JMXServiceURL(url),
@@ -236,6 +247,52 @@ public class JMXServerUtils
         {
             JMXPluggableAuthenticator authenticator = new JMXPluggableAuthenticator(env);
             return authenticator.authenticate(credentials);
+        }
+    }
+
+    /**
+     * In the RMI subsystem, the ObjectTable instance holds references to remote
+     * objects for distributed garbage collection purposes. When objects are
+     * added to the ObjectTable (exported), a flag is passed to * indicate the
+     * "permanence" of that object. Exporting as permanent has two effects; the
+     * object is not eligible for distributed garbage collection, and its
+     * existence will not prevent the JVM from exiting after termination of all
+     * non-daemon threads terminate. Neither of these is bad for our case, as we
+     * attach the server exactly once (i.e. at startup, not subsequently using
+     * the Attach API) and don't disconnect it before shutdown. The primary
+     * benefit we gain is that it doesn't trigger the scheduled full GC that
+     * is otherwise incurred by programatically configuring the management server.
+     *
+     * To that end, we use this private implementation of RMIExporter to register
+     * our JMXConnectorServer as a permanent object by adding it to the map of
+     * environment variables under the key RMIExporter.EXPORTER_ATTRIBUTE
+     * (com.sun.jmx.remote.rmi.exporter) prior to calling server.start()
+     *
+     * See also:
+     *  * CASSANDRA-2967 for background
+     *  * https://www.jclarity.com/2015/01/27/rmi-system-gc-unplugged/ for more detail
+     *  * https://bugs.openjdk.java.net/browse/JDK-6760712 for info on setting the exporter
+     *  * sun.management.remote.ConnectorBootstrap to trace how the inbuilt management agent
+     *    sets up the JMXConnectorServer
+     */
+    private static class Exporter implements RMIExporter
+    {
+        public Remote exportObject(Remote obj, int port, RMIClientSocketFactory csf, RMIServerSocketFactory ssf)
+        throws RemoteException
+        {
+            // We should only ever get here by configuring our own JMX Connector server,
+            // so assert some invariants we expect to be true in that case
+            assert ssf != null; // we always configure a custom server socket factory
+            assert RMIJRMPServerImpl.class.isAssignableFrom(obj.getClass()); // IIOP not supported
+
+            // as we always configure a custom server socket factory, either for SSL or to ensure
+            // only loopback addresses, we use a UnicastServerRef2 for exporting
+            return new UnicastServerRef2(port, csf, ssf).exportObject(obj, null, true);
+        }
+
+        public boolean unexportObject(Remote obj, boolean force) throws NoSuchObjectException
+        {
+            return UnicastRemoteObject.unexportObject(obj, force);
         }
     }
 }
