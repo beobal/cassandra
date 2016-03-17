@@ -51,6 +51,7 @@ class Cql3ParsingRuleSet(CqlParsingRuleSet):
         ('default_time_to_live', None),
         ('speculative_retry', None),
         ('memtable_flush_period_in_ms', None),
+        ('read_repairable_commands', None),
     )
 
     columnfamily_layout_map_options = (
@@ -458,6 +459,8 @@ def cf_prop_name_completer(ctxt, cass):
 def cf_prop_val_completer(ctxt, cass):
     exist_opts = ctxt.get_binding('propname')
     this_opt = exist_opts[-1]
+    if this_opt == 'read_repairable_commands':
+        return ["'ALL'", "'READ'", "'RANGE'", "'NONE'"]
     if this_opt == 'compression':
         return ["{'sstable_compression': '"]
     if this_opt == 'compaction':

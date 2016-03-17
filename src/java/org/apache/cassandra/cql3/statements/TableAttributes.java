@@ -131,6 +131,9 @@ public final class TableAttributes extends PropertyDefinitions
         if (hasOption(Option.CRC_CHECK_CHANCE))
             builder.crcCheckChance(getDouble(Option.CRC_CHECK_CHANCE));
 
+        if (hasOption(Option.READ_REPAIRABLE_COMMANDS))
+            builder.readRepairableCommands(ReadRepairableCommandsParam.fromString(getString(Option.READ_REPAIRABLE_COMMANDS)));
+
         return builder.build();
     }
 

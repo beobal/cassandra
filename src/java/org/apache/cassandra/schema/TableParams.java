@@ -18,13 +18,16 @@
 package org.apache.cassandra.schema;
 
 import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.Map;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableMap;
 
+import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.exceptions.ConfigurationException;
+
 import static java.lang.String.format;
 
 public final class TableParams
@@ -46,6 +49,7 @@ public final class TableParams
         MEMTABLE_FLUSH_PERIOD_IN_MS,
         MIN_INDEX_INTERVAL,
         READ_REPAIR_CHANCE,
+        READ_REPAIRABLE_COMMANDS,
         SPECULATIVE_RETRY,
         CRC_CHECK_CHANCE;
 
@@ -81,6 +85,7 @@ public final class TableParams
     public final CompactionParams compaction;
     public final CompressionParams compression;
     public final ImmutableMap<String, ByteBuffer> extensions;
+    public final ReadRepairableCommandsParam readRepairableCommands;
 
     private TableParams(Builder builder)
     {
@@ -101,6 +106,9 @@ public final class TableParams
         compaction = builder.compaction;
         compression = builder.compression;
         extensions = builder.extensions;
+        readRepairableCommands = extensions.containsKey(Option.READ_REPAIRABLE_COMMANDS.toString())
+                                 ? ReadRepairableCommandsParam.fromString(UTF8Type.instance.compose(extensions.get(Option.READ_REPAIRABLE_COMMANDS.toString())))
+                                 : ReadRepairableCommandsParam.ALL;
     }
 
     public static Builder builder()
@@ -122,6 +130,7 @@ public final class TableParams
                             .maxIndexInterval(params.maxIndexInterval)
                             .memtableFlushPeriodInMs(params.memtableFlushPeriodInMs)
                             .minIndexInterval(params.minIndexInterval)
+                            .readRepairableCommands(params.readRepairableCommands)
                             .readRepairChance(params.readRepairChance)
                             .speculativeRetry(params.speculativeRetry)
                             .extensions(params.extensions);
@@ -199,6 +208,7 @@ public final class TableParams
         TableParams p = (TableParams) o;
 
         return comment.equals(p.comment)
+            && readRepairableCommands == p.readRepairableCommands
             && readRepairChance == p.readRepairChance
             && dcLocalReadRepairChance == p.dcLocalReadRepairChance
             && bloomFilterFpChance == p.bloomFilterFpChance
@@ -219,6 +229,7 @@ public final class TableParams
     public int hashCode()
     {
         return Objects.hashCode(comment,
+                                readRepairableCommands,
                                 readRepairChance,
                                 dcLocalReadRepairChance,
                                 bloomFilterFpChance,
@@ -240,6 +251,7 @@ public final class TableParams
     {
         return MoreObjects.toStringHelper(this)
                           .add(Option.COMMENT.toString(), comment)
+                          .add(Option.READ_REPAIRABLE_COMMANDS.toString(), readRepairableCommands)
                           .add(Option.READ_REPAIR_CHANCE.toString(), readRepairChance)
                           .add(Option.DCLOCAL_READ_REPAIR_CHANCE.toString(), dcLocalReadRepairChance)
                           .add(Option.BLOOM_FILTER_FP_CHANCE.toString(), bloomFilterFpChance)
@@ -287,6 +299,18 @@ public final class TableParams
         public Builder comment(String val)
         {
             comment = val;
+            return this;
+        }
+
+        public Builder readRepairableCommands(ReadRepairableCommandsParam commands)
+        {
+            // for now, read_repairable_commands option is stored in the extensions map
+            // for compatibility. In 4.0 we can move this to its own attribute and add a
+            // column in system_schema.tables for it.
+            Map<String, ByteBuffer> newExtensions = new HashMap<>();
+            newExtensions.putAll(extensions);
+            newExtensions.put(Option.READ_REPAIRABLE_COMMANDS.toString(), UTF8Type.instance.decompose(commands.toString()));
+            extensions = ImmutableMap.copyOf(newExtensions);
             return this;
         }
 
@@ -370,6 +394,19 @@ public final class TableParams
 
         public Builder extensions(Map<String, ByteBuffer> val)
         {
+            // this is pretty ugly, but we store the read_repairable_commands option
+            // as an extension for compatibility (until 4.0). So, if overwriting the
+            // extensions map, check whether an existing value for that would be
+            // removed without a replacement. If so, make sure we preserve it.
+            if (extensions.containsKey(Option.READ_REPAIRABLE_COMMANDS.toString()) &&
+                !val.containsKey(Option.READ_REPAIRABLE_COMMANDS.toString()))
+            {
+                Map<String, ByteBuffer> clone = new HashMap<>();
+                clone.putAll(val);
+                clone.put(Option.READ_REPAIRABLE_COMMANDS.toString(),
+                          extensions.get(Option.READ_REPAIRABLE_COMMANDS.toString()));
+                val = clone;
+            }
             extensions = ImmutableMap.copyOf(val);
             return this;
         }

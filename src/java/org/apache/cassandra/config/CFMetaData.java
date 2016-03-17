@@ -205,6 +205,12 @@ public final class CFMetaData
         return this;
     }
 
+    public CFMetaData readRepairableCommands(ReadRepairableCommandsParam commands)
+    {
+        params = TableParams.builder(params).readRepairableCommands(commands).build();
+        return this;
+    }
+
     public CFMetaData crcCheckChance(double prop)
     {
         params = TableParams.builder(params).crcCheckChance(prop).build();
@@ -562,6 +568,12 @@ public final class CFMetaData
 
     public ReadRepairDecision newReadRepairDecision()
     {
+        // as we only consult this during read and not during range requests,
+        // if the param controlling which commands are eligible for read repair
+        // doesn't cover reads, the decision should always be NONE
+        if (!params.readRepairableCommands.includesReadCommands())
+            return ReadRepairDecision.NONE;
+
         double chance = ThreadLocalRandom.current().nextDouble();
         if (params.readRepairChance > chance)
             return ReadRepairDecision.GLOBAL;

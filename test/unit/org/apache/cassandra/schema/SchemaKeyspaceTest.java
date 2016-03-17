@@ -20,13 +20,11 @@ package org.apache.cassandra.schema;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.MapDifference;
+import com.google.common.collect.Maps;
 
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -159,6 +157,58 @@ public class SchemaKeyspaceTest
 
         metadata = Schema.instance.getCFMetaData(keyspace, "test");
         assertEquals(extensions, metadata.params.extensions);
+    }
+
+    @Test
+    public void testReadRepairableCommands() throws Exception
+    {
+        String keyspace = "SandBox";
+        String table = "repairable_commands_test";
+
+        createTable(keyspace, "CREATE TABLE " + table + " (a text PRIMARY KEY, b int, c int)");
+        CFMetaData metadata = Schema.instance.getCFMetaData(keyspace, table);
+        assertEquals(ReadRepairableCommandsParam.ALL, metadata.params.readRepairableCommands);
+
+        CFMetaData copy = metadata.copy().readRepairableCommands(ReadRepairableCommandsParam.NONE);
+        updateTable(keyspace, metadata, copy);
+
+        metadata = Schema.instance.getCFMetaData(keyspace, table);
+        assertEquals(ReadRepairableCommandsParam.NONE, metadata.params.readRepairableCommands);
+
+        // for compatibility pre-4.0, the actual value is stored in the extensions map, so
+        // test that overwrites of that map is handled correctly
+        ImmutableMap<String, ByteBuffer> extensions = ImmutableMap.of("From ... with Love",
+                                                                      ByteBuffer.wrap(new byte[]{0, 0, 7}));
+        copy = metadata.copy().extensions(extensions);
+        updateTable(keyspace, metadata, copy);
+
+        metadata = Schema.instance.getCFMetaData(keyspace, table);
+        assertEquals(ReadRepairableCommandsParam.NONE, metadata.params.readRepairableCommands);
+        assertOnlyDifference(metadata.params.extensions, extensions, TableParams.Option.READ_REPAIRABLE_COMMANDS.toString());
+
+        copy = metadata.copy().readRepairableCommands(ReadRepairableCommandsParam.RANGE);
+        updateTable(keyspace, metadata, copy);
+
+        metadata = Schema.instance.getCFMetaData(keyspace, table);
+        assertEquals(ReadRepairableCommandsParam.RANGE, metadata.params.readRepairableCommands);
+        assertOnlyDifference(metadata.params.extensions, extensions, TableParams.Option.READ_REPAIRABLE_COMMANDS.toString());
+
+        extensions = ImmutableMap.of();
+        copy = metadata.copy().extensions(extensions);
+        updateTable(keyspace, metadata, copy);
+
+        metadata = Schema.instance.getCFMetaData(keyspace, table);
+        assertEquals(ReadRepairableCommandsParam.RANGE, metadata.params.readRepairableCommands);
+        assertOnlyDifference(metadata.params.extensions, extensions, TableParams.Option.READ_REPAIRABLE_COMMANDS.toString());
+    }
+
+    private void assertOnlyDifference(Map<String, ByteBuffer> left, Map<String, ByteBuffer> right, String key)
+    {
+        MapDifference<String, ByteBuffer> diff = Maps.difference(left, right);
+        assertEquals(1, diff.entriesOnlyOnLeft().size());
+        assertTrue(diff.entriesOnlyOnLeft().containsKey(key));
+        assertTrue(diff.entriesOnlyOnRight().isEmpty());
+        assertTrue(diff.entriesDiffering().isEmpty());
     }
 
     private static void updateTable(String keyspace, CFMetaData oldTable, CFMetaData newTable)
