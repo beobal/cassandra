@@ -54,6 +54,14 @@ public abstract class UnfilteredRowIterators
         public void onMergedRangeTombstoneMarkers(RangeTombstoneMarker merged, RangeTombstoneMarker[] versions);
 
         public void close();
+
+        public static MergeListener NO_OP_LISTENER = new MergeListener()
+        {
+            public void onMergedPartitionLevelDeletion(DeletionTime mergedDeletion, DeletionTime[] versions) {}
+            public void onMergedRows(Row merged, Row[] versions) {}
+            public void onMergedRangeTombstoneMarkers(RangeTombstoneMarker merged, RangeTombstoneMarker[] versions) {}
+            public void close() {}
+        };
     }
 
     /**

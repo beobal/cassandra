@@ -300,6 +300,21 @@ public abstract class ReadCommand extends MonitorableImpl implements ReadQuery
             return 0;
     }
 
+    /**
+     * Determine whether repair mutations should be generated & sent to replicas in the
+     * case of a mismatch. Inconsistencies are always resolved by the coordinator, this
+     * is purely responsible for deciding whether remedial updates should be sent to any
+     * out of sync replicas, based on the table level read_repairable_commands option
+     * which specifies which commands can trigger a read repair (ALL, READS, RANGES or NONE).
+     *
+     * @return true if read repair should be performed, false if inconsistencies on
+     * replicas should be left alone
+     */
+    public boolean mayPerformReadRepair()
+    {
+        return metadata.params.readRepairableCommands.mayRepair(this);
+    }
+
     public Index getIndex(ColumnFamilyStore cfs)
     {
         // if we've already consulted the index manager, and it returned a valid index

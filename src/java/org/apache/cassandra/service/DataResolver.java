@@ -36,6 +36,7 @@ import org.apache.cassandra.db.transform.MoreRows;
 import org.apache.cassandra.db.transform.Transformation;
 import org.apache.cassandra.exceptions.ReadTimeoutException;
 import org.apache.cassandra.net.*;
+import org.apache.cassandra.schema.ReadRepairableCommandsParam;
 import org.apache.cassandra.tracing.Tracing;
 import org.apache.cassandra.utils.FBUtilities;
 
@@ -80,7 +81,17 @@ public class DataResolver extends ResponseResolver
         if (results.size() == 1)
             return UnfilteredPartitionIterators.filter(results.get(0), command.nowInSec());
 
-        UnfilteredPartitionIterators.MergeListener listener = new RepairMergeListener(sources);
+        UnfilteredPartitionIterators.MergeListener listener;
+        if (command.mayPerformReadRepair())
+        {
+            logger.trace("Table metadata options make command eligible for read repair");
+            listener = new RepairMergeListener(sources);
+        }
+        else
+        {
+            logger.trace("Table metadata options make command eligible for read repair");
+            listener = UnfilteredPartitionIterators.MergeListener.NO_OP_LISTENER;
+        }
 
         // So-called "short reads" stems from nodes returning only a subset of the results they have for a partition due to the limit,
         // but that subset not being enough post-reconciliation. So if we don't have limit, don't bother.
