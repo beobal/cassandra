@@ -307,12 +307,15 @@ public abstract class ReadCommand extends MonitorableImpl implements ReadQuery
      * out of sync replicas, based on the table level read_repairable_commands option
      * which specifies which commands can trigger a read repair (ALL, READS, RANGES or NONE).
      *
+     * If no param value is present, assume legacy behaviour equivalent to ALL
+     *
      * @return true if read repair should be performed, false if inconsistencies on
      * replicas should be left alone
      */
     public boolean mayPerformReadRepair()
     {
-        return metadata.params.readRepairableCommands.mayRepair(this);
+        return metadata.params.readRepairableCommands == null
+               || metadata.params.readRepairableCommands.mayRepair(this);
     }
 
     public Index getIndex(ColumnFamilyStore cfs)

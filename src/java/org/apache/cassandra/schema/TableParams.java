@@ -108,7 +108,7 @@ public final class TableParams
         extensions = builder.extensions;
         readRepairableCommands = extensions.containsKey(Option.READ_REPAIRABLE_COMMANDS.toString())
                                  ? ReadRepairableCommandsParam.fromString(UTF8Type.instance.compose(extensions.get(Option.READ_REPAIRABLE_COMMANDS.toString())))
-                                 : ReadRepairableCommandsParam.ALL;
+                                 : null;
     }
 
     public static Builder builder()
@@ -307,6 +307,11 @@ public final class TableParams
             // for now, read_repairable_commands option is stored in the extensions map
             // for compatibility. In 4.0 we can move this to its own attribute and add a
             // column in system_schema.tables for it.
+            // special case null to avoid storing the default value for the param, i.e.
+            // only store if a value is explicitly set
+            if (commands == null)
+                return this;
+
             Map<String, ByteBuffer> newExtensions = new HashMap<>();
             newExtensions.putAll(extensions);
             newExtensions.put(Option.READ_REPAIRABLE_COMMANDS.toString(), UTF8Type.instance.decompose(commands.toString()));

@@ -571,7 +571,7 @@ public final class CFMetaData
         // as we only consult this during read and not during range requests,
         // if the param controlling which commands are eligible for read repair
         // doesn't cover reads, the decision should always be NONE
-        if (!params.readRepairableCommands.includesReadCommands())
+        if (params.readRepairableCommands != null && !params.readRepairableCommands.includesReadCommands())
             return ReadRepairDecision.NONE;
 
         double chance = ThreadLocalRandom.current().nextDouble();

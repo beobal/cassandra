@@ -51,6 +51,7 @@ import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.FBUtilities;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class SchemaKeyspaceTest
@@ -146,8 +147,8 @@ public class SchemaKeyspaceTest
         createTable(keyspace, "CREATE TABLE test (a text primary key, b int, c int)");
 
         CFMetaData metadata = Schema.instance.getCFMetaData(keyspace, "test");
+        System.out.println(metadata.params.extensions.keySet());
         assertTrue("extensions should be empty", metadata.params.extensions.isEmpty());
-
         ImmutableMap<String, ByteBuffer> extensions = ImmutableMap.of("From ... with Love",
                                                                       ByteBuffer.wrap(new byte[]{0, 0, 7}));
 
@@ -167,7 +168,9 @@ public class SchemaKeyspaceTest
 
         createTable(keyspace, "CREATE TABLE " + table + " (a text PRIMARY KEY, b int, c int)");
         CFMetaData metadata = Schema.instance.getCFMetaData(keyspace, table);
-        assertEquals(ReadRepairableCommandsParam.ALL, metadata.params.readRepairableCommands);
+        // null by default, which is handled in ReadCommand::mayPerformReadRepair
+        // the same as ALL
+        assertNull(metadata.params.readRepairableCommands);
 
         CFMetaData copy = metadata.copy().readRepairableCommands(ReadRepairableCommandsParam.NONE);
         updateTable(keyspace, metadata, copy);
