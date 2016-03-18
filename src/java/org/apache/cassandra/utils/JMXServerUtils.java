@@ -283,7 +283,6 @@ public class JMXServerUtils
             // We should only ever get here by configuring our own JMX Connector server,
             // so assert some invariants we expect to be true in that case
             assert ssf != null; // we always configure a custom server socket factory
-            assert RMIJRMPServerImpl.class.isAssignableFrom(obj.getClass()); // IIOP not supported
 
             // as we always configure a custom server socket factory, either for SSL or to ensure
             // only loopback addresses, we use a UnicastServerRef2 for exporting
