@@ -707,7 +707,7 @@ public abstract class SingleColumnRestriction extends AbstractRestriction
             // LIKE could be used with clustering columns as soon as they are indexed,
             // but we have to hide such expression from clustering filter since it
             // can only filter based on the complete values.
-            return builder;
+            throw new UnsupportedOperationException("Cannot use LIKE restriction for slicing");
         }
 
         @Override
