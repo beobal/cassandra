@@ -20,13 +20,8 @@ package org.apache.cassandra.auth;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-
 import javax.security.auth.Subject;
-import javax.security.auth.callback.Callback;
-import javax.security.auth.callback.CallbackHandler;
-import javax.security.auth.callback.NameCallback;
-import javax.security.auth.callback.PasswordCallback;
-import javax.security.auth.callback.UnsupportedCallbackException;
+import javax.security.auth.callback.*;
 import javax.security.auth.login.FailedLoginException;
 import javax.security.auth.login.LoginException;
 import javax.security.auth.spi.LoginModule;
@@ -129,10 +124,7 @@ public class CassandraLoginModule implements LoginModule
         {
             // authentication failed -- clean up
             succeeded = false;
-            username = null;
-            for (int i = 0; i < password.length; i++)
-                password[i] = ' ';
-            password = null;
+            cleanUpInternalState();
             throw new FailedLoginException(e.getMessage());
         }
 
@@ -186,12 +178,7 @@ public class CassandraLoginModule implements LoginModule
             if (!subject.getPrincipals().contains(principal))
                 subject.getPrincipals().add(principal);
 
-            // clean out state
-            username = null;
-            for (int i = 0; i < password.length; i++)
-                password[i] = ' ';
-            password = null;
-
+            cleanUpInternalState();
             commitSucceeded = true;
             return true;
         }
@@ -221,13 +208,7 @@ public class CassandraLoginModule implements LoginModule
         {
             // login succeeded but overall authentication failed
             succeeded = false;
-            username = null;
-            if (password != null)
-            {
-                for (int i = 0; i < password.length; i++)
-                    password[i] = ' ';
-                password = null;
-            }
+            cleanUpInternalState();
             principal = null;
         }
         else
@@ -254,6 +235,13 @@ public class CassandraLoginModule implements LoginModule
     {
         subject.getPrincipals().remove(principal);
         succeeded = false;
+        cleanUpInternalState();
+        principal = null;
+        return true;
+    }
+
+    private void cleanUpInternalState()
+    {
         username = null;
         if (password != null)
         {
@@ -261,7 +249,5 @@ public class CassandraLoginModule implements LoginModule
                 password[i] = ' ';
             password = null;
         }
-        principal = null;
-        return true;
     }
 }
