@@ -709,27 +709,46 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
     }
 
     /**
-     * Check if this endpoint can safely bootstrap into the cluster.
+     * Check if this node can safely be started and join the ring.
+     * If the node is bootstrapping, examines gossip state for any previous status to decide whether
+     * it's safe to allow this node to start & bootstrap. If not bootstrapping, compares the host ID
+     * that the node itself has (obtained by reading from system.local or generated if not present)
+     * with the host ID obtained from gossip for the endpoint address (if any). This latter case
+     * prevents a non-bootstrapping, new node from being started with the same address of a
+     * previously started, but currently down predecessor.
      *
      * @param endpoint - the endpoint to check
-     * @return true if the endpoint can join the cluster
+     * @param localHostUUID - the host id to check
+     * @param isBootstrapping - whether the node intends to bootstrap when joining
+     * @return true if it is safe to start the node, false otherwise
      */
-    public boolean isSafeForBootstrap(InetAddress endpoint)
+    public boolean isSafeForStartup(InetAddress endpoint, UUID localHostUUID, boolean isBootstrapping)
     {
         EndpointState epState = endpointStateMap.get(endpoint);
-
         // if there's no previous state, or the node was previously removed from the cluster, we're good
         if (epState == null || isDeadState(epState))
             return true;
 
-        String status = getGossipStatus(epState);
-
-        // these states are not allowed to join the cluster as it would not be safe
-        final List<String> unsafeStatuses = new ArrayList<String>() {{
-            add(""); // failed bootstrap but we did start gossiping
-            add(VersionedValue.STATUS_NORMAL); // node is legit in the cluster or it was stopped with kill -9
-            add(VersionedValue.SHUTDOWN); }}; // node was shutdown
-        return !unsafeStatuses.contains(status);
+        if (isBootstrapping)
+        {
+            String status = getGossipStatus(epState);
+            // these states are not allowed to join the cluster as it would not be safe
+            final List<String> unsafeStatuses = new ArrayList<String>()
+            {{
+                add("");                           // failed bootstrap but we did start gossiping
+                add(VersionedValue.STATUS_NORMAL); // node is legit in the cluster or it was stopped with kill -9
+                add(VersionedValue.SHUTDOWN);      // node was shutdown
+            }};
+            return !unsafeStatuses.contains(status);
+        }
+        else
+        {
+            // if the previous UUID matches what we currently have (i.e. what was read from
+            // system.local at startup), then we're good to start up. Otherwise, something
+            // is amiss and we need to replace the previous node
+            VersionedValue previous = epState.getApplicationState(ApplicationState.HOST_ID);
+            return UUID.fromString(previous.value).equals(localHostUUID);
+        }
     }
 
     private void doStatusCheck()

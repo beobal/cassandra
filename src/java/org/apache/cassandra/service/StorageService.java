@@ -545,7 +545,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         return localHostId;
     }
 
-    private synchronized void checkForEndpointCollision() throws ConfigurationException
+    private synchronized void checkForEndpointCollision(UUID localHostId) throws ConfigurationException
     {
         if (Boolean.getBoolean("cassandra.allow_unsafe_join"))
         {
@@ -559,7 +559,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         // If not bootstrapping, compare the host id for this endpoint learned from gossip (if any) with the local
         // one, which was either read from system.local or generated at startup. If a learned id is present &
         // doesn't match the local, then the node needs replacing
-        if (!Gossiper.instance.isSafeForBootstrap(FBUtilities.getBroadcastAddress()))
+        if (!Gossiper.instance.isSafeForStartup(FBUtilities.getBroadcastAddress(), localHostId, shouldBootstrap()))
         {
             throw new RuntimeException(String.format("A node with address %s already exists, cancelling join. " +
                                                      "Use cassandra.replace_address if you want to replace this node.",
@@ -831,7 +831,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             }
             else
             {
-                checkForEndpointCollision();
+                checkForEndpointCollision(localHostId);
             }
 
             // have to start the gossip service before we can see any info on other nodes.  this is necessary
