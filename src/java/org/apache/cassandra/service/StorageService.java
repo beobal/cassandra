@@ -527,7 +527,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
         try
         {
-            VersionedValue tokensVersionedValue = Gossiper.instance.getEndpointStateForEndpoint(DatabaseDescriptor.getReplaceAddress()).getApplicationState(ApplicationState.TOKENS);
+            VersionedValue tokensVersionedValue = Gossiper.instance.getEndpointStateForEndpoint(replaceAddress).getApplicationState(ApplicationState.TOKENS);
             if (tokensVersionedValue == null)
                 throw new RuntimeException(String.format("Could not find tokens for %s to replace", replaceAddress));
 
@@ -807,8 +807,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
                 else
                     throw new ConfigurationException("This node was decommissioned and will not rejoin the ring unless cassandra.override_decommission=true has been set, or all existing data is removed and the node is bootstrapped again");
             }
-            if (replacing && !(Boolean.parseBoolean(System.getProperty("cassandra.join_ring", "true"))))
-                throw new ConfigurationException("Cannot set both join_ring=false and attempt to replace a node");
+
             if (DatabaseDescriptor.getReplaceTokens().size() > 0 || DatabaseDescriptor.getReplaceNode() != null)
                 throw new RuntimeException("Replace method removed; use cassandra.replace_address instead");
 
@@ -818,16 +817,27 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
                 if (SystemKeyspace.bootstrapComplete())
                     throw new RuntimeException("Cannot replace address with a node that is already bootstrapped");
 
-                if (!DatabaseDescriptor.isAutoBootstrap())
-                    throw new RuntimeException("Trying to replace_address with auto_bootstrap disabled will not work, check your configuration");
-
                 if (!(Boolean.parseBoolean(System.getProperty("cassandra.join_ring", "true"))))
                     throw new ConfigurationException("Cannot set both join_ring=false and attempt to replace a node");
+
+                if (!DatabaseDescriptor.isAutoBootstrap() && !Boolean.getBoolean("cassandra.allow_unsafe_replace"))
+                    throw new RuntimeException("Replacing a node without bootstrapping risks invalidating consistency " +
+                                               "guarantees as the expected data may not be present until repair is run. " +
+                                               "To perform this operation, please restart with " +
+                                               "-Dcassandra.allow_unsafe_replace=true");
 
                 InetAddress replaceAddress = DatabaseDescriptor.getReplaceAddress();
                 localHostId = prepareReplacementInfo(replaceAddress);
                 appStates.put(ApplicationState.TOKENS, valueFactory.tokens(bootstrapTokens));
-                appStates.put(ApplicationState.STATUS, valueFactory.hibernate(true));
+
+                // if want to bootstrap the ranges of the node we're replacing,
+                // go into hibernate mode while that happens. Otherwise, persist
+                // the tokens we're taking over locally so that they don't get
+                // clobbered with auto generated ones in joinTokenRing
+                if (DatabaseDescriptor.isAutoBootstrap())
+                    appStates.put(ApplicationState.STATUS, valueFactory.hibernate(true));
+                else
+                    SystemKeyspace.updateTokens(bootstrapTokens);
             }
             else
             {
