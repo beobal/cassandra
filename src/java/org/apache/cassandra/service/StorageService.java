@@ -580,6 +580,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
                     throw new UnsupportedOperationException("Other bootstrapping/leaving/moving nodes detected, cannot bootstrap while cassandra.consistent.rangemovement is true");
             }
         }
+        logger.debug("Resetting gossip state after shadow round");
         Gossiper.instance.resetEndpointStateMap();
     }
 
