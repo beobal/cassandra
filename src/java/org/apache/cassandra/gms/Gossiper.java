@@ -1350,9 +1350,6 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
         if (seeds.isEmpty())
             return;
 
-        if (!MessagingService.instance().isListening())
-            MessagingService.instance().listen();
-
         seedsInShadowRound.clear();
         // send a completely empty syn
         List<GossipDigest> gDigests = new ArrayList<GossipDigest>();

@@ -528,7 +528,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         logger.info("Gathering node replacement information for {}", DatabaseDescriptor.getReplaceAddress());
         Gossiper.instance.doShadowRound();
         // as we've completed the shadow round of gossip, we should be able to find the node we're replacing
-        if (Gossiper.instance.getEndpointStateForEndpoint(replaceAddress)== null)
+        if (Gossiper.instance.getEndpointStateForEndpoint(replaceAddress) == null)
             throw new RuntimeException(String.format("Cannot replace_address %s because it doesn't exist in gossip", replaceAddress));
 
         try
@@ -820,7 +820,11 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             if (DatabaseDescriptor.getReplaceTokens().size() > 0 || DatabaseDescriptor.getReplaceNode() != null)
                 throw new RuntimeException("Replace method removed; use cassandra.replace_address instead");
 
+            if (!MessagingService.instance().isListening())
+                MessagingService.instance().listen();
+
             UUID localHostId = SystemKeyspace.getLocalHostId();
+
             if (replacing)
             {
                 if (SystemKeyspace.bootstrapComplete())
@@ -876,11 +880,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             gossipSnitchInfo();
             // gossip Schema.emptyVersion forcing immediate check for schema updates (see MigrationManager#maybeScheduleSchemaPull)
             Schema.instance.updateVersionAndAnnounce(); // Ensure we know our own actual Schema UUID in preparation for updates
-
-            if (!MessagingService.instance().isListening())
-                MessagingService.instance().listen();
             LoadBroadcaster.instance.startBroadcasting();
-
             HintsService.instance.startDispatch();
             BatchlogManager.instance.start();
         }

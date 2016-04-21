@@ -72,12 +72,12 @@ public class GossipDigestSynVerbHandler implements IVerbHandler<GossipDigestSyn>
             // doing a shadow round) will always contain > 0 digests
             if (gDigestList.size() > 0)
             {
-                logger.trace("Ignoring GossipDigestSynMessage because currently in gossip shadow round");
+                logger.trace("Ignoring non-empty GossipDigestSynMessage because currently in gossip shadow round");
                 return;
             }
 
             logger.trace("Received a shadow round syn from {}. Gossip is disabled but " +
-                         "currently also in shadow round, responding with a minimal ack");
+                         "currently also in shadow round, responding with a minimal ack", from);
             MessagingService.instance()
                             .sendOneWay(new MessageOut<>(MessagingService.Verb.GOSSIP_DIGEST_ACK,
                                                          new GossipDigestAck(new ArrayList<>(), new HashMap<>()),
