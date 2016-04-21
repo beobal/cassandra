@@ -256,8 +256,9 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     /* true if node is rebuilding and receiving data */
     private final AtomicBoolean isRebuilding = new AtomicBoolean();
 
-    private boolean initialized;
+    private volatile boolean initialized = false;
     private volatile boolean joined = false;
+    private volatile boolean gossipActive = false;
 
     /* the probability for tracing any particular request, 0 disables tracing and 1 enables for all */
     private double traceProbability = 0.0;
@@ -372,24 +373,24 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     // should only be called via JMX
     public void stopGossiping()
     {
-        if (initialized)
+        if (gossipActive)
         {
             logger.warn("Stopping gossip by operator request");
             Gossiper.instance.stop();
-            initialized = false;
+            gossipActive = false;
         }
     }
 
     // should only be called via JMX
     public void startGossiping()
     {
-        if (!initialized)
+        if (!gossipActive)
         {
             logger.warn("Starting gossip by operator request");
             setGossipTokens(getLocalTokens());
             Gossiper.instance.forceNewerGeneration();
             Gossiper.instance.start((int) (System.currentTimeMillis() / 1000));
-            initialized = true;
+            gossipActive = true;
         }
     }
 
@@ -465,7 +466,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
     public void stopTransports()
     {
-        if (isInitialized())
+        if (isGossipActive())
         {
             logger.error("Stopping gossiper");
             stopGossiping();
@@ -503,7 +504,12 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         return initialized;
     }
 
-    public boolean isSetupCompleted()
+    public boolean isGossipActive()
+    {
+        return gossipActive;
+    }
+
+    public boolean isDaemonSetupCompleted()
     {
         return daemon == null
                ? false
@@ -593,6 +599,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     public void unsafeInitialize() throws ConfigurationException
     {
         initialized = true;
+        gossipActive = true;
         Gossiper.instance.register(this);
         Gossiper.instance.start((int) (System.currentTimeMillis() / 1000)); // needed for node-ring gathering.
         Gossiper.instance.addLocalApplicationState(ApplicationState.NET_VERSION, valueFactory.networkVersion());
@@ -626,8 +633,6 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         logger.info("Thrift API version: {}", cassandraConstants.VERSION);
         logger.info("CQL supported versions: {} (default: {})",
                 StringUtils.join(ClientState.getCQLSupportedVersion(), ","), ClientState.DEFAULT_CQL_VERSION);
-
-        initialized = true;
 
         try
         {
@@ -715,6 +720,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             logger.info("Not starting gossip as requested.");
             // load ring state in preparation for starting gossip later
             loadRingState();
+            initialized = true;
             return;
         }
 
@@ -749,6 +755,8 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             }
             logger.info("Not joining ring as requested. Use JMX (StorageService->joinRing()) to initiate ring joining");
         }
+
+        initialized = true;
     }
 
     private void loadRingState()
@@ -863,6 +871,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             logger.info("Starting up server gossip");
             Gossiper.instance.register(this);
             Gossiper.instance.start(SystemKeyspace.incrementAndGetGeneration(), appStates); // needed for node-ring gathering.
+            gossipActive = true;
             // gossip snitch infos (local DC and rack)
             gossipSnitchInfo();
             // gossip Schema.emptyVersion forcing immediate check for schema updates (see MigrationManager#maybeScheduleSchemaPull)
