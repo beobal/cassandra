@@ -477,7 +477,7 @@ Function SetCassandraEnvironment
     #$env:JVM_OPTS="$JVM_OPTS -Dcassandra.jmx.authorizer=org.apache.cassandra.auth.jmx.AuthorizationProxy"
 
     # Default JMX setup, bound to local loopback address only
-    $env:JVM_OPTS="$env:JVM_OPTS -Dcassandra.jmx.local.port=$JMX_PORT -XX:+DisableExplicitGC"
+    $env:JVM_OPTS="$env:JVM_OPTS -Dcassandra.jmx.local.port=$JMX_PORT"
 
     $env:JVM_OPTS="$env:JVM_OPTS $env:JVM_EXTRA_OPTS"
 }
