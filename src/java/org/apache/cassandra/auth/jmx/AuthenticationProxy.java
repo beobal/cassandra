@@ -46,10 +46,6 @@ import org.apache.cassandra.exceptions.ConfigurationException;
  * If authentication is successful then a Subject containing one or more
  * Principals is returned. This Subject may then be used during authorization
  * if a JMX authorization is enabled.
- *
- * This implementation differs from the out of the box JMXPluggableAuthenticator
- * in that is removes the hard requirement for a JMX user to send their username
- * & password during a connection attempt.
  */
 public final class AuthenticationProxy implements JMXAuthenticator
 {
@@ -92,10 +88,9 @@ public final class AuthenticationProxy implements JMXAuthenticator
      */
     public Subject authenticate(Object credentials)
     {
-        // optionally (depending on the auth scheme being employed), the credentials
-        // object passed as an argument to the authenticate method may contain a
-        // string array holding the subject's username & password. If that is the
-        // case, the values are made accessible to LoginModules via the JMXCallbackHandler.
+        // The credentials object is expected to be a string array holding the subject's
+        // username & password. Those values are made accessible to LoginModules via the
+        // JMXCallbackHandler.
         JMXCallbackHandler callbackHandler = new JMXCallbackHandler(credentials);
         try
         {
@@ -114,7 +109,7 @@ public final class AuthenticationProxy implements JMXAuthenticator
         }
         catch (LoginException e)
         {
-            logger.info("Authentication exception", e);
+            logger.trace("Authentication exception", e);
             throw new SecurityException("Authentication error", e);
         }
     }
