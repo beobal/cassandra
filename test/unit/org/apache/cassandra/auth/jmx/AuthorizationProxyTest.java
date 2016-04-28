@@ -373,6 +373,40 @@ public class AuthorizationProxyTest
         testNonMbeanMethods(false);
     }
 
+    @Test
+    public void rejectWhenAuthSetupIsNotComplete() throws Throwable
+    {
+        // IAuthorizer & IRoleManager should not be considered ready to use until
+        // we know that auth setup has completed. So, even though the IAuthorizer
+        // would theoretically grant access, the auth proxy should deny it if setup
+        // hasn't finished.
+
+        Map<RoleResource, Set<PermissionDetails>> permissions =
+        ImmutableMap.of(role1, Collections.singleton(permission(role1, osBean, Permission.SELECT)));
+
+        // verify that access is granted when setup is complete
+        AuthorizationProxy proxy = new ProxyBuilder().isSuperuser((role) -> false)
+                                                     .getPermissions(permissions::get)
+                                                     .isAuthzRequired(() -> true)
+                                                     .isAuthSetupComplete(() -> true)
+                                                     .build();
+
+        assertTrue(proxy.authorize(subject(role1.getRoleName()),
+                                   "getAttribute",
+                                   new Object[]{ objectName(osBean), "arch" }));
+
+        // and denied when it isn't
+        proxy = new ProxyBuilder().isSuperuser((role) -> false)
+                                  .getPermissions(permissions::get)
+                                  .isAuthzRequired(() -> true)
+                                  .isAuthSetupComplete(() -> false)
+                                  .build();
+
+        assertFalse(proxy.authorize(subject(role1.getRoleName()),
+                                   "getAttribute",
+                                   new Object[]{ objectName(osBean), "arch" }));
+    }
+
     private void testNonMbeanMethods(boolean withPermission)
     {
         String[] methods = { "getDefaultDomain",
@@ -456,6 +490,7 @@ public class AuthorizationProxyTest
         Function<ObjectName, Set<ObjectName>> queryNames;
         Function<RoleResource, Boolean> isSuperuser;
         Supplier<Boolean> isAuthzRequired;
+        Supplier<Boolean> isAuthSetupComplete = () -> true;
 
         AuthorizationProxy build()
         {
@@ -472,6 +507,8 @@ public class AuthorizationProxyTest
 
             if (isAuthzRequired != null)
                 proxy.setIsAuthzRequired(isAuthzRequired);
+
+            proxy.setIsAuthSetupComplete(isAuthSetupComplete);
 
             return proxy;
         }
@@ -500,6 +537,12 @@ public class AuthorizationProxyTest
             return this;
         }
 
+        ProxyBuilder isAuthSetupComplete(Supplier<Boolean> s)
+        {
+            isAuthSetupComplete = s;
+            return this;
+        }
+
         private static class InjectableAuthProxy extends AuthorizationProxy
         {
             void setGetPermissions(Function<RoleResource, Set<PermissionDetails>> f)
@@ -520,6 +563,11 @@ public class AuthorizationProxyTest
             void setIsAuthzRequired(Supplier<Boolean> s)
             {
                 this.isAuthzRequired = s;
+            }
+
+            void setIsAuthSetupComplete(Supplier<Boolean> s)
+            {
+                this.isAuthSetupComplete = s;
             }
         }
     }

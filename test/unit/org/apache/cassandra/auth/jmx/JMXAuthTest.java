@@ -265,13 +265,15 @@ public class JMXAuthTest extends CQLTester
         }
     }
 
-    // always answers false to isSuperUser - saves us having to initialize a real IRoleManager for the test
+    // always answers false to isSuperUser and true to isAuthSetup complete - saves us having to initialize
+    // a real IRoleManager and StorageService for the test
     public static class NoSuperUserAuthorizationProxy extends AuthorizationProxy
     {
         public NoSuperUserAuthorizationProxy()
         {
             super();
             this.isSuperuser = (role) -> false;
+            this.isAuthSetupComplete = () -> true;
         }
     }
 }

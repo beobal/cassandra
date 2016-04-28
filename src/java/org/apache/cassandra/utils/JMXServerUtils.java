@@ -153,6 +153,7 @@ public class JMXServerUtils
                 // stash the password file location where JMXPluggableAuthenticator expects it
                 env.put("jmx.remote.x.password.file", passwordFile);
             }
+
             env.put(JMXConnectorServer.AUTHENTICATOR, new JMXPluggableAuthenticatorWrapper(env));
         }
 
@@ -235,6 +236,7 @@ public class JMXServerUtils
                      : Arrays.stream(serverFactory.getEnabledCipherSuites()).collect(Collectors.joining("','", "'", "'")),
                      serverFactory.getNeedClientAuth());
     }
+
     private static class JMXPluggableAuthenticatorWrapper implements JMXAuthenticator
     {
         final Map<?, ?> env;

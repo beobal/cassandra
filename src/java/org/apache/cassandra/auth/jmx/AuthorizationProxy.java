@@ -41,6 +41,7 @@ import org.slf4j.LoggerFactory;
 import org.apache.cassandra.auth.*;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.exceptions.ConfigurationException;
+import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.utils.FBUtilities;
 
 /**
@@ -125,13 +126,19 @@ public class AuthorizationProxy implements InvocationHandler
      Used to decide whether authorization is enabled or not, usually this depends on the configured
      IAuthorizer, but can be overridden for testing.
      */
-    protected  Supplier<Boolean> isAuthzRequired = () -> DatabaseDescriptor.getAuthorizer().requireAuthorization();
+    protected Supplier<Boolean> isAuthzRequired = () -> DatabaseDescriptor.getAuthorizer().requireAuthorization();
 
     /*
      Used to find matching MBeans when the invocation target is a pattern type ObjectName.
      Defaults to querying the MBeanServer but can be overridden for testing. See checkPattern for usage.
      */
     protected Function<ObjectName, Set<ObjectName>> queryNames = (name) -> mbs.queryNames(name, null);
+
+    /*
+     Used to determine whether auth setup has completed so we know whether the expect the IAuthorizer
+     to be ready. Can be overridden for testing.
+     */
+    protected Supplier<Boolean> isAuthSetupComplete = () -> StorageService.instance.isAuthSetupComplete();
 
     @Override
     public Object invoke(Object proxy, Method method, Object[] args)
@@ -183,6 +190,12 @@ public class AuthorizationProxy implements InvocationHandler
         logger.trace("Authorizing JMX method invocation {} for {}",
                      methodName,
                      subject == null ? "" :subject.toString().replaceAll("\\n", " "));
+
+        if (!isAuthSetupComplete.get())
+        {
+            logger.trace("Auth setup is not complete, refusing access");
+            return false;
+        }
 
         // Permissive authorization is enabled
         if (!isAuthzRequired.get())
