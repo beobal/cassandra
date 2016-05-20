@@ -434,7 +434,8 @@ public class Server implements CassandraDaemon.Server
         private final Map<InetAddress, LatestEvent> latestEvents = new ConcurrentHashMap<>();
         // We also want to delay delivering a NEW_NODE notification until the new node has set its RPC ready
         // state. This tracks the endpoints which have joined, but not yet signalled they're ready for clients
-        private final Set<InetAddress> endpointsPendingJoinedNotification = ConcurrentHashMap.newKeySet();
+        private final Set<InetAddress> endpointsPendingJoinedNotification =
+            Collections.newSetFromMap(new ConcurrentHashMap<InetAddress, Boolean>());
 
 
         private static final InetAddress bindAll;
