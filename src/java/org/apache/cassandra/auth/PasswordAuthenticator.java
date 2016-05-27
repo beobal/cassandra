@@ -64,6 +64,7 @@ public class PasswordAuthenticator implements IAuthenticator
     private static final byte NUL = 0;
     private SelectStatement authenticateStatement;
 
+    public static final String LEGACY_USERS_TABLE = "users";
     public static final String LEGACY_CREDENTIALS_TABLE = "credentials";
     private SelectStatement legacyAuthenticateStatement;
 
@@ -79,7 +80,7 @@ public class PasswordAuthenticator implements IAuthenticator
         {
             // If the legacy users table exists try to verify credentials there. This is to handle the case
             // where the cluster is being upgraded and so is running with mixed versions of the authn tables
-            SelectStatement authenticationStatement = Schema.instance.getCFMetaData(AuthKeyspace.NAME, LEGACY_CREDENTIALS_TABLE) == null
+            SelectStatement authenticationStatement = Schema.instance.getCFMetaData(AuthKeyspace.NAME, LEGACY_USERS_TABLE) == null
                                                     ? authenticateStatement
                                                     : legacyAuthenticateStatement;
             return doAuthenticate(username, password, authenticationStatement);
@@ -103,13 +104,14 @@ public class PasswordAuthenticator implements IAuthenticator
 
     public void setup()
     {
+        logger.info("XXXXXXXXXXXX");
         String query = String.format("SELECT %s FROM %s.%s WHERE role = ?",
                                      SALTED_HASH,
                                      AuthKeyspace.NAME,
                                      AuthKeyspace.ROLES);
         authenticateStatement = prepare(query);
 
-        if (Schema.instance.getCFMetaData(AuthKeyspace.NAME, LEGACY_CREDENTIALS_TABLE) != null)
+        if (Schema.instance.getCFMetaData(AuthKeyspace.NAME, LEGACY_USERS_TABLE) != null)
         {
             query = String.format("SELECT %s from %s.%s WHERE username = ?",
                                   SALTED_HASH,
