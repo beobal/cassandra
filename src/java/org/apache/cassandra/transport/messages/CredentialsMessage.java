@@ -24,6 +24,7 @@ import io.netty.buffer.ByteBuf;
 import org.apache.cassandra.auth.AuthenticatedUser;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.exceptions.AuthenticationException;
+import org.apache.cassandra.metrics.AuthMetrics;
 import org.apache.cassandra.service.QueryState;
 import org.apache.cassandra.transport.CBUtil;
 import org.apache.cassandra.transport.Message;
@@ -34,6 +35,7 @@ import org.apache.cassandra.transport.ProtocolException;
  */
 public class CredentialsMessage extends Message.Request
 {
+    private static final AuthMetrics authMetrics = new AuthMetrics("CredentialsMessage");
     public static final Message.Codec<CredentialsMessage> codec = new Message.Codec<CredentialsMessage>()
     {
         public CredentialsMessage decode(ByteBuf body, int version)
@@ -76,9 +78,11 @@ public class CredentialsMessage extends Message.Request
         {
             AuthenticatedUser user = DatabaseDescriptor.getAuthenticator().legacyAuthenticate(credentials);
             state.getClientState().login(user);
+            authMetrics.markSuccess();
         }
         catch (AuthenticationException e)
         {
+            authMetrics.markFailure();
             return ErrorMessage.fromException(e);
         }
 
