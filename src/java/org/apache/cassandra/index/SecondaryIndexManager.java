@@ -483,6 +483,17 @@ public class SecondaryIndexManager implements IndexRegistry
                                   .filter(index -> !index.getBackingTable().isPresent()),
                            Index::getBlockingFlushTask);
     }
+    
+    /**
+     * Performs a blocking execution of pre-join tasks of all indexes
+     */
+    public void executePreJoinTasksBlocking(boolean hadBootstrap)
+    {
+        logger.info("Executing pre-join{} tasks for: {}", hadBootstrap ? " post-bootstrap" : "", this.baseCfs);
+        executeAllBlocking(indexes.values().stream(), (index) -> {
+            return index.getPreJoinTask(hadBootstrap);
+        });
+    }
 
     /**
      * @return all indexes which are marked as built and ready to use
