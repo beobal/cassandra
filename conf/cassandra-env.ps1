@@ -436,64 +436,16 @@ Function SetCassandraEnvironment
         exit
     }
 
-    # Specifies the default port over which Cassandra will be available for
-    # JMX connections.
-    $JMX_PORT="7199"
-
-    # store in env to check if it's avail in verification
-    $env:JMX_PORT=$JMX_PORT
-
     # Configure the following for JEMallocAllocator and if jemalloc is not available in the system
     # library path.
     # set LD_LIBRARY_PATH=<JEMALLOC_HOME>/lib/
     # $env:JVM_OPTS="$env:JVM_OPTS -Djava.library.path=<JEMALLOC_HOME>/lib/"
 
-    # jmx: metrics and administration interface
-    #
-    # add this if you're having trouble connecting:
-    # $env:JVM_OPTS="$env:JVM_OPTS -Djava.rmi.server.hostname=<public name>"
-    #
-    # see
-    # https://blogs.oracle.com/jmxetc/entry/troubleshooting_connection_problems_in_jconsole
-    # for more on configuring JMX through firewalls, etc. (Short version:
-    # get it working with no firewall first.)
-    #
-    # Due to potential security exploits, Cassandra ships with JMX accessible
-    # *only* from localhost.  To enable remote JMX connections, uncomment lines below
-    # with authentication and ssl enabled. See https://wiki.apache.org/cassandra/JmxSecurity
-    #
-    #$env:JVM_OPTS="$env:JVM_OPTS -Dcom.sun.management.jmxremote.port=$JMX_PORT"
-    #$env:JVM_OPTS="$env:JVM_OPTS -Dcom.sun.management.jmxremote.rmi.port=$JMX_PORT"
-    #
     # JMX SSL options
-    #$env:JVM_OPTS="$env:JVM_OPTS -Dcom.sun.management.jmxremote.ssl=true"
-    #$env:JVM_OPTS="$env:JVM_OPTS -Dcom.sun.management.jmxremote.ssl.need.client.auth=true"
-    #$env:JVM_OPTS="$env:JVM_OPTS -Dcom.sun.management.jmxremote.ssl.enabled.protocols=<enabled-protocols>"
-    #$env:JVM_OPTS="$env:JVM_OPTS -Dcom.sun.management.jmxremote.ssl.enabled.cipher.suites=<enabled-cipher-suites>"
-    #$env:JVM_OPTS="$env:JVM_OPTS -Djavax.net.ssl.keyStore=C:/keystore"
-    #$env:JVM_OPTS="$env:JVM_OPTS -Djavax.net.ssl.keyStorePassword=<keystore-password>"
-    #$env:JVM_OPTS="$env:JVM_OPTS -Djavax.net.ssl.trustStore=C:/truststore"
-    #$env:JVM_OPTS="$env:JVM_OPTS -Djavax.net.ssl.trustStorePassword=<truststore-password>"
-    #
-    # JMX auth options
-    #$env:JVM_OPTS="$env:JVM_OPTS -Dcom.sun.management.jmxremote.authenticate=true"
-    ## Basic file based authn & authz
-    #$env:JVM_OPTS="$env:JVM_OPTS -Dcom.sun.management.jmxremote.password.file=C:/jmxremote.password"
-    #$env:JVM_OPTS="$env:JVM_OPTS -Dcom.sun.management.jmxremote.access.file=C:/jmxremote.access"
-
-    ## Custom auth settings which can be used as alternatives to JMX's out of the box auth utilities.
-    ## JAAS login modules can be used for authentication by uncommenting these two properties.
-    ## Cassandra ships with a LoginModule implementation - org.apache.cassandra.auth.CassandraLoginModule -
-    ## which delegates to the IAuthenticator configured in cassandra.yaml
-    #$env:JVM_OPTS="$env:JVM_OPTS -Dcassandra.jmx.remote.login.config=CassandraLogin"
-    #$env:JVM_OPTS="$env:JVM_OPTS -Djava.security.auth.login.config=C:/cassandra-jaas.config"
-
-    ## Cassandra also ships with a helper for delegating JMX authz calls to the configured IAuthorizer,
-    ## uncomment this to use it. Requires one of the two authentication options to be enabled
-    #$env:JVM_OPTS="$env:JVM_OPTS -Dcassandra.jmx.authorizer=org.apache.cassandra.auth.jmx.AuthorizationProxy"
-
-    # Default JMX setup, bound to local loopback address only
-    $env:JVM_OPTS="$env:JVM_OPTS -Dcassandra.jmx.local.port=$JMX_PORT"
+    #$env:JVM_OPTS="$JVM_OPTS -Djavax.net.ssl.keyStore=C:/keystore"
+    #$env:JVM_OPTS="$JVM_OPTS -Djavax.net.ssl.keyStorePassword=<keystore-password>"
+    #$env:JVM_OPTS="$JVM_OPTS -Djavax.net.ssl.trustStore=C:/truststore"
+    #$env:JVM_OPTS="$JVM_OPTS -Djavax.net.ssl.trustStorePassword=<truststore-password>"
 
     $env:JVM_OPTS="$env:JVM_OPTS $env:JVM_EXTRA_OPTS"
 }

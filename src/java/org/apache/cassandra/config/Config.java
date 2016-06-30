@@ -349,7 +349,9 @@ public class Config
      * (Only valid, if enable_user_defined_functions_threads==true)
      */
     public UserFunctionTimeoutPolicy user_function_timeout_policy = UserFunctionTimeoutPolicy.die;
-
+    
+    public JMXServerOptions jmx_server_options = new JMXServerOptions();
+    
     public static boolean getOutboundBindAny()
     {
         return outboundBindAny;

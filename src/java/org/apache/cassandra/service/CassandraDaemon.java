@@ -50,6 +50,7 @@ import org.apache.cassandra.batchlog.LegacyBatchlogMigrator;
 import org.apache.cassandra.concurrent.ScheduledExecutors;
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.config.JMXServerOptions;
 import org.apache.cassandra.config.Schema;
 import org.apache.cassandra.config.SchemaConstants;
 import org.apache.cassandra.cql3.functions.ThreadAwareSecurityManager;
@@ -112,7 +113,7 @@ public class CassandraDaemon
         if (System.getProperty("com.sun.management.jmxremote.port") != null)
         {
             logger.warn("JMX settings in cassandra-env.sh have been bypassed as the JMX connector server is " +
-                        "already initialized. Please refer to cassandra-env.(sh|ps1) for JMX configuration info");
+                        "already initialized. Please refer to cassandra.yaml for JMX configuration info");
             return;
         }
 
@@ -126,21 +127,20 @@ public class CassandraDaemon
         // available for remote.
         // If neither is remote nor local port is set in cassandra-env.(sh|ps)
         // then JMX is effectively  disabled.
-        boolean localOnly = false;
-        String jmxPort = System.getProperty("cassandra.jmx.remote.port");
-
-        if (jmxPort == null)
+        JMXServerOptions jmxServerOptions = DatabaseDescriptor.getJmxOptions();
+        jmxServerOptions.maybeOverwriteSettingsFromSystemProperty();
+        
+        if (!jmxServerOptions.enabled)
         {
-            localOnly = true;
-            jmxPort = System.getProperty("cassandra.jmx.local.port");
+        	return;
         }
-
-        if (jmxPort == null)
-            return;
+        
+        boolean localOnly = !jmxServerOptions.remote;
+        int jmxPort = jmxServerOptions.port;
 
         try
         {
-            jmxServer = JMXServerUtils.createJMXServer(Integer.parseInt(jmxPort), localOnly);
+            jmxServer = JMXServerUtils.createJMXServer(jmxPort, localOnly);
             if (jmxServer == null)
                 return;
         }

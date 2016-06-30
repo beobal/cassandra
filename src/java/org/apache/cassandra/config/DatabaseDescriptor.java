@@ -2260,4 +2260,9 @@ public class DatabaseDescriptor
     {
         return Integer.parseInt(System.getProperty("cassandra.search_concurrency_factor", "1"));
     }
+    
+    public static JMXServerOptions getJmxOptions()
+    {
+    	return conf.jmx_server_options;
+    }
 }

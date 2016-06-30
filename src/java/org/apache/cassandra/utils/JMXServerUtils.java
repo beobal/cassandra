@@ -38,20 +38,21 @@ import javax.rmi.ssl.SslRMIServerSocketFactory;
 import javax.security.auth.Subject;
 
 import com.google.common.collect.ImmutableMap;
-import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.sun.jmx.remote.internal.RMIExporter;
 import com.sun.jmx.remote.security.JMXPluggableAuthenticator;
 import org.apache.cassandra.auth.jmx.AuthenticationProxy;
-import org.apache.cassandra.exceptions.ConfigurationException;
+import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.config.JMXServerOptions;
 import sun.rmi.registry.RegistryImpl;
 import sun.rmi.server.UnicastServerRef2;
 
 public class JMXServerUtils
 {
     private static final Logger logger = LoggerFactory.getLogger(JMXServerUtils.class);
+    private static final JMXServerOptions options = DatabaseDescriptor.getJmxOptions();
 
     private static java.rmi.registry.Registry registry;
 
@@ -133,7 +134,7 @@ public class JMXServerUtils
     private static Map<String, Object> configureJmxAuthentication()
     {
         Map<String, Object> env = new HashMap<>();
-        if (!Boolean.getBoolean("com.sun.management.jmxremote.authenticate"))
+        if (!options.authenticate)
             return env;
 
         // If authentication is enabled, initialize the appropriate JMXAuthenticator
@@ -147,14 +148,18 @@ public class JMXServerUtils
         // before creating the authenticator. If no password file has been
         // explicitly set, it's read from the default location
         // $JAVA_HOME/lib/management/jmxremote.password
-        String configEntry = System.getProperty("cassandra.jmx.remote.login.config");
+        String configEntry = options.login_config;
         if (configEntry != null)
         {
             env.put(JMXConnectorServer.AUTHENTICATOR, new AuthenticationProxy(configEntry));
+            if (options.java_security_auth_login_config != null)
+            {
+            	System.setProperty("java.security.auth.login.config", options.java_security_auth_login_config);
+            }
         }
         else
         {
-            String passwordFile = System.getProperty("com.sun.management.jmxremote.password.file");
+            String passwordFile = options.password_file;
             if (passwordFile != null)
             {
                 // stash the password file location where JMXPluggableAuthenticator expects it
@@ -174,7 +179,7 @@ public class JMXServerUtils
         // can be set as the JMXConnectorServer's MBeanServerForwarder.
         // If no custom proxy is supplied, check system properties for the location of the
         // standard access file & stash it in env
-        String authzProxyClass = System.getProperty("cassandra.jmx.authorizer");
+        String authzProxyClass = options.authorizer;
         if (authzProxyClass != null)
         {
             final InvocationHandler handler = FBUtilities.construct(authzProxyClass, "JMX authz proxy");
@@ -185,7 +190,7 @@ public class JMXServerUtils
         }
         else
         {
-            String accessFile = System.getProperty("com.sun.management.jmxremote.access.file");
+            String accessFile = options.access_file;
             if (accessFile != null)
             {
                 env.put("jmx.remote.x.access.file", accessFile);
@@ -197,23 +202,19 @@ public class JMXServerUtils
     private static Map<String, Object> configureJmxSocketFactories(InetAddress serverAddress, boolean localOnly)
     {
         Map<String, Object> env = new HashMap<>();
-        if (Boolean.getBoolean("com.sun.management.jmxremote.ssl"))
+        if (options.ssl_enabled)
         {
-            boolean requireClientAuth = Boolean.getBoolean("com.sun.management.jmxremote.ssl.need.client.auth");
-            String[] protocols = null;
-            String protocolList = System.getProperty("com.sun.management.jmxremote.ssl.enabled.protocols");
-            if (protocolList != null)
+            boolean requireClientAuth = options.ssl_need_client_auth;
+            String[] protocols = options.ssl_protocols;
+            if (protocols != null)
             {
-                System.setProperty("javax.rmi.ssl.client.enabledProtocols", protocolList);
-                protocols = StringUtils.split(protocolList, ',');
+                System.setProperty("javax.rmi.ssl.client.enabledProtocols", String.join(",", protocols));
             }
 
-            String[] ciphers = null;
-            String cipherList = System.getProperty("com.sun.management.jmxremote.ssl.enabled.cipher.suites");
-            if (cipherList != null)
+            String[] ciphers = options.ssl_cipher_suites;
+            if (ciphers != null)
             {
-                System.setProperty("javax.rmi.ssl.client.enabledCipherSuites", cipherList);
-                ciphers = StringUtils.split(cipherList, ',');
+                System.setProperty("javax.rmi.ssl.client.enabledCipherSuites", String.join(",", ciphers));
             }
 
             SslRMIClientSocketFactory clientFactory = new SslRMIClientSocketFactory();

@@ -1133,6 +1133,56 @@ transparent_data_encryption_options:
             store_type: JCEKS
             key_password: cassandra
 
+# jmx: metrics and administration interface
+#
+# add this to cassandra-evn.(sh|ps1) if you're having trouble connecting:
+# JVM_OPTS="$JVM_OPTS -Djava.rmi.server.hostname=<public name>"
+#
+# see
+# https://blogs.oracle.com/jmxetc/entry/troubleshooting_connection_problems_in_jconsole
+# for more on configuring JMX through firewalls, etc. (Short version:
+# get it working with no firewall first.)
+#
+# Cassandra ships with JMX accessible *only* from localhost by default.
+# To enable remote JMX connections, set remote to true, with authentication and/or ssl enabled.
+# See https://wiki.apache.org/cassandra/JmxSecurity
+#
+jmx_server_options:
+    enabled: true
+    remote: false
+    port: 7199
+    authenticate: false
+
+    # jmx ssl options
+    ssl_enabled: false
+    # ssl_need_client_auth: true
+    # registory_ssl: true
+    # ssl_protocols: [enabled protocols]
+    # cipher_suites: [TLS_RSA_WITH_AES_128_CBC_SHA,TLS_RSA_WITH_AES_256_CBC_SHA,TLS_DHE_RSA_WITH_AES_128_CBC_SHA,TLS_DHE_RSA_WITH_AES_256_CBC_SHA,TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA]
+
+    # keystore: /path/to/keystore
+    # keystore_password: <keystore_password>
+    # truststore: /path/to/truststore
+    # truststore_password: <truststore_password>
+
+    # jmx authentication and authorization options. By default, auth is only
+    # activated for remote connections but they can also be enabled for local only JMX
+    ## Basic file based authn & authz
+    password_file: /etc/cassandra/jmxremote.password
+    # access_file: /etc/cassandra/jmxremote.access
+
+    ## Custom auth settings which can be used as alternatives to JMX's out of the box auth utilities.
+    ## JAAS login modules can be used for authentication by uncommenting these two properties.
+    ## Cassandra ships with a LoginModule implementation - org.apache.cassandra.auth.CassandraLoginModule -
+    ## which delegates to the IAuthenticator configured in cassandra.yaml. See the sample JAAS configuration
+    ## file cassandra-jaas.config
+    # login_config: cassandraLogin
+    # java_security_auth_login_config: conf/cassandra-jaas.config
+
+    ## Cassandra also ships with a helper for delegating JMX authz calls to the configured IAuthorizer,
+    ## uncomment this to use it. Requires one of the two authentication options to be enabled
+    #authorizer: org.apache.cassandra.auth.jmx.AuthorizationProxy"
+
 
 #####################
 # SAFETY THRESHOLDS #
