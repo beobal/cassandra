@@ -101,7 +101,7 @@ public class SASIIndexTest
                                                                                SchemaLoader.staticSASICFMD(KS_NAME, STATIC_CF_NAME))));
     }
 
-    @After
+    @Before
     public void cleanUp()
     {
         Keyspace.open(KS_NAME).getColumnFamilyStore(CF_NAME).truncateBlocking();
@@ -1065,8 +1065,8 @@ public class SASIIndexTest
         Mutation rm = new Mutation(KS_NAME, decoratedKey(AsciiType.instance.decompose("key1")));
         update(rm, new ArrayList<Cell>()
         {{
-            add(buildCell(firstName, AsciiType.instance.decompose("pavel"), System.currentTimeMillis()));
             add(buildCell(age, LongType.instance.decompose(26L), System.currentTimeMillis()));
+            add(buildCell(firstName, AsciiType.instance.decompose("pavel"), System.currentTimeMillis()));
         }});
         rm.apply();
 
