@@ -1,58 +1,40 @@
 package org.apache.cassandra.metrics;
 
-import com.codahale.metrics.Counter;
-
-import static org.apache.cassandra.metrics.CassandraMetricsRegistry.Metrics;
+import com.codahale.metrics.Meter;
 
 /**
  * Metrics about authentication
  */
 public class AuthMetrics
 {
-    /** Counts the number of successes */
-    protected final Counter success;
 
-    /** Counts the number of failures */
-    protected final Counter failure;
+    public static final AuthMetrics instance = new AuthMetrics();
 
-    protected final MetricNameFactory factory;
-
-    /**
-     * Create AuthMetrics with given group, type and scope.
-     *
-     * @param scope Scope of metrics
-     */
-    public AuthMetrics(String scope)
+    public static void init()
     {
-        this(new DefaultNameFactory("Auth", scope));
+        // no-op, just used to force instance creation
     }
 
-    /**
-     * Create AuthMetrics with given group, type and scope.
-     *
-     * @param factory MetricName factory to use
-     */
-    private AuthMetrics(MetricNameFactory factory)
-    {
-        this.factory = factory;
+    /** Number and rate of successful logins */
+    protected final Meter success;
 
-        success = Metrics.counter(factory.createMetricName("success"));
-        failure = Metrics.counter(factory.createMetricName("failure"));
-    }
+    /** Number and rate of login failures */
+    protected final Meter failure;
 
-    public void release()
+    private AuthMetrics()
     {
-        Metrics.remove(factory.createMetricName("success"));
-        Metrics.remove(factory.createMetricName("failure"));
+
+        success = ClientMetrics.instance.addMeter("AuthSuccess");
+        failure = ClientMetrics.instance.addMeter("AuthFailure");
     }
 
     public void markSuccess()
     {
-        success.inc();
+        success.mark();
     }
 
     public void markFailure()
     {
-        failure.inc();
+        failure.mark();
     }
 }
