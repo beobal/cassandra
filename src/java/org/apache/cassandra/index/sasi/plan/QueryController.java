@@ -93,23 +93,21 @@ public class QueryController
         return index.isPresent() ? ((SASIIndex) index.get()).getIndex() : null;
     }
 
-    public UnfilteredRowIterator getPartition(DecoratedKey key, ClusteringPrefix clusteringPrefix, ReadExecutionController executionController)
+    public UnfilteredRowIterator getPartition(DecoratedKey key, NavigableSet<Clustering> clusterings, ReadExecutionController executionController)
     {
         if (key == null)
             throw new NullPointerException();
+
         try
         {
-
-            // TODO (ifesdjeen) here we have nulls in case of clustering, can we optimise/improve?
-            ClusteringBound start = clusteringPrefix == null ? ClusteringBound.BOTTOM : ClusteringBound.create(cfs.getComparator(), true, true, clusteringPrefix.getRawValues());
-            ClusteringBound end = clusteringPrefix == null ? ClusteringBound.TOP : ClusteringBound.create(cfs.getComparator(), false, true, clusteringPrefix.getRawValues());
-
-            // TODO (ifesdjeen) probably that's incorrect as we'll query all rows
+            ClusteringIndexNamesFilter filter = new ClusteringIndexNamesFilter(clusterings, false);
             SinglePartitionReadCommand partition = SinglePartitionReadCommand.create(cfs.metadata,
                                                                                      command.nowInSec(),
+                                                                                     command.columnFilter(),
+                                                                                     command.rowFilter(),
+                                                                                     DataLimits.NONE,
                                                                                      key,
-                                                                                     Slice.make(start, end));
-
+                                                                                     filter);
             return partition.queryMemtableAndDisk(cfs, executionController);
         }
         finally

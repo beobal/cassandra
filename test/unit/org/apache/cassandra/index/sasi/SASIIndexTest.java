@@ -1761,7 +1761,7 @@ public class SASIIndexTest
         Assert.assertEquals("Tony", results.one().getString("name"));
     }
 
-    @Test
+    @Test @Ignore("11182")
     public void testStaticIndex() throws Exception
     {
         testStaticIndex(false);

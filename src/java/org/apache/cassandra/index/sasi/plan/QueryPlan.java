@@ -19,19 +19,25 @@ package org.apache.cassandra.index.sasi.plan;
 
 import java.util.*;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.db.*;
 import org.apache.cassandra.db.partitions.UnfilteredPartitionIterator;
 import org.apache.cassandra.db.rows.*;
+import org.apache.cassandra.db.transform.Transformation;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.index.sasi.disk.*;
 import org.apache.cassandra.index.sasi.plan.Operation.OperationType;
 import org.apache.cassandra.exceptions.RequestTimeoutException;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.utils.*;
+import org.apache.cassandra.utils.btree.BTreeSet;
 
 public class QueryPlan
 {
+    private static final Logger logger = LoggerFactory.getLogger(QueryPlan.class);
     private final QueryController controller;
 
     public QueryPlan(ColumnFamilyStore cfs, ReadCommand command, long executionQuotaMs)
@@ -68,7 +74,7 @@ public class QueryPlan
         return new ResultIterator(analyze(), controller, executionController);
     }
 
-    private static class ResultIterator extends AbstractIterator<UnfilteredRowIterator> implements UnfilteredPartitionIterator
+    private static class ResultIterator implements UnfilteredPartitionIterator
     {
         private final AbstractBounds<PartitionPosition> keyRange;
         private final Operation operationTree;
@@ -76,6 +82,8 @@ public class QueryPlan
         private final ReadExecutionController executionController;
 
         private Iterator<RowKey> currentKeys = null;
+        private UnfilteredRowIterator nextPartition = null;
+        private DecoratedKey lastPartitionKey = null;
 
         public ResultIterator(Operation operationTree, QueryController controller, ReadExecutionController executionController)
         {
@@ -88,76 +96,104 @@ public class QueryPlan
                 operationTree.skipTo((Long) keyRange.left.getToken().getTokenValue());
         }
 
-        protected UnfilteredRowIterator computeNext()
+        public boolean hasNext()
+        {
+            return prepareNext();
+        }
+
+        public UnfilteredRowIterator next()
+        {
+            if (nextPartition == null)
+                prepareNext();
+
+            UnfilteredRowIterator toReturn = nextPartition;
+            nextPartition = null;
+            return toReturn;
+        }
+
+        private boolean prepareNext()
         {
             if (operationTree == null)
-                return endOfData();
+                return false;
 
-            for (;;)
+            while (true)
             {
                 if (currentKeys == null || !currentKeys.hasNext())
                 {
                     if (!operationTree.hasNext())
-                    {
-                        return endOfData();
-                    }
-
+                        return false;
 
                     Token token = operationTree.next();
                     currentKeys = token.iterator();
                 }
 
-                while (currentKeys.hasNext())
+                CFMetaData metadata = controller.metadata();
+                BTreeSet.Builder<Clustering> clusterings = BTreeSet.builder(metadata.comparator);
+
+                while (true)
                 {
+                    if (!currentKeys.hasNext())
+                    {
+                        // No more keys for this token.
+                        // If no clusterings were collected yet, exit this inner loop so the operation
+                        // tree iterator can move on to the next token.
+                        // If some clusterings were collected, build an iterator for those rows
+                        // and return.
+                        if (clusterings.isEmpty() || lastPartitionKey == null)
+                            break;
+
+                        UnfilteredRowIterator partition = fetchPartition(lastPartitionKey, clusterings.build());
+                        if (partition.isEmpty())
+                        {
+                            partition.close();
+                            continue;
+                        }
+
+                        nextPartition = partition;
+                        return true;
+                    }
+
                     RowKey fullKey = currentKeys.next();
                     DecoratedKey key = fullKey.decoratedKey;
 
                     // TODO
                     if (!keyRange.right.isMinimum() && keyRange.right.compareTo(key) < 0)
-                        return endOfData();
+                        return false;
 
-                    try (UnfilteredRowIterator partition = controller.getPartition(key, fullKey.clustering, executionController))
+                    if (lastPartitionKey != null && metadata.getKeyValidator().compare(lastPartitionKey.getKey(), key.getKey()) != 0)
                     {
-                        Row staticRow = partition.staticRow();
-                        List<Unfiltered> clusters = new ArrayList<>();
+                        UnfilteredRowIterator partition = fetchPartition(lastPartitionKey, clusterings.build());
+                        // reset clusterings
+                        clusterings = BTreeSet.builder(metadata.comparator);
 
-                        while (partition.hasNext())
+                        if (partition.isEmpty())
                         {
-                            Unfiltered row = partition.next();
-                            // TODO: what about static row here?
-                            if (operationTree.satisfiedBy(row, staticRow, true))
-                                clusters.add(row);
+                            partition.close();
                         }
-
-                        if (!clusters.isEmpty())
-                            return new PartitionIterator(partition, clusters);
+                        else
+                        {
+                            nextPartition = partition;
+                            return true;
+                        }
                     }
+
+                    lastPartitionKey = key;
+                    clusterings.add(fullKey.clustering);
                 }
             }
         }
 
-        private static class PartitionIterator extends AbstractUnfilteredRowIterator
+        private UnfilteredRowIterator fetchPartition(DecoratedKey key, NavigableSet<Clustering> clusterings)
         {
-            private final Iterator<Unfiltered> rows;
+            // TODO static rows are broken - i.e. if one of the clusterings in the set is STATIC_CLUSTERING
+            // an assert is triggered in ClusteringIndexNamesFilter, so these need special casing
+            return Transformation.apply(controller.getPartition(key, clusterings, executionController), new Transform());
+        }
 
-            public PartitionIterator(UnfilteredRowIterator partition, Collection<Unfiltered> content)
-            {
-                super(partition.metadata(),
-                      partition.partitionKey(),
-                      partition.partitionLevelDeletion(),
-                      partition.columns(),
-                      partition.staticRow(),
-                      partition.isReverseOrder(),
-                      partition.stats());
-
-                rows = content.iterator();
-            }
-
-            @Override
-            protected Unfiltered computeNext()
-            {
-                return rows.hasNext() ? rows.next() : endOfData();
-            }
+        public void close()
+        {
+            if (nextPartition != null)
+                nextPartition.close();
         }
 
         public boolean isForThrift()
@@ -170,10 +206,17 @@ public class QueryPlan
             return controller.metadata();
         }
 
-        public void close()
+        private class Transform extends Transformation
         {
-            FileUtils.closeQuietly(operationTree);
-            controller.finish();
+            @Override
+            public Row applyToRow(Row row)
+            {
+                // todo fix static rows - needs change to operationTree.satisfiedBy
+                if (operationTree.satisfiedBy(row, Rows.EMPTY_STATIC_ROW, true))
+                    return row;
+
+                return null;
+            }
         }
     }
 }

@@ -20,6 +20,7 @@ package org.apache.cassandra.index.sasi.disk;
 
 import java.util.*;
 
+import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.db.*;
 
 /**
@@ -78,6 +79,13 @@ public class RowKey implements Comparable<RowKey>
     }
 
     public static RowKeyComparator COMPARATOR = new RowKeyComparator();
+
+    public String toString(CFMetaData metadata)
+    {
+        return String.format("RowKey: { pk : %s, clustering: %s}",
+                             metadata.getKeyValidator().getString(decoratedKey.getKey()),
+                             clustering.toString(metadata));
+    }
 
     private static class RowKeyComparator implements Comparator<RowKey>
     {
