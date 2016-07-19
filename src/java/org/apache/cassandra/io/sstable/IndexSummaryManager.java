@@ -225,7 +225,9 @@ public class IndexSummaryManager implements IndexSummaryManagerMBean
         Pair<List<SSTableReader>, Map<UUID, LifecycleTransaction>> compactingAndNonCompacting = getCompactingAndNonCompactingSSTables();
         try
         {
-            redistributeSummaries(compactingAndNonCompacting.left, compactingAndNonCompacting.right, this.memoryPoolBytes);
+            redistributeSummaries(new IndexSummaryRedistribution(compactingAndNonCompacting.left,
+                                                                 compactingAndNonCompacting.right,
+                                                                 this.memoryPoolBytes));
         }
         finally
         {
@@ -243,8 +245,8 @@ public class IndexSummaryManager implements IndexSummaryManagerMBean
      * @return a list of new SSTableReader instances
      */
     @VisibleForTesting
-    public static List<SSTableReader> redistributeSummaries(List<SSTableReader> compacting, Map<UUID, LifecycleTransaction> transactions, long memoryPoolBytes) throws IOException
+    public static List<SSTableReader> redistributeSummaries(IndexSummaryRedistribution redistribution) throws IOException
     {
-        return CompactionManager.instance.runIndexSummaryRedistribution(new IndexSummaryRedistribution(compacting, transactions, memoryPoolBytes));
+        return CompactionManager.instance.runIndexSummaryRedistribution(redistribution);
     }
 }
