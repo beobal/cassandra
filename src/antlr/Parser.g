@@ -181,6 +181,18 @@ options {
         }
     }
 
+    public Capability validateCapability(String domain, String name)
+    {
+        try
+        {
+            return Capabilities.capability(domain, name);
+        }
+        catch (java.lang.IllegalArgumentException e)
+        {
+            addRecognitionError("Unknown capability " + domain + "." + name);
+        }
+        return null;
+    }
 }
 
 /** STATEMENTS **/
@@ -227,6 +239,9 @@ cqlStatement returns [ParsedStatement stmt]
     | st38=createMaterializedViewStatement { $stmt = st38; }
     | st39=dropMaterializedViewStatement   { $stmt = st39; }
     | st40=alterMaterializedViewStatement  { $stmt = st40; }
+    | st41=listRestrictionsStatement       { $stmt = st41; }
+    | st42=createRestrictionStatement      { $stmt = st42; }
+    | st43=dropRestrictionStatement        { $stmt = st43; }
     ;
 
 /*
@@ -1147,6 +1162,73 @@ roleOption[RoleOptions opts]
 // for backwards compatibility in CREATE/ALTER USER, this has no '='
 userPassword[RoleOptions opts]
     :  K_PASSWORD v=STRING_LITERAL { opts.setOption(IRoleManager.Option.PASSWORD, $v.text); }
+    ;
+
+listRestrictionsStatement returns [ListRestrictionsStatement stmt]
+    @init {
+        boolean includeInherited = true;
+        IResource resource = Restriction.Specification.ANY_RESOURCE;
+        Capability cap = Restriction.Specification.ANY_CAPABILITY;
+        RoleName role = new RoleName();
+    }
+    : K_LIST K_RESTRICTIONS
+      (
+        K_ON ( K_ANY K_ROLE | roleName[role] )
+        (
+          K_USING ( K_ANY K_CAPABILITY | capability { cap = $capability.cap; } )
+          ( K_WITH (K_ANY K_RESOURCE | resource { resource = $resource.res; } ) )?
+        )?
+        ( K_NORECURSIVE { includeInherited = false; } )?
+      )?
+      { $stmt = new ListRestrictionsStatement(role, resource, cap, includeInherited); }
+    ;
+
+createRestrictionStatement returns [CreateRestrictionStatement stmt]
+    @init {
+
+    }
+    : K_CREATE K_RESTRICTION (K_IF K_NOT K_EXISTS)?
+      K_ON
+        role=userOrRoleName
+      K_USING
+        capability
+      K_WITH
+        resource
+      { $stmt = new CreateRestrictionStatement($capability.cap, role, $resource.res); }
+    ;
+
+dropRestrictionStatement returns [DropRestrictionStatement stmt]
+    @init {
+
+    }
+    : K_DROP K_RESTRICTION (K_IF K_EXISTS)?
+      K_ON
+        role=userOrRoleName
+      K_USING
+        capability
+      K_WITH
+        resource
+      { $stmt = new DropRestrictionStatement($capability.cap, role, $resource.res); }
+    ;
+
+capability returns [Capability cap]
+    @init { String domain = Capabilities.System.DOMAIN;}
+    : (d=capabilityDomain '.' { domain = $d.text; })? name=capabilityName
+      { $cap = validateCapability(domain, $name.text); }
+    ;
+
+capabilityDomain
+    : IDENT
+    | STRING_LITERAL
+    | QUOTED_NAME
+    | unreserved_keyword
+    ;
+
+capabilityName
+    : IDENT
+    | STRING_LITERAL
+    | QUOTED_NAME
+    | unreserved_keyword
     ;
 
 /** DEFINITIONS **/

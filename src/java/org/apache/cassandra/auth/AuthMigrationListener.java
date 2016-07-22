@@ -32,16 +32,19 @@ public class AuthMigrationListener extends MigrationListener
     {
         DatabaseDescriptor.getAuthorizer().revokeAllOn(DataResource.keyspace(ksName));
         DatabaseDescriptor.getAuthorizer().revokeAllOn(FunctionResource.keyspace(ksName));
+        DatabaseDescriptor.getCapabilityManager().dropAllRestrictionsWith(DataResource.keyspace(ksName));
     }
 
     public void onDropColumnFamily(String ksName, String cfName)
     {
         DatabaseDescriptor.getAuthorizer().revokeAllOn(DataResource.table(ksName, cfName));
+        DatabaseDescriptor.getCapabilityManager().dropAllRestrictionsWith(DataResource.table(ksName, cfName));
     }
 
     public void onDropFunction(String ksName, String functionName, List<AbstractType<?>> argTypes)
     {
         DatabaseDescriptor.getAuthorizer()
                           .revokeAllOn(FunctionResource.function(ksName, functionName, argTypes));
+
     }
 }

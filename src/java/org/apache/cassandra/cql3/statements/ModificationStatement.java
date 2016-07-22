@@ -25,6 +25,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.auth.Permission;
+import org.apache.cassandra.auth.capability.Capabilities;
+import org.apache.cassandra.auth.capability.Capability;
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.config.ColumnDefinition;
 import org.apache.cassandra.config.ColumnDefinition.Raw;
@@ -227,6 +229,8 @@ public abstract class ModificationStatement implements CQLStatement
 
         for (Function function : getFunctions())
             state.ensureHasPermission(Permission.EXECUTE, function);
+
+        state.ensureNotRestricted(cfm.resource, getRequiredCapabilities());
     }
 
     public void validate(ClientState state) throws InvalidRequestException
@@ -404,6 +408,14 @@ public abstract class ModificationStatement implements CQLStatement
     public boolean hasConditions()
     {
         return !conditions.isEmpty();
+    }
+
+    public Iterable<Capability> getRequiredCapabilities()
+    {
+        if (hasConditions())
+            return Collections.singleton(Capabilities.System.LWT);
+
+        return Collections.emptySet();
     }
 
     public ResultMessage execute(QueryState queryState, QueryOptions options, long queryStartNanoTime)

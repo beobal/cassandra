@@ -947,6 +947,12 @@ public class TokenMetadata
         }
     }
 
+    // lightweight alternative to getAllEndpoints().size() which doesn't require locking
+    public int countAllEndpoints()
+    {
+        return endpointToHostIdMap.keySet().size();
+    }
+
     public Set<InetAddress> getAllEndpoints()
     {
         lock.readLock().lock();

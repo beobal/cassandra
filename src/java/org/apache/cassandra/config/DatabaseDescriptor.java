@@ -41,6 +41,7 @@ import org.apache.cassandra.auth.IAuthenticator;
 import org.apache.cassandra.auth.IAuthorizer;
 import org.apache.cassandra.auth.IInternodeAuthenticator;
 import org.apache.cassandra.auth.IRoleManager;
+import org.apache.cassandra.auth.capability.ICapabilityManager;
 import org.apache.cassandra.config.Config.CommitLogSync;
 import org.apache.cassandra.config.Config.RequestSchedulerId;
 import org.apache.cassandra.dht.IPartitioner;
@@ -97,6 +98,7 @@ public class DatabaseDescriptor
     // Don't initialize the role manager until applying config. The options supported by CassandraRoleManager
     // depend on the configured IAuthenticator, so defer creating it until that's been set.
     private static IRoleManager roleManager;
+    private static ICapabilityManager capabilityManager;
 
     private static IRequestScheduler requestScheduler;
     private static RequestSchedulerId requestSchedulerId;
@@ -1032,6 +1034,16 @@ public class DatabaseDescriptor
     public static void setRoleManager(IRoleManager roleManager)
     {
         DatabaseDescriptor.roleManager = roleManager;
+    }
+
+    public static ICapabilityManager getCapabilityManager()
+    {
+        return capabilityManager;
+    }
+
+    public static void setCapabilityManager(ICapabilityManager capabilityManager)
+    {
+        DatabaseDescriptor.capabilityManager = capabilityManager;
     }
 
     public static int getPermissionsValidity()

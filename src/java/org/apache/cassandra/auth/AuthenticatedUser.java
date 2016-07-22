@@ -21,6 +21,7 @@ import java.util.Set;
 
 import com.google.common.base.Objects;
 
+import org.apache.cassandra.auth.capability.Capability;
 import org.apache.cassandra.config.DatabaseDescriptor;
 
 /**
@@ -102,6 +103,11 @@ public class AuthenticatedUser
     public Set<Permission> getPermissions(IResource resource)
     {
         return permissionsCache.getPermissions(this, resource);
+    }
+
+    public Set<Capability> getRestrictions(IResource resource)
+    {
+        return DatabaseDescriptor.getCapabilityManager().getRestrictions(this.getPrimaryRole(), resource);
     }
 
     @Override

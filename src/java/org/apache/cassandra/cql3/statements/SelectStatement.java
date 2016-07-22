@@ -26,6 +26,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.auth.Permission;
+import org.apache.cassandra.auth.capability.Capabilities;
+import org.apache.cassandra.auth.capability.Capability;
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.config.ColumnDefinition;
 import org.apache.cassandra.cql3.*;
@@ -36,10 +38,7 @@ import org.apache.cassandra.cql3.selection.Selection;
 import org.apache.cassandra.db.*;
 import org.apache.cassandra.db.aggregation.AggregationSpecification;
 import org.apache.cassandra.db.filter.*;
-import org.apache.cassandra.db.marshal.CollectionType;
-import org.apache.cassandra.db.marshal.CompositeType;
-import org.apache.cassandra.db.marshal.Int32Type;
-import org.apache.cassandra.db.marshal.UserType;
+import org.apache.cassandra.db.marshal.*;
 import org.apache.cassandra.db.partitions.PartitionIterator;
 import org.apache.cassandra.db.rows.ComplexColumnData;
 import org.apache.cassandra.db.rows.Row;
@@ -142,6 +141,14 @@ public class SelectStatement implements CQLStatement
         return functions;
     }
 
+    public Iterable<Capability> getRequiredCapabilities()
+    {
+        if (parameters.allowFiltering)
+            return Collections.singleton(Capabilities.System.FILTERING);
+
+        return Collections.emptySet();
+    }
+
     private void addFunctionsTo(List<Function> functions)
     {
         selection.addFunctionsTo(functions);
@@ -222,6 +229,8 @@ public class SelectStatement implements CQLStatement
 
         for (Function function : getFunctions())
             state.ensureHasPermission(Permission.EXECUTE, function);
+
+        state.ensureNotRestricted(cfm.resource, getRequiredCapabilities());
     }
 
     public void validate(ClientState state) throws InvalidRequestException

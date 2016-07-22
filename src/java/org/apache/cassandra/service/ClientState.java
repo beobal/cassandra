@@ -24,14 +24,13 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
+import com.google.common.collect.Iterables;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.auth.*;
-import org.apache.cassandra.config.CFMetaData;
-import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.config.Schema;
-import org.apache.cassandra.config.SchemaConstants;
+import org.apache.cassandra.auth.capability.Capability;
+import org.apache.cassandra.config.*;
 import org.apache.cassandra.cql3.QueryHandler;
 import org.apache.cassandra.cql3.QueryProcessor;
 import org.apache.cassandra.cql3.functions.Function;
@@ -41,9 +40,9 @@ import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.exceptions.UnauthorizedException;
 import org.apache.cassandra.schema.SchemaKeyspace;
 import org.apache.cassandra.thrift.ThriftValidation;
+import org.apache.cassandra.utils.CassandraVersion;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.JVMStabilityInspector;
-import org.apache.cassandra.utils.CassandraVersion;
 
 /**
  * State related to a client connection.
@@ -346,6 +345,29 @@ public class ClientState
                                                                              function.argTypes()));
     }
 
+    public void ensureNotRestricted(IResource resource, Iterable<Capability> capabilities)
+    {
+        if (isInternal)
+            return;
+
+        if (Iterables.isEmpty(capabilities))
+            return;
+
+        for (IResource res : Resources.chain(resource))
+        {
+            Set<Capability> restricted = getRestrictions(res);
+            for (Capability required : capabilities)
+            {
+                if (restricted.contains(required))
+                {
+                    throw new UnauthorizedException(String.format("Required capability %s is restricted on %s for " +
+                                                                  "role %s or one of its granted roles",
+                                                                  required, res, user.getName()));
+                }
+            }
+        }
+    }
+
     private void checkPermissionOnResourceChain(Permission perm, IResource resource)
     {
         for (IResource r : Resources.chain(resource))
@@ -417,5 +439,10 @@ public class ClientState
     private Set<Permission> authorize(IResource resource)
     {
         return user.getPermissions(resource);
+    }
+
+    private Set<Capability> getRestrictions(IResource resource)
+    {
+        return user.getRestrictions(resource);
     }
 }

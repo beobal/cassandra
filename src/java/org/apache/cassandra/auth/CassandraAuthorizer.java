@@ -116,7 +116,7 @@ public class CassandraAuthorizer implements IAuthorizer
 
     // Called when deleting a role with DROP ROLE query.
     // Internal hook, so no permission checks are needed here.
-    // Executes a logged batch removing the granted premissions
+    // Executes a logged batch removing the granted permissions
     // for the role as well as the entries from the reverse index
     // table
     public void revokeAllFrom(RoleResource revokee)

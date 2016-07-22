@@ -70,6 +70,12 @@ public class DropRoleStatement extends AuthenticationStatement
         DatabaseDescriptor.getRoleManager().dropRole(state.getUser(), role);
         DatabaseDescriptor.getAuthorizer().revokeAllFrom(role);
         DatabaseDescriptor.getAuthorizer().revokeAllOn(role);
+        DatabaseDescriptor.getCapabilityManager().dropAllRestrictionsOn(role);
+        // restrictions on doing stuff *with* roles (as opposed to restrictions
+        // *on* roles doing stuff with *other* types of resource) are not
+        // implemented yet, but theoretically they could be, so it does no harm
+        // to preemptively clean up here
+        DatabaseDescriptor.getCapabilityManager().dropAllRestrictionsWith(role);
         return null;
     }
 }

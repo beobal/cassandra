@@ -35,6 +35,9 @@ public final class AuthKeyspace
     public static final String ROLE_MEMBERS = "role_members";
     public static final String ROLE_PERMISSIONS = "role_permissions";
     public static final String RESOURCE_ROLE_INDEX = "resource_role_permissons_index";
+    public static final String ROLE_CAP_RESTRICTIONS = "role_capability_restrictions";
+    public static final String RESOURCE_RESTRICTIONS_INDEX = "resource_role_restrictions_index";
+
 
     public static final long SUPERUSER_SETUP_DELAY = Long.getLong("cassandra.superuser_setup_delay_ms", 10000);
 
@@ -74,6 +77,22 @@ public final class AuthKeyspace
                 + "role text,"
                 + "PRIMARY KEY(resource, role))");
 
+    private static final CFMetaData RoleRestrictions =
+        compile(ROLE_CAP_RESTRICTIONS,
+                "capability restrictions imposed on db roles",
+                "CREATE TABLE %s ("
+                + "role text,"
+                + "resource text,"
+                + "capabilities set<text>,"
+                + "PRIMARY KEY(role, resource))");
+
+    private static final CFMetaData ResourceRestrictionIndex =
+        compile(RESOURCE_RESTRICTIONS_INDEX,
+                "index of db roles with capability restrictions for a given resource",
+                "CREATE TABLE %s ("
+                + "resource text,"
+                + "role text,"
+                + "PRIMARY KEY(resource, role))");
 
     private static CFMetaData compile(String name, String description, String schema)
     {
@@ -84,6 +103,13 @@ public final class AuthKeyspace
 
     public static KeyspaceMetadata metadata()
     {
-        return KeyspaceMetadata.create(SchemaConstants.AUTH_KEYSPACE_NAME, KeyspaceParams.simple(1), Tables.of(Roles, RoleMembers, RolePermissions, ResourceRoleIndex));
+        return KeyspaceMetadata.create(SchemaConstants.AUTH_KEYSPACE_NAME,
+                                       KeyspaceParams.simple(1),
+                                       Tables.of(Roles,
+                                                 RoleMembers,
+                                                 RolePermissions,
+                                                 ResourceRoleIndex,
+                                                 RoleRestrictions,
+                                                 ResourceRestrictionIndex));
     }
 }

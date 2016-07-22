@@ -357,7 +357,7 @@ public class CassandraRoleManager implements IRoleManager
                || !QueryProcessor.process(allUsersQuery, ConsistencyLevel.QUORUM).isEmpty();
     }
 
-    private void scheduleSetupTask(final Callable<Void> setupTask)
+    protected void scheduleSetupTask(final Callable<Void> setupTask)
     {
         // The delay is to give the node a chance to see its peers before attempting the operation
         ScheduledExecutors.optionalTasks.schedule(new Runnable()
@@ -494,15 +494,11 @@ public class CassandraRoleManager implements IRoleManager
     private Role getRoleFromTable(String name, SelectStatement statement, Function<UntypedResultSet.Row, Role> function)
     throws RequestExecutionException, RequestValidationException
     {
-        ResultMessage.Rows rows =
-            statement.execute(QueryState.forInternalCalls(),
-                              QueryOptions.forInternalCalls(consistencyForRole(name),
-                                                            Collections.singletonList(ByteBufferUtil.bytes(name))),
-                              System.nanoTime());
-        if (rows.result.isEmpty())
+        UntypedResultSet result = process(statement, name);
+        if (result.isEmpty())
             return NULL_ROLE;
 
-        return function.apply(UntypedResultSet.create(rows.result).one());
+        return function.apply(result.one());
     }
 
     /*
@@ -597,7 +593,8 @@ public class CassandraRoleManager implements IRoleManager
      * This shouldn't be used during setup as this will directly return an error if the manager is not setup yet. Setup tasks
      * should use QueryProcessor.process directly.
      */
-    private UntypedResultSet process(String query, ConsistencyLevel consistencyLevel) throws RequestValidationException, RequestExecutionException
+    protected UntypedResultSet process(String query, ConsistencyLevel consistencyLevel)
+    throws RequestValidationException, RequestExecutionException
     {
         if (!isClusterReady)
             throw new InvalidRequestException("Cannot process role related query as the role manager isn't yet setup. "
@@ -605,6 +602,15 @@ public class CassandraRoleManager implements IRoleManager
                                             + "You need to upgrade all nodes to Cassandra 2.2 or more to use roles.");
 
         return QueryProcessor.process(query, consistencyLevel);
+    }
+
+    protected UntypedResultSet process(SelectStatement statement, String role)
+    {
+        return UntypedResultSet.create(
+            statement.execute(QueryState.forInternalCalls(),
+                              QueryOptions.forInternalCalls(consistencyForRole(role),
+                                                            Collections.singletonList(ByteBufferUtil.bytes(role))),
+                              System.nanoTime()).result);
     }
 
     private static final class Role

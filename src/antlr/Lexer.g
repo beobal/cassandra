@@ -200,6 +200,11 @@ K_DEFAULT:     D E F A U L T;
 K_UNSET:       U N S E T;
 K_LIKE:        L I K E;
 
+K_ANY:         A N Y;
+K_CAPABILITY:  C A P A B I L I T Y;
+K_RESTRICTION: R E S T R I C T I O N;
+K_RESTRICTIONS: R E S T R I C T I O N S;
+
 // Case-insensitive alpha characters
 fragment A: ('a'|'A');
 fragment B: ('b'|'B');

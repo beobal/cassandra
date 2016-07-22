@@ -21,6 +21,8 @@ package org.apache.cassandra.auth;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.cassandra.auth.capability.CassandraCapabilityManager;
+import org.apache.cassandra.auth.capability.ICapabilityManager;
 import org.apache.cassandra.config.Config;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.exceptions.ConfigurationException;
@@ -48,7 +50,9 @@ public final class AuthConfig
 
         IAuthenticator authenticator = new AllowAllAuthenticator();
 
-        /* Authentication, authorization and role management backend, implementing IAuthenticator, IAuthorizer & IRoleMapper*/
+        /* Authentication, authorization and role management backend,
+           implementing IAuthenticator, IAuthorizer & IRoleManager */
+
         if (conf.authenticator != null)
             authenticator = FBUtilities.newAuthenticator(conf.authenticator);
 
@@ -92,7 +96,16 @@ public final class AuthConfig
 
         DatabaseDescriptor.setRoleManager(roleManager);
 
-        // authenticator
+        // capability manager
+
+        ICapabilityManager capabilityManager = new CassandraCapabilityManager();
+
+        if (conf.capability_manager != null)
+            capabilityManager = FBUtilities.newCapabilityManager(conf.capability_manager);
+
+        DatabaseDescriptor.setCapabilityManager(capabilityManager);
+
+        // internode authenticator
 
         IInternodeAuthenticator internodeAuthenticator;
         if (conf.internode_authenticator != null)
@@ -102,12 +115,13 @@ public final class AuthConfig
 
         DatabaseDescriptor.setInternodeAuthenticator(internodeAuthenticator);
 
-        // Validate at last to have authenticator, authorizer, role-manager and internode-auth setup
-        // in case these rely on each other.
+        // Validate at last to have authenticator, authorizer, role-manager, capability manager
+        // and internode-auth setup in case these rely on each other.
 
         authenticator.validateConfiguration();
         authorizer.validateConfiguration();
         roleManager.validateConfiguration();
+        capabilityManager.validateConfiguration();
         internodeAuthenticator.validateConfiguration();
     }
 }
