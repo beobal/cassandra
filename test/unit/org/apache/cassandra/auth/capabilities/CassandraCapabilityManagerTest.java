@@ -19,10 +19,10 @@
 package org.apache.cassandra.auth.capabilities;
 
 import java.lang.reflect.Field;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
+import java.nio.ByteBuffer;
+import java.util.*;
 import java.util.concurrent.Callable;
+import java.util.function.Function;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -46,6 +46,8 @@ import org.apache.cassandra.cql3.statements.SelectStatement;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.cassandra.db.Keyspace;
+import org.apache.cassandra.dht.IPartitioner;
+import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.exceptions.RequestExecutionException;
 import org.apache.cassandra.exceptions.RequestValidationException;
 import org.apache.cassandra.schema.KeyspaceParams;
@@ -69,13 +71,12 @@ public class CassandraCapabilityManagerTest
     private static final RoleResource ROLE_A = RoleResource.role("role_a");
     private static final RoleResource ROLE_B = RoleResource.role("role_b");
     private static final RoleResource ROLE_C = RoleResource.role("role_c");
-    private static final RoleResource[] ROLES = {ROLE_A, ROLE_B, ROLE_C};
-    private static final AuthenticatedUser anon = AuthenticatedUser.ANONYMOUS_USER;
+    private static final RoleResource[] ROLES = { ROLE_A, ROLE_B, ROLE_C };
 
     // Test helpers - these classes simply extend the internal IRoleManager & ICapabilityManager
     // implementations to ensure that all access to underlying tables is made via
-    // QueryProcessor.executeOnceInternal and not StorageProxy so that they can be used in a
-    // test environment.
+    // QueryProcessor.executeOnceInternal/CQLStatement.executeInternal and not StorageProxy
+    // so that they can be used in a unit test environment.
 
     private static class LocalExecutionRoleManager extends CassandraRoleManager
     {
@@ -99,9 +100,32 @@ public class CassandraCapabilityManagerTest
 
     private static class LocalExecutionTableHandler extends TableBasedRestrictionHandler
     {
+        LocalExecutionTableHandler()
+        {
+            super(new LocalExecutionLookupSupport<>(AuthKeyspace.ROLE_CAP_RESTRICTIONS,
+                                                  "role",
+                                                  AuthKeyspace.RESOURCE_RESTRICTIONS_INDEX,
+                                                  "resource",
+                                                  RoleResource::getName,
+                                                  IResource::getName));
+        }
+
         protected UntypedResultSet process(String query) throws RequestExecutionException
         {
             return QueryProcessor.executeOnceInternal(query);
+        }
+    }
+
+    private static class LocalExecutionLookupSupport<P, L> extends AuthLookupTableSupport<P, L>
+    {
+        public LocalExecutionLookupSupport(String primaryTable,
+                                           String primaryKeyName,
+                                           String lookupTable,
+                                           String lookupKeyName,
+                                           Function<P, String> primaryAsString,
+                                           Function<L, String> lookupAsString)
+        {
+            super(primaryTable, primaryKeyName, lookupTable, lookupKeyName, primaryAsString, lookupAsString);
         }
 
         protected void executeAsBatch(List<ModificationStatement> statements)
@@ -109,6 +133,18 @@ public class CassandraCapabilityManagerTest
         {
             statements.forEach(stmt -> stmt.executeInternal(QueryState.forInternalCalls(),
                                                             QueryOptions.forInternalCalls(Collections.emptyList())));
+        }
+
+        protected UntypedResultSet process(String query) throws RequestExecutionException
+        {
+            return QueryProcessor.executeOnceInternal(query);
+        }
+
+        protected UntypedResultSet process(SelectStatement select, ByteBuffer...args)
+        {
+            return UntypedResultSet.create(select.executeInternal(QueryState.forInternalCalls(),
+                                                                  QueryOptions.forInternalCalls(ConsistencyLevel.LOCAL_ONE,
+                                                                                                Arrays.asList(args))).result);
         }
     }
 
@@ -139,6 +175,13 @@ public class CassandraCapabilityManagerTest
         IRoleManager roleManager = DatabaseDescriptor.getRoleManager();
         for (RoleResource role : ROLES)
             roleManager.createRole(AuthenticatedUser.ANONYMOUS_USER, role, new RoleOptions());
+    }
+
+    private static void setupPartitioner()
+    {
+        IPartitioner partitioner = new Murmur3Partitioner();
+        setDatabaseDescriptorField("partitioner", partitioner);
+        IPartitioner x = DatabaseDescriptor.getPartitioner();
     }
 
     private static void setupRoleManager()
@@ -648,13 +691,15 @@ public class CassandraCapabilityManagerTest
     {
         ICapabilityManager capabilityManager = DatabaseDescriptor.getCapabilityManager();
         capabilities.forEach(capability ->
-                             capabilityManager.createRestriction(anon, new Restriction(role, resource.getName(), capability)));
+                             capabilityManager.createRestriction(AuthenticatedUser.ANONYMOUS_USER,
+                                                                 new Restriction(role, resource.getName(), capability)));
     }
 
     private static void dropRestriction(RoleResource role, DataResource resource, Capability capability)
     {
         ICapabilityManager capabilityManager = DatabaseDescriptor.getCapabilityManager();
-        capabilityManager.dropRestriction(anon, new Restriction(role, resource.getName(), capability));
+        capabilityManager.dropRestriction(AuthenticatedUser.ANONYMOUS_USER,
+                                          new Restriction(role, resource.getName(), capability));
     }
 
     private static Restriction.Specification spec(RoleResource role, IResource resource, Capability capability)

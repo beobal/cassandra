@@ -80,13 +80,13 @@ public class CassandraCapabilityManager implements ICapabilityManager
     public void createRestriction(AuthenticatedUser performedBy, Restriction restriction)
     {
         checkReadyStatus();
-        loader.modifyForRole(restriction, "+");
+        loader.modifyForRole(restriction, RestrictionHandler.Operator.ADD);
     }
 
     public void dropRestriction(AuthenticatedUser performedBy, Restriction restriction)
     {
         checkReadyStatus();
-        loader.modifyForRole(restriction, "-");
+        loader.modifyForRole(restriction, RestrictionHandler.Operator.REMOVE);
     }
 
     public void dropAllRestrictionsOn(RoleResource role)

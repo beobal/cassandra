@@ -26,9 +26,21 @@ import org.apache.cassandra.exceptions.RequestExecutionException;
 
 public interface RestrictionHandler
 {
+    enum Operator
+    {
+        ADD("+"),
+        REMOVE("-");
+
+        String op;
+        Operator(String op)
+        {
+            this.op = op;
+        }
+    }
+
     ImmutableSet<Restriction> fetch(Restriction.Specification spec, boolean includeInherited);
 
-    void modifyForRole(Restriction restriction, String operator) throws RequestExecutionException;
+    void modifyForRole(Restriction restriction, Operator operator) throws RequestExecutionException;
 
     void removeAllForRole(RoleResource role);
 
