@@ -171,6 +171,18 @@ credentials_validity_in_ms: 2000
 # Defaults to the same value as credentials_validity_in_ms.
 # credentials_update_interval_in_ms: 2000
 
+# Validity period for capability restrictions cache.
+# Defaults to 2000, set to 0 to disable caching completely.
+capability_restrictions_validity_in_ms: 2000
+
+# Refresh interval for capability restrictions cache (if enabled).
+# After this interval, cache entries become eligible for refresh. Upon next
+# access, an async reload is scheduled and the old value returned until it
+# completes. If capability_restrictions_validity_in_ms is non-zero, then this must be
+# also.
+# Defaults to the same value as capability_restrictions_validity_in_ms.
+# capability_restrictions_update_interval_in_ms: 2000
+
 # The partitioner is responsible for distributing groups of rows (by
 # partition key) across nodes in the cluster.  You should leave this
 # alone for new clusters.  The partitioner can NOT be changed without

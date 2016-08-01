@@ -22,6 +22,7 @@ import java.util.Set;
 import com.google.common.base.Objects;
 
 import org.apache.cassandra.auth.capability.Capability;
+import org.apache.cassandra.auth.capability.RestrictionsCache;
 import org.apache.cassandra.config.DatabaseDescriptor;
 
 /**
@@ -40,6 +41,9 @@ public class AuthenticatedUser
 
     // User-level permissions cache.
     private static final PermissionsCache permissionsCache = new PermissionsCache(DatabaseDescriptor.getAuthorizer());
+
+    // User-level capability restrictions cache
+    private static final RestrictionsCache restrictionsCache = new RestrictionsCache(DatabaseDescriptor.getCapabilityManager());
 
     private final String name;
     // primary Role of the logged in user
@@ -107,7 +111,7 @@ public class AuthenticatedUser
 
     public Set<Capability> getRestrictions(IResource resource)
     {
-        return DatabaseDescriptor.getCapabilityManager().getRestrictions(this.getPrimaryRole(), resource);
+        return restrictionsCache.getRestrictedCapabilities(this, resource);
     }
 
     @Override

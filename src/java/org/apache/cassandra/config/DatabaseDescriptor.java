@@ -1142,6 +1142,38 @@ public class DatabaseDescriptor
         return conf.credentials_cache_max_entries = maxEntries;
     }
 
+    public static int getCapabilityRestrictionsValidity()
+    {
+        return conf.capability_restrictions_validity_in_ms;
+    }
+
+    public static void setCapabilityRestrictionsValidity(int validity)
+    {
+        conf.capability_restrictions_validity_in_ms = validity;
+    }
+
+    public static int getCapabilityRestrictionsUpdateInterval()
+    {
+        return conf.capability_restrictions_update_interval_in_ms == -1
+               ? conf.capability_restrictions_validity_in_ms
+               : conf.capability_restrictions_update_interval_in_ms;
+    }
+
+    public static void setCapabilityRestrictionsUpdateInterval(int interval)
+    {
+        conf.capability_restrictions_update_interval_in_ms = interval;
+    }
+
+    public static int getCapabilityRestrictionsCacheMaxEntries()
+    {
+        return conf.capability_restrictions_cache_max_entries;
+    }
+
+    public static int setCapabilityRestrictionsCacheMaxEntries(int maxEntries)
+    {
+        return conf.capability_restrictions_cache_max_entries = maxEntries;
+    }
+
     public static int getThriftFramedTransportSize()
     {
         return conf.thrift_framed_transport_size_in_mb * 1024 * 1024;
