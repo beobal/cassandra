@@ -27,7 +27,7 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.auth.Permission;
 import org.apache.cassandra.auth.capability.Capabilities;
-import org.apache.cassandra.auth.capability.Capability;
+import org.apache.cassandra.auth.capability.CapabilitySet;
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.config.ColumnDefinition;
 import org.apache.cassandra.cql3.*;
@@ -141,12 +141,20 @@ public class SelectStatement implements CQLStatement
         return functions;
     }
 
-    public Iterable<Capability> getRequiredCapabilities()
+    public CapabilitySet getRequiredCapabilities(QueryState queryState, QueryOptions options)
     {
-        if (parameters.allowFiltering)
-            return Collections.singleton(Capabilities.System.FILTERING);
+        // todo short-circuit if not enabled
 
-        return Collections.emptySet();
+        CapabilitySet.Builder required = new CapabilitySet.Builder();
+        if (parameters.allowFiltering)
+            required.add(Capabilities.System.FILTERING);
+
+        if (options.getConsistency() == ConsistencyLevel.ALL)
+            required.add(Capabilities.System.CL_ALL_READ);
+        if (options.getConsistency() == ConsistencyLevel.ONE)
+            required.add(Capabilities.System.CL_ONE_READ);
+
+        return required.build();
     }
 
     private void addFunctionsTo(List<Function> functions)
@@ -230,7 +238,6 @@ public class SelectStatement implements CQLStatement
         for (Function function : getFunctions())
             state.ensureHasPermission(Permission.EXECUTE, function);
 
-        state.ensureNotRestricted(cfm.resource, getRequiredCapabilities());
     }
 
     public void validate(ClientState state) throws InvalidRequestException
@@ -256,6 +263,7 @@ public class SelectStatement implements CQLStatement
 
         QueryPager pager = getPager(query, options);
 
+        state.getClientState().ensureNotRestricted(cfm.resource, getRequiredCapabilities(state, options));
         return execute(Pager.forDistributedQuery(pager, cl, state.getClientState()), options, pageSize, nowInSec, userLimit, queryStartNanoTime);
     }
 

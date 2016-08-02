@@ -18,14 +18,13 @@
 
 package org.apache.cassandra.auth.capability;
 
-import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 import org.apache.cassandra.auth.*;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.utils.Pair;
 
-public class RestrictionsCache extends AuthCache<Pair<RoleResource, IResource>, Set<Capability>>
+public class RestrictionsCache extends AuthCache<Pair<RoleResource, IResource>, CapabilitySet>
 {
     public RestrictionsCache(ICapabilityManager capabilityManager)
     {
@@ -36,11 +35,11 @@ public class RestrictionsCache extends AuthCache<Pair<RoleResource, IResource>, 
               DatabaseDescriptor::getCapabilityRestrictionsUpdateInterval,
               DatabaseDescriptor::setCapabilityRestrictionsCacheMaxEntries,
               DatabaseDescriptor::getCapabilityRestrictionsCacheMaxEntries,
-              (p) -> capabilityManager.getRestrictions(p.left, p.right),
+              (p) -> capabilityManager.getRestricted(p.left, p.right),
               () -> true);
     }
 
-    public Set<Capability> getRestrictedCapabilities(AuthenticatedUser user, IResource resource)
+    public CapabilitySet getRestrictedCapabilities(AuthenticatedUser user, IResource resource)
     {
         try
         {

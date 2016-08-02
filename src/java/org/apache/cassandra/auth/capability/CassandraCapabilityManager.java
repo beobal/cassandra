@@ -101,9 +101,9 @@ public class CassandraCapabilityManager implements ICapabilityManager
         loader.removeAllForResource(resource);
     }
 
-    public ImmutableSet<Capability> getRestrictions(RoleResource primaryRole, IResource resource)
+    public CapabilitySet getRestricted(RoleResource primaryRole, IResource resource)
     {
-        ImmutableSet.Builder<Capability> restricted = ImmutableSet.builder();
+        CapabilitySet.Builder restricted = new CapabilitySet.Builder();
         Restriction.Specification spec = new Restriction.Specification(primaryRole, resource, ANY_CAPABILITY);
         loader.fetch(spec, true)
               .stream()

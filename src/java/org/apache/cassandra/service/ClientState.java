@@ -23,13 +23,14 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
-import com.google.common.collect.Iterables;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.auth.*;
 import org.apache.cassandra.auth.capability.Capability;
+import org.apache.cassandra.auth.capability.CapabilitySet;
 import org.apache.cassandra.config.*;
 import org.apache.cassandra.cql3.QueryHandler;
 import org.apache.cassandra.cql3.QueryProcessor;
@@ -345,26 +346,33 @@ public class ClientState
                                                                              function.argTypes()));
     }
 
-    public void ensureNotRestricted(IResource resource, Iterable<Capability> capabilities)
+    public void ensureNotRestricted(IResource resource, CapabilitySet required)
     {
         if (isInternal)
             return;
 
-        if (Iterables.isEmpty(capabilities))
+        if (required.isEmpty())
             return;
 
+        Set<Capability> requiredAndRestricted = new HashSet<>();
         for (IResource res : Resources.chain(resource))
         {
-            Set<Capability> restricted = getRestrictions(res);
-            for (Capability required : capabilities)
-            {
-                if (restricted.contains(required))
-                {
-                    throw new UnauthorizedException(String.format("Required capability %s is restricted on %s for " +
-                                                                  "role %s or one of its granted roles",
-                                                                  required, res, user.getName()));
-                }
-            }
+            CapabilitySet restricted = getRestrictions(res);
+            requiredAndRestricted.addAll(required.intersection(restricted));
+        }
+
+        if (!requiredAndRestricted.isEmpty())
+        {
+            throw new UnauthorizedException(String.format("Role %s or one of its granted roles has restrictions on one" +
+                                                          "or more capabilities required for this operation which apply " +
+                                                          "to %s or one of its parents. Required but restricted " +
+                                                          "capabilities : %s",
+                                                          user.getName(),
+                                                          resource,
+                                                          requiredAndRestricted.stream()
+                                                                 .map(Capability::toString)
+                                                                 .collect(Collectors.joining(", "))));
+
         }
     }
 
@@ -441,7 +449,7 @@ public class ClientState
         return user.getPermissions(resource);
     }
 
-    private Set<Capability> getRestrictions(IResource resource)
+    private CapabilitySet getRestrictions(IResource resource)
     {
         return user.getRestrictions(resource);
     }

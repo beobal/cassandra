@@ -27,6 +27,7 @@ import org.slf4j.LoggerFactory;
 import org.apache.cassandra.auth.Permission;
 import org.apache.cassandra.auth.capability.Capabilities;
 import org.apache.cassandra.auth.capability.Capability;
+import org.apache.cassandra.auth.capability.CapabilitySet;
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.config.ColumnDefinition;
 import org.apache.cassandra.config.ColumnDefinition.Raw;
@@ -410,12 +411,12 @@ public abstract class ModificationStatement implements CQLStatement
         return !conditions.isEmpty();
     }
 
-    public Iterable<Capability> getRequiredCapabilities()
+    public CapabilitySet getRequiredCapabilities()
     {
         if (hasConditions())
-            return Collections.singleton(Capabilities.System.LWT);
+            return new CapabilitySet(Capabilities.System.LWT);
 
-        return Collections.emptySet();
+        return CapabilitySet.emptySet();
     }
 
     public ResultMessage execute(QueryState queryState, QueryOptions options, long queryStartNanoTime)

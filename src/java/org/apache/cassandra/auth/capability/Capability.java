@@ -27,13 +27,32 @@ public abstract class Capability
     private final String domain;
     private final String name;
     private final String fullName;
+    private int ordinal = -1;
 
     protected Capability(String domain, String name)
     {
-        // todo assert neither domain nor name contain delim
+        assert domain.indexOf('.') == -1 : "Capability domain must not include '.'";
+        assert name.indexOf('.') == -1 : "Capability name must not include '.'";
+
         this.domain = domain.toLowerCase(Locale.US);
         this.name = name.toLowerCase(Locale.US);
         this.fullName = this.domain + '.' + this.name;
+    }
+
+    Capability withOrdinal(int ordinal)
+    {
+        this.ordinal = ordinal;
+        return this;
+    }
+
+    public boolean isRegistered()
+    {
+        return ordinal >= 0;
+    }
+
+    public int getOrdinal()
+    {
+        return ordinal;
     }
 
     public String getFullName()
@@ -67,7 +86,8 @@ public abstract class Capability
         Capability cap = (Capability) o;
 
         return Objects.equal(domain, cap.domain)
-               && Objects.equal(name, cap.name);
+               && Objects.equal(name, cap.name)
+               && Objects.equal(ordinal, cap.ordinal);
     }
 
     public int hashCode()

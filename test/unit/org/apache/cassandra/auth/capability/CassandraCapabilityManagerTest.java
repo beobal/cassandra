@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.auth.capabilities;
+package org.apache.cassandra.auth.capability;
 
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
@@ -33,7 +33,6 @@ import org.junit.Test;
 
 import org.apache.cassandra.SchemaLoader;
 import org.apache.cassandra.auth.*;
-import org.apache.cassandra.auth.capability.*;
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.config.Schema;
@@ -223,7 +222,7 @@ public class CassandraCapabilityManagerTest
                                                    Capabilities.System.LWT,
                                                    Capabilities.System.TRUNCATE);
         addRestrictions(ROLE_A, TABLE, expected);
-        assertEquals(expected, capabilityManager.getRestrictions(ROLE_A, TABLE));
+        assertEquals(new CapabilitySet(expected), capabilityManager.getRestricted(ROLE_A, TABLE));
     }
 
     @Test
@@ -238,7 +237,7 @@ public class CassandraCapabilityManagerTest
         Set<Capability> expected = Sets.newHashSet(Capabilities.System.LWT,
                                                    Capabilities.System.TRUNCATE);
 
-        assertEquals(expected, capabilityManager.getRestrictions(ROLE_A, TABLE));
+        assertEquals(new CapabilitySet(expected), capabilityManager.getRestricted(ROLE_A, TABLE));
     }
 
     @Test
@@ -255,7 +254,7 @@ public class CassandraCapabilityManagerTest
                                                    Capabilities.System.LWT,
                                                    Capabilities.System.TRUNCATE);
 
-        assertEquals(expected, capabilityManager.getRestrictions(ROLE_A, TABLE));
+        assertEquals(new CapabilitySet(expected), capabilityManager.getRestricted(ROLE_A, TABLE));
     }
 
     // tests of the various permutations of ICapabilityManager::listPermissions

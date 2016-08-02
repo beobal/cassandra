@@ -21,7 +21,7 @@ import java.util.Set;
 
 import com.google.common.base.Objects;
 
-import org.apache.cassandra.auth.capability.Capability;
+import org.apache.cassandra.auth.capability.CapabilitySet;
 import org.apache.cassandra.auth.capability.RestrictionsCache;
 import org.apache.cassandra.config.DatabaseDescriptor;
 
@@ -109,7 +109,7 @@ public class AuthenticatedUser
         return permissionsCache.getPermissions(this, resource);
     }
 
-    public Set<Capability> getRestrictions(IResource resource)
+    public CapabilitySet getRestrictions(IResource resource)
     {
         return restrictionsCache.getRestrictedCapabilities(this, resource);
     }

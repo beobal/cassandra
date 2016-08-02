@@ -18,10 +18,11 @@
 
 package org.apache.cassandra.auth.capability;
 
-import java.util.Map;
-import java.util.NoSuchElementException;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Maps;
 
 import org.slf4j.Logger;
@@ -35,10 +36,8 @@ public class Capabilities
     private static final Registry registry = new Registry();
     static
     {
-        FBUtilities.classForName(System.class.getName(), "System defined capabilities");
+        FBUtilities.classForName(System.class.getName(), "System defined domainRegistries");
     }
-
-    // todo: ensure non-duplication
 
     public static Capability capability(String domain, String name)
     {
@@ -56,6 +55,26 @@ public class Capabilities
         String domain = fullName.substring(0, delim);
         String name = fullName.substring(delim + 1);
         return capability(domain, name);
+    }
+
+    /**
+     * Given a domain and the ordinal value of a Capability within it (which is its position in
+     * a BitSet representing a set of required or restricted capabilities), fetch the Capability
+     * instance itself from the registry.
+     * This is a relatively expensive operation, as the ordinal value of the Capability within
+     * the domain is not indexed, so we end up iterating until we find the match. However, this
+     * is only used when a client request is missing a required capability to build the error
+     * message for the client response and so performance is not critical.
+     * @param domain name of the domain the Capability belongs to
+     * @param index the ordinal value of the Capability within the domain
+     * @return the Capability instance referred to by the domain + ordinal
+     */
+    public static Capability getByIndex(String domain, int index)
+    {
+        Capability capability = registry.getByIndex(domain, index);
+        assert capability != null : String.format("Unregistered capability found in capability set " +
+                                                  "(domain: %s, index: %s", domain, index);
+        return capability;
     }
 
     public static void register(Capability capability)
@@ -94,35 +113,84 @@ public class Capabilities
         public static final Capability CL_SERIAL_READ = new SystemCapability("CL_SERIAL_READ");
         public static final Capability CL_LOCAL_SERIAL_READ = new SystemCapability("CL_LOCAL_SERIAL_READ");
 
+        @VisibleForTesting
+        public static final Capability[] ALL =
+        {
+            FILTERING, LWT, NON_LWT_UPDATE, TRUNCATE, MULTI_PARTITION_READ, MULTI_PARTITION_AGGREGATION,
+            PARTITION_RANGE_READ, CL_ALL_WRITE, CL_ONE_READ, CL_ONE_WRITE, CL_LOCAL_ONE_READ, CL_LOCAL_ONE_WRITE,
+            CL_TWO_READ, CL_TWO_WRITE, CL_THREE_READ, CL_THREE_WRITE, CL_QUORUM_READ, CL_QUORUM_WRITE,
+            CL_LOCAL_QUORUM_READ, CL_LOCAL_QUORUM_WRITE, CL_EACH_QUORUM_READ, CL_EACH_QUORUM_WRITE,
+            CL_ALL_READ, CL_ALL_WRITE, CL_SERIAL_READ, CL_LOCAL_SERIAL_READ
+        };
+
         private static final class SystemCapability extends Capability
         {
             private SystemCapability(String name)
             {
                 super(DOMAIN, name);
-                logger.trace("Instantiating system CAPABILITY {}", name);
                 registry.register(this);
+                logger.trace("Registered system CAPABILITY {}", this);
             }
         }
     }
 
     private static class Registry
     {
-        private final Map<String, Map<String, Capability>> capabilities = new ConcurrentHashMap<>();
+        private static class DomainRegistry implements Iterable<Capability>
+        {
+            private final Map<String, Capability> capabilities = Maps.newConcurrentMap();
+            private final AtomicInteger counter = new AtomicInteger(0);
+
+            private void put(final Capability capability)
+            {
+                Capability registered =
+                    capabilities.computeIfAbsent(capability.getName(),
+                                                 (s) -> capability.withOrdinal(counter.getAndIncrement()));
+
+                // if the capability was previously registered, throw an exception to notify of the duplication
+                if (registered != capability)
+                    throw new IllegalArgumentException(String.format("Capability %s was already registered", capability));
+            }
+
+            private Capability get(String name)
+            {
+                return capabilities.get(name);
+            }
+
+            public Iterator<Capability> iterator()
+            {
+                return capabilities.values().iterator();
+            }
+        }
+
+        private final Map<String, DomainRegistry> domainRegistries = new ConcurrentHashMap<>();
 
         public Capability lookup(String domain, String name)
         {
-            if (!capabilities.containsKey(domain))
+            String d = domain.toLowerCase(Locale.US);
+            if (!domainRegistries.containsKey(d))
                 return null;
 
-            return capabilities.get(domain).get(name);
+            return domainRegistries.get(d).get(name.toLowerCase(Locale.US));
+        }
+
+        public Capability getByIndex(String domain, int index)
+        {
+            String d = domain.toLowerCase(Locale.US);
+            for (Capability capability : domainRegistries.get(d))
+                if (capability.getOrdinal() == index)
+                    return capability;
+
+            return null;
         }
 
 
         private void register(Capability capability)
         {
             logger.trace("Registering CAPABILITY {}", capability);
-            capabilities.computeIfAbsent(capability.getDomain(), (s) -> Maps.newConcurrentMap())
-                        .put(capability.getName(), capability);
+            domainRegistries.computeIfAbsent(capability.getDomain(), (s) -> new DomainRegistry())
+                            .put(capability);
+
         }
     }
 }

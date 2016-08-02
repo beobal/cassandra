@@ -37,7 +37,7 @@ public interface ICapabilityManager
 
     ImmutableSet<Restriction> listRestrictions(Restriction.Specification specification, boolean includeInherited);
 
-    ImmutableSet<Capability> getRestrictions(RoleResource primaryRole, IResource resource);
+    CapabilitySet getRestricted(RoleResource primaryRole, IResource resource);
 
     /**
      * Hook to perform validation of an implementation's configuration (if supported).
