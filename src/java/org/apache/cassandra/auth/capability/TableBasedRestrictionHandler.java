@@ -40,9 +40,7 @@ import org.apache.cassandra.service.QueryState;
 
 public class TableBasedRestrictionHandler implements RestrictionHandler
 {
-    private static final Logger logger = LoggerFactory.getLogger(TableBasedRestrictionHandler.class);
-
-    private final AuthLookupTableSupport lookup;
+    private final AuthLookupTableSupport<RoleResource, IResource> lookup;
 
     public TableBasedRestrictionHandler()
     {
@@ -76,86 +74,16 @@ public class TableBasedRestrictionHandler implements RestrictionHandler
             lookup.addLookupEntry(restriction.getRole(), Resources.fromName(restriction.getResourceName()));
         else
             lookup.removeLookupEntry(restriction.getRole(), Resources.fromName(restriction.getResourceName()));
-        // update the resource lookup table
-//        String indexUpdateTemplate = (operator.equals("+"))
-//                                     ? "INSERT INTO %s.%s (resource, role) VALUES ('%s','%s')"
-//                                     : "DELETE FROM %s.%s WHERE resource = '%s' AND role = '%s'";
-//        process(String.format(indexUpdateTemplate,
-//                              AuthKeyspace.NAME,
-//                              AuthKeyspace.RESOURCE_RESTRICTIONS_INDEX,
-//                              escape(restriction.getResourceName()),
-//                              escape(restriction.getRole().getName())));
     }
 
     public void removeAllForRole(RoleResource role)
     {
         lookup.removeAllEntriesForPrimaryKey(role);
-//        try
-//        {
-//            UntypedResultSet rows = process(String.format("SELECT resource FROM %s.%s WHERE role = '%s'",
-//                                                          AuthKeyspace.NAME,
-//                                                          AuthKeyspace.ROLE_CAP_RESTRICTIONS,
-//                                                          escape(role.getName())));
-//
-//            List<ModificationStatement> statements = new ArrayList<>();
-//            for (UntypedResultSet.Row row : rows)
-//            {
-//                statements.add((ModificationStatement)QueryProcessor.getStatement(String.format("DELETE FROM %s.%s WHERE resource = '%s' AND role = '%s'",
-//                                                          AuthKeyspace.NAME,
-//                                                          AuthKeyspace.RESOURCE_RESTRICTIONS_INDEX,
-//                                                          escape(row.getString("resource")),
-//                                                          escape(role.getName())),
-//                                            ClientState.forInternalCalls()).statement);
-//
-//            }
-//
-//            statements.add((ModificationStatement)QueryProcessor.getStatement(String.format("DELETE FROM %s.%s WHERE role = '%s'",
-//                                                                     AuthKeyspace.NAME,
-//                                                                     AuthKeyspace.ROLE_CAP_RESTRICTIONS,
-//                                                                     escape(role.getName())),
-//                                                       ClientState.forInternalCalls()).statement);
-//
-//            executeAsBatch(statements);
-//        }
-//        catch (RequestExecutionException | RequestValidationException e)
-//        {
-//            logger.warn("Failed to revoke all restrictions of {}: {}", role.getRoleName(), e);
-//        }
     }
 
     public void removeAllForResource(IResource resource)
     {
         lookup.removeAllEntriesForLookupKey(resource);
-//        try
-//        {
-//            UntypedResultSet rows = process(String.format("SELECT role FROM %s.%s WHERE resource = '%s'",
-//                                                          AuthKeyspace.NAME,
-//                                                          AuthKeyspace.RESOURCE_RESTRICTIONS_INDEX,
-//                                                          escape(resource.getName())));
-//
-//            List<ModificationStatement> statements = new ArrayList<>();
-//            for (UntypedResultSet.Row row : rows)
-//            {
-//                statements.add((ModificationStatement)QueryProcessor.getStatement(String.format("DELETE FROM %s.%s WHERE role = '%s' AND resource = '%s'",
-//                                                                         AuthKeyspace.NAME,
-//                                                                         AuthKeyspace.ROLE_CAP_RESTRICTIONS,
-//                                                                         escape(row.getString("role")),
-//                                                                         escape(resource.getName())),
-//                                                           ClientState.forInternalCalls()).statement);
-//            }
-//
-//            statements.add((ModificationStatement)QueryProcessor.getStatement(String.format("DELETE FROM %s.%s WHERE resource = '%s'",
-//                                                                          AuthKeyspace.NAME,
-//                                                                          AuthKeyspace.RESOURCE_RESTRICTIONS_INDEX,
-//                                                                          escape(resource.getName())),
-//                                                            ClientState.forInternalCalls()).statement);
-//
-//            executeAsBatch(statements);
-//        }
-//        catch (RequestExecutionException | RequestValidationException e)
-//        {
-//            logger.warn("Failed to revoke all restrictions on {}: {}", resource, e);
-//        }
     }
 
     public ImmutableSet<Restriction> fetch(Restriction.Specification spec, boolean includeInherited)
@@ -191,16 +119,6 @@ public class TableBasedRestrictionHandler implements RestrictionHandler
 
         return collector.getRestrictions();
     }
-
-//    protected void executeAsBatch(List<ModificationStatement> statements)
-//    throws RequestExecutionException, RequestValidationException
-//    {
-//        BatchStatement batch = new BatchStatement(0, BatchStatement.Type.LOGGED, statements, Attributes.none());
-//        QueryProcessor.instance.processBatch(batch,
-//                                             QueryState.forInternalCalls(),
-//                                             BatchQueryOptions.withoutPerStatementVariables(QueryOptions.DEFAULT));
-//
-//    }
 
     private ImmutableSet<Restriction> readRestrictionsByResource(Restriction.Specification spec)
     {
@@ -245,14 +163,6 @@ public class TableBasedRestrictionHandler implements RestrictionHandler
                                      role.getName(),
                                      resource.getName()));
     }
-
-//    private UntypedResultSet lookupRolesForResource(IResource resource)
-//    {
-//        return process(String.format("SELECT role FROM %s.%s WHERE resource = '%s'",
-//                                     AuthKeyspace.NAME,
-//                                     AuthKeyspace.RESOURCE_RESTRICTIONS_INDEX,
-//                                     resource.getName()));
-//    }
 
     // We only worry about one character ('). Make sure it's properly escaped.
     private static String escape(String name)

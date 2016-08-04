@@ -28,6 +28,7 @@ import com.google.common.collect.Maps;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.cassandra.utils.FBUtilities;
 
 public class Capabilities
@@ -92,6 +93,13 @@ public class Capabilities
         public static final Capability MULTI_PARTITION_READ = new SystemCapability("MULTI_PARTITION_READ");
         public static final Capability MULTI_PARTITION_AGGREGATION =  new SystemCapability("MULTI_PARTITION_AGGREGATION");
         public static final Capability PARTITION_RANGE_READ = new SystemCapability("PARTITION_RANGE_READ");
+        public static final Capability UNLOGGED_BATCH = new SystemCapability("UNLOGGED_BATCH");
+        public static final Capability LOGGED_BATCH = new SystemCapability("LOGGED_BATCH");
+        public static final Capability COUNTER_BATCH = new SystemCapability("COUNTER_BATCH");
+        public static final Capability NATIVE_SECONDARY_INDEX= new SystemCapability("NATIVE_SECONDARY_INDEX");
+        public static final Capability CUSTOM_SECONDARY_INDEX= new SystemCapability("CUSTOM_SECONDARY_INDEX");
+        public static final Capability QUERY_TRACING = new SystemCapability("QUERY_TRACING");
+        public static final Capability UNPREPARED_STATEMENT = new SystemCapability("UNPREPARED_STATEMENT");
 
         public static final Capability CL_ANY_WRITE = new SystemCapability("CL_ANY_WRITE");
         public static final Capability CL_ONE_READ = new SystemCapability("CL_ONE_READ");
@@ -130,6 +138,62 @@ public class Capabilities
                 super(DOMAIN, name);
                 registry.register(this);
                 logger.trace("Registered system CAPABILITY {}", this);
+            }
+        }
+
+        public static Capability forReadConsistencyLevel(ConsistencyLevel cl)
+        {
+            switch(cl)
+            {
+                case ALL:
+                    return CL_ALL_READ;
+                case ONE:
+                    return CL_ONE_READ;
+                case TWO:
+                    return CL_TWO_READ;
+                case THREE:
+                    return CL_THREE_READ;
+                case LOCAL_ONE:
+                    return CL_LOCAL_ONE_READ;
+                case LOCAL_QUORUM:
+                    return CL_LOCAL_QUORUM_READ;
+                case EACH_QUORUM:
+                    return CL_EACH_QUORUM_READ;
+                case QUORUM:
+                    return CL_QUORUM_READ;
+                case LOCAL_SERIAL:
+                    return CL_LOCAL_SERIAL_READ;
+                case SERIAL:
+                    return CL_SERIAL_READ;
+                default:
+                    throw new IllegalArgumentException(String.format("Consistency Level %s is not valid for reads", cl));
+            }
+        }
+
+        public static Capability forWriteConsistencyLevel(ConsistencyLevel cl)
+        {
+            switch(cl)
+            {
+                case ALL:
+                    return CL_ALL_WRITE;
+                case ONE:
+                    return CL_ONE_WRITE;
+                case TWO:
+                    return CL_TWO_WRITE;
+                case THREE:
+                    return CL_THREE_WRITE;
+                case LOCAL_ONE:
+                    return CL_LOCAL_ONE_WRITE;
+                case LOCAL_QUORUM:
+                    return CL_LOCAL_QUORUM_WRITE;
+                case EACH_QUORUM:
+                    return CL_EACH_QUORUM_WRITE;
+                case QUORUM:
+                    return CL_QUORUM_WRITE;
+                case ANY:
+                    return CL_ANY_WRITE;
+                default:
+                    throw new IllegalArgumentException(String.format("Consistency Level %s is not valid for writes", cl));
             }
         }
     }

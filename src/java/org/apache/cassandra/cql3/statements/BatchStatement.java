@@ -21,12 +21,16 @@ import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.helpers.MessageFormatter;
 
+import org.apache.cassandra.auth.capability.Capabilities;
+import org.apache.cassandra.auth.capability.Capability;
+import org.apache.cassandra.auth.capability.CapabilitySet;
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.config.ColumnDefinition;
 import org.apache.cassandra.config.DatabaseDescriptor;
@@ -246,6 +250,7 @@ public class BatchStatement implements CQLStatement
         }
 
         collector.validateIndexedColumns();
+
         return collector.toMutations();
     }
 
@@ -353,6 +358,22 @@ public class BatchStatement implements CQLStatement
             throw new InvalidRequestException("Invalid empty consistency level");
         if (options.getSerialConsistency() == null)
             throw new InvalidRequestException("Invalid empty serial consistency level");
+
+        Capability consistencyCap = Capabilities.System.forWriteConsistencyLevel(options.getConsistency());
+        Capability batchTypeCap = isCounter()
+                                    ? Capabilities.System.COUNTER_BATCH
+                                    :isLogged() ? Capabilities.System.LOGGED_BATCH : Capabilities.System.UNLOGGED_BATCH;
+
+        // check required capabilities against each modification statement individually
+        // as capabilities can be restricted at the keyspace and/or table level
+        for (ModificationStatement statement : statements)
+        {   Capability requiredUpdateCapability = statement.hasConditions()
+                                                     ? Capabilities.System.LWT
+                                                     : Capabilities.System.NON_LWT_UPDATE;
+            queryState.getClientState()
+                      .ensureNotRestricted(statement.cfm.resource,
+                                           new CapabilitySet(consistencyCap, batchTypeCap, requiredUpdateCapability));
+        }
 
         if (hasConditions)
             return executeWithConditions(options, queryState, queryStartNanoTime);
@@ -537,6 +558,11 @@ public class BatchStatement implements CQLStatement
                                                               : boundNames.getPartitionKeyBindIndexes(batchStatement.statements.get(0).cfm);
 
             return new ParsedStatement.Prepared(batchStatement, boundNames, partitionKeyBindIndexes);
+        }
+
+        public List<ModificationStatement.Parsed> getParsedStatements()
+        {
+            return ImmutableList.copyOf(parsedStatements);
         }
     }
 

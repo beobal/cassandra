@@ -109,25 +109,25 @@ public class ExecuteMessage extends Message.Request
                 state.prepareTracingSession(tracingId);
             }
 
-            if (state.traceNextQuery())
+            if (state.traceNextQuery() && !state.getClientState().isTracingRestricted())
             {
                 state.createTracingSession(getCustomPayload());
 
                 ImmutableMap.Builder<String, String> builder = ImmutableMap.builder();
                 if (options.getPageSize() > 0)
                     builder.put("page_size", Integer.toString(options.getPageSize()));
-                if(options.getConsistency() != null)
+                if (options.getConsistency() != null)
                     builder.put("consistency_level", options.getConsistency().name());
-                if(options.getSerialConsistency() != null)
+                if (options.getSerialConsistency() != null)
                     builder.put("serial_consistency_level", options.getSerialConsistency().name());
                 builder.put("query", prepared.rawCQLStatement);
 
-                for(int i=0;i<prepared.boundNames.size();i++)
+                for (int i = 0; i < prepared.boundNames.size(); i++)
                 {
                     ColumnSpecification cs = prepared.boundNames.get(i);
                     String boundName = cs.name.toString();
                     String boundValue = cs.type.asCQL3Type().toCQLLiteral(options.getValues().get(i), options.getProtocolVersion());
-                    if ( boundValue.length() > 1000 )
+                    if (boundValue.length() > 1000)
                     {
                         boundValue = boundValue.substring(0, 1000) + "...'";
                     }
@@ -139,6 +139,7 @@ public class ExecuteMessage extends Message.Request
 
                 Tracing.instance.begin("Execute CQL3 prepared query", state.getClientAddress(), builder.build());
             }
+
 
             // Some custom QueryHandlers are interested by the bound names. We provide them this information
             // by wrapping the QueryOptions.

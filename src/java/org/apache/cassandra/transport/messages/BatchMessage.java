@@ -158,14 +158,14 @@ public class BatchMessage extends Message.Request
                 state.prepareTracingSession(tracingId);
             }
 
-            if (state.traceNextQuery())
+            if (state.traceNextQuery() && !state.getClientState().isTracingRestricted())
             {
                 state.createTracingSession();
 
                 ImmutableMap.Builder<String, String> builder = ImmutableMap.builder();
-                if(options.getConsistency() != null)
+                if (options.getConsistency() != null)
                     builder.put("consistency_level", options.getConsistency().name());
-                if(options.getSerialConsistency() != null)
+                if (options.getSerialConsistency() != null)
                     builder.put("serial_consistency_level", options.getSerialConsistency().name());
 
                 // TODO we don't have [typed] access to CQL bind variables here.  CASSANDRA-4560 is open to add support.

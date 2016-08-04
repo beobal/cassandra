@@ -17,10 +17,6 @@
  */
 package org.apache.cassandra.cql3;
 
-import java.util.Collections;
-
-import org.apache.cassandra.auth.capability.Capability;
-import org.apache.cassandra.auth.capability.CapabilitySet;
 import org.apache.cassandra.cql3.functions.Function;
 import org.apache.cassandra.exceptions.*;
 import org.apache.cassandra.service.ClientState;
@@ -71,9 +67,4 @@ public interface CQLStatement
      * @return functions all functions found (may contain duplicates)
      */
     public Iterable<Function> getFunctions();
-
-    default CapabilitySet getRequiredCapabilities(QueryState queryState, QueryOptions options)
-    {
-        return CapabilitySet.emptySet();
-    }
 }

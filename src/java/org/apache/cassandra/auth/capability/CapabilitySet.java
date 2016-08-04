@@ -19,8 +19,11 @@
 package org.apache.cassandra.auth.capability;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 import com.google.common.base.Objects;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class CapabilitySet
 {
@@ -100,6 +103,19 @@ public class CapabilitySet
         return intersection == null ? Collections.emptySet() : intersection;
     }
 
+    public String toString()
+    {
+        StringBuilder builder = new StringBuilder("CapabilitySet [");
+        for (Map.Entry<String, BitSet> entry : domains.entrySet())
+        {
+            BitSet thisDomain = entry.getValue();
+            for ( int i = thisDomain.nextSetBit(0); i >= 0; i = thisDomain.nextSetBit(i + 1) )
+                builder.append(Capabilities.getByIndex(entry.getKey(), i).toString());
+        }
+        builder.append("]");
+        return builder.toString();
+    }
+
     public boolean equals(Object o)
     {
         if (this == o)
@@ -127,9 +143,10 @@ public class CapabilitySet
             capabilities.add(capability);
             return this;
         }
-
+private static final Logger logger = LoggerFactory.getLogger(Builder.class);
         public CapabilitySet build()
         {
+//            logger.info("XXX Set of collected caps: {}", capabilities.stream().map(Capability::toString).collect(Collectors.joining(",")));
             return new CapabilitySet(capabilities);
         }
     }

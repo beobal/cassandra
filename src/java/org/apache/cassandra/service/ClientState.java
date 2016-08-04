@@ -29,6 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.auth.*;
+import org.apache.cassandra.auth.capability.Capabilities;
 import org.apache.cassandra.auth.capability.Capability;
 import org.apache.cassandra.auth.capability.CapabilitySet;
 import org.apache.cassandra.config.*;
@@ -83,6 +84,8 @@ public class ClientState
         DROPPABLE_SYSTEM_TABLES.add(DataResource.table(SchemaConstants.AUTH_KEYSPACE_NAME, CassandraRoleManager.LEGACY_USERS_TABLE));
         DROPPABLE_SYSTEM_TABLES.add(DataResource.table(SchemaConstants.AUTH_KEYSPACE_NAME, CassandraAuthorizer.USER_PERMISSIONS));
     }
+
+    private static final CapabilitySet TRACING_CAPABILITY = new CapabilitySet(Capabilities.System.QUERY_TRACING);
 
     // Current user for the session
     private volatile AuthenticatedUser user;
@@ -348,10 +351,13 @@ public class ClientState
 
     public void ensureNotRestricted(IResource resource, CapabilitySet required)
     {
-        if (isInternal)
+        if (isInternal || user.isSuper())
             return;
 
         if (required.isEmpty())
+            return;
+
+        if (resource instanceof DataResource && SchemaConstants.isSystemKeyspace(((DataResource)resource).getKeyspace()))
             return;
 
         Set<Capability> requiredAndRestricted = new HashSet<>();
@@ -363,17 +369,29 @@ public class ClientState
 
         if (!requiredAndRestricted.isEmpty())
         {
-            throw new UnauthorizedException(String.format("Role %s or one of its granted roles has restrictions on one" +
+            throw new UnauthorizedException(String.format("Role %s or one of its granted roles has restrictions on one " +
                                                           "or more capabilities required for this operation which apply " +
                                                           "to %s or one of its parents. Required but restricted " +
                                                           "capabilities : %s",
                                                           user.getName(),
-                                                          resource,
+                                                          resource.toString(),
                                                           requiredAndRestricted.stream()
                                                                  .map(Capability::toString)
                                                                  .collect(Collectors.joining(", "))));
 
         }
+    }
+
+    public boolean isTracingRestricted()
+    {
+        boolean restricted = !TRACING_CAPABILITY.intersection(getRestrictions(DataResource.root())).isEmpty();
+
+        if (restricted)
+            ClientWarn.instance.warn(String.format("Query tracing was triggered either explicitly or probabilistically " +
+                                                   "but is restricted for role %s or one of its granted roles.",
+                                                   user.getName()));
+
+        return restricted;
     }
 
     private void checkPermissionOnResourceChain(Permission perm, IResource resource)

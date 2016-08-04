@@ -156,6 +156,12 @@ public class CapabilitiesTest
         }
     }
 
+    @Test
+    public void testConsistencyLevelMappings()
+    {
+        fail("Fix me");
+    }
+
     private String randomDomain()
     {
         return UUID.randomUUID().toString();

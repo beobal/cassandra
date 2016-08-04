@@ -24,6 +24,9 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
+import org.apache.cassandra.auth.DataResource;
+import org.apache.cassandra.auth.capability.Capabilities;
+import org.apache.cassandra.auth.capability.CapabilitySet;
 import org.apache.cassandra.tracing.Tracing;
 
 /**
@@ -84,6 +87,7 @@ public class QueryState
 
     public void createTracingSession(Map<String,ByteBuffer> customPayload)
     {
+
         UUID session = this.preparedTracingSession;
         if (session == null)
         {

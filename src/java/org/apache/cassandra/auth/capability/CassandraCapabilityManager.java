@@ -70,6 +70,7 @@ public class CassandraCapabilityManager implements ICapabilityManager
         {
             logger.debug("TokenMetadata contains only single endpoint, skipping peer version checks");
             isClusterReady = true;
+            logger.info("CassandraCapabilityManager initialized");
         }
         else
         {
@@ -135,6 +136,7 @@ public class CassandraCapabilityManager implements ICapabilityManager
                 return;
             }
             isClusterReady = true;
+            logger.info("CassandraCapabilityManager initialized");
       }, AuthKeyspace.SUPERUSER_SETUP_DELAY, TimeUnit.MILLISECONDS);
     }
 

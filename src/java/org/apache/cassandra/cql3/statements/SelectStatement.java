@@ -27,6 +27,7 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.auth.Permission;
 import org.apache.cassandra.auth.capability.Capabilities;
+import org.apache.cassandra.auth.capability.Capability;
 import org.apache.cassandra.auth.capability.CapabilitySet;
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.config.ColumnDefinition;
@@ -46,6 +47,7 @@ import org.apache.cassandra.db.rows.RowIterator;
 import org.apache.cassandra.db.view.View;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.exceptions.*;
+import org.apache.cassandra.index.Index;
 import org.apache.cassandra.index.SecondaryIndexManager;
 import org.apache.cassandra.serializers.MarshalException;
 import org.apache.cassandra.service.ClientState;
@@ -141,7 +143,7 @@ public class SelectStatement implements CQLStatement
         return functions;
     }
 
-    public CapabilitySet getRequiredCapabilities(QueryState queryState, QueryOptions options)
+    public CapabilitySet getRequiredCapabilities(ReadQuery query, QueryOptions options)
     {
         // todo short-circuit if not enabled
 
@@ -149,12 +151,50 @@ public class SelectStatement implements CQLStatement
         if (parameters.allowFiltering)
             required.add(Capabilities.System.FILTERING);
 
-        if (options.getConsistency() == ConsistencyLevel.ALL)
-            required.add(Capabilities.System.CL_ALL_READ);
-        if (options.getConsistency() == ConsistencyLevel.ONE)
-            required.add(Capabilities.System.CL_ONE_READ);
+        if (restrictions.keyIsInRelation())
+            required.add(Capabilities.System.MULTI_PARTITION_READ);
 
+        if (restrictions.isKeyRange())
+            required.add(Capabilities.System.PARTITION_RANGE_READ);
+
+        if (selection.isAggregate() && (restrictions.isKeyRange() || restrictions.keyIsInRelation()))
+            required.add(Capabilities.System.MULTI_PARTITION_AGGREGATION);
+
+        // Don't waste effort inspecting the query itself unless we know that it uses 2i
+        if (restrictions.usesSecondaryIndexing())
+        {
+            ColumnFamilyStore cfs = Keyspace.openAndGetStore(cfm);
+            // at the moment, a ReadQuery using 2i can only be a
+            // PartitionRangeReadCommand (modulo the bug in CASSANDRA-11617),
+            // but that may change with CASSANDRA-11872, so this handling of
+            // SPRC.Group is somewhat pre-emptive
+            if (query instanceof SinglePartitionReadCommand.Group)
+                ((SinglePartitionReadCommand.Group)query).commands.forEach((command) -> {
+                    getRequiredIndexCapability(command, cfs).ifPresent(required::add);
+                });
+            else
+                getRequiredIndexCapability((ReadCommand)query, cfs).ifPresent(required::add);
+        }
+
+        required.add(Capabilities.System.forReadConsistencyLevel(options.getConsistency()));
         return required.build();
+    }
+
+
+
+    private Optional<Capability> getRequiredIndexCapability(ReadCommand command, ColumnFamilyStore cfs)
+    {
+        Index index;
+        // If an index is applicable for the command, it will already have been
+        // identified (via SecondaryIndexManager) and cached in the command.
+        // Even if that were not the case, doing this now only moves that lookup
+        // and caching of the result here
+        if ((index = command.getIndex(cfs)) != null)
+            return Optional.of(index.getIndexMetadata().isCustom()
+                                ? Capabilities.System.CUSTOM_SECONDARY_INDEX
+                                : Capabilities.System.NATIVE_SECONDARY_INDEX);
+
+        return Optional.empty();
     }
 
     private void addFunctionsTo(List<Function> functions)
@@ -258,12 +298,13 @@ public class SelectStatement implements CQLStatement
         int pageSize = options.getPageSize();
         ReadQuery query = getQuery(options, nowInSec, userLimit, userPerPartitionLimit, pageSize);
 
+        state.getClientState().ensureNotRestricted(cfm.resource, getRequiredCapabilities(query, options));
+
         if (aggregationSpec == null && (pageSize <= 0 || (query.limits().count() <= pageSize)))
             return execute(query, options, state, nowInSec, userLimit, queryStartNanoTime);
 
         QueryPager pager = getPager(query, options);
 
-        state.getClientState().ensureNotRestricted(cfm.resource, getRequiredCapabilities(state, options));
         return execute(Pager.forDistributedQuery(pager, cl, state.getClientState()), options, pageSize, nowInSec, userLimit, queryStartNanoTime);
     }
 

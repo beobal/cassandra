@@ -25,6 +25,9 @@ import java.util.Set;
 import com.google.common.base.Objects;
 import com.google.common.base.Strings;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.apache.cassandra.auth.IResource;
 import org.apache.cassandra.auth.Permission;
 import org.apache.cassandra.auth.RoleResource;
@@ -137,6 +140,13 @@ public class Restriction
             return new Specification(role, this.resource, this.capability);
         }
 
+        public String toString()
+        {
+            return String.format("[role: %s, resource: %s, capability: %s]",
+                                 role == ANY_ROLE ? "ANY ROLE" : role.getName(),
+                                 resource == ANY_RESOURCE ? "ANY RESOURCE" : resource.getName(),
+                                 capability == ANY_CAPABILITY ? "ANY CAPABILITY" : capability.getFullName());
+        }
 
         private static final class AnyResource implements IResource
         {

@@ -230,8 +230,6 @@ public abstract class ModificationStatement implements CQLStatement
 
         for (Function function : getFunctions())
             state.ensureHasPermission(Permission.EXECUTE, function);
-
-        state.ensureNotRestricted(cfm.resource, getRequiredCapabilities());
     }
 
     public void validate(ClientState state) throws InvalidRequestException
@@ -411,12 +409,18 @@ public abstract class ModificationStatement implements CQLStatement
         return !conditions.isEmpty();
     }
 
-    public CapabilitySet getRequiredCapabilities()
+    public CapabilitySet getRequiredCapabilities(QueryState state, QueryOptions options)
     {
-        if (hasConditions())
-            return new CapabilitySet(Capabilities.System.LWT);
+        // todo short circuit if not enabled
 
-        return CapabilitySet.emptySet();
+        CapabilitySet.Builder required = new CapabilitySet.Builder();
+        if (hasConditions())
+            required.add(Capabilities.System.LWT);
+        else
+            required.add(Capabilities.System.NON_LWT_UPDATE);
+
+        required.add(Capabilities.System.forWriteConsistencyLevel(options.getConsistency()));
+        return required.build();
     }
 
     public ResultMessage execute(QueryState queryState, QueryOptions options, long queryStartNanoTime)
@@ -424,6 +428,8 @@ public abstract class ModificationStatement implements CQLStatement
     {
         if (options.getConsistency() == null)
             throw new InvalidRequestException("Invalid empty consistency level");
+
+        queryState.getClientState().ensureNotRestricted(cfm.resource, getRequiredCapabilities(queryState, options));
 
         return hasConditions()
              ? executeWithCondition(queryState, options, queryStartNanoTime)

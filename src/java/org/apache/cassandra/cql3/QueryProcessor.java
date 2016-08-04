@@ -34,6 +34,9 @@ import org.slf4j.LoggerFactory;
 
 import com.googlecode.concurrentlinkedhashmap.ConcurrentLinkedHashMap;
 import org.antlr.runtime.*;
+import org.apache.cassandra.auth.DataResource;
+import org.apache.cassandra.auth.capability.Capabilities;
+import org.apache.cassandra.auth.capability.CapabilitySet;
 import org.apache.cassandra.concurrent.ScheduledExecutors;
 import org.apache.cassandra.config.Config;
 import org.apache.cassandra.config.DatabaseDescriptor;
@@ -235,16 +238,46 @@ public class QueryProcessor implements QueryHandler
     public ResultMessage process(String queryString, QueryState queryState, QueryOptions options, long queryStartNanoTime)
     throws RequestExecutionException, RequestValidationException
     {
-        ParsedStatement.Prepared p = getStatement(queryString, queryState.getClientState());
+        Tracing.trace("Parsing {}", queryString);
+        ParsedStatement parsed = parseStatement(queryString);
+
+        ParsedStatement.Prepared p = prepareStatement(parsed, queryState.getClientState());
         options.prepare(p.boundNames);
         CQLStatement prepared = p.statement;
+
         if (prepared.getBoundTerms() != options.getValues().size())
             throw new InvalidRequestException("Invalid amount of bind variables");
+
+        // don't check restrictions until after preparation as keyspace may not be set
+        if (!queryState.getClientState().isInternal && parsed instanceof CFStatement)
+            checkRestrictionsOnParsedStatement((CFStatement)parsed, queryState.getClientState());
 
         if (!queryState.getClientState().isInternal)
             metrics.regularStatementsExecuted.inc();
 
         return processStatement(prepared, queryState, options, queryStartNanoTime);
+    }
+
+    private void checkRestrictionsOnParsedStatement(CFStatement cfStatement, ClientState clientState)
+    {
+        // for non-internal clients ensure that there is no active
+        // restriction on using non-prepared statements on this table
+        CapabilitySet requiredCap = new CapabilitySet(Capabilities.System.UNPREPARED_STATEMENT);
+        if (cfStatement instanceof BatchStatement.Parsed)
+        {
+            for (ModificationStatement.Parsed modification : ((BatchStatement.Parsed)cfStatement).getParsedStatements())
+            {
+                clientState.ensureNotRestricted(DataResource.table(modification.keyspace(),
+                                                                   modification.columnFamily()),
+                                                requiredCap);
+            }
+        }
+        else if (!(cfStatement instanceof SchemaAlteringStatement))
+        {
+            clientState.ensureNotRestricted(DataResource.table(cfStatement.keyspace(),
+                                                               cfStatement.columnFamily()),
+                                            requiredCap);
+        }
     }
 
     public static ParsedStatement.Prepared parseStatement(String queryStr, QueryState queryState) throws RequestValidationException
@@ -536,8 +569,11 @@ public class QueryProcessor implements QueryHandler
     throws RequestValidationException
     {
         Tracing.trace("Parsing {}", queryStr);
-        ParsedStatement statement = parseStatement(queryStr);
+        return prepareStatement(parseStatement(queryStr), clientState);
+    }
 
+    private static ParsedStatement.Prepared prepareStatement(ParsedStatement statement, ClientState clientState)
+    {
         // Set keyspace for statement that require login
         if (statement instanceof CFStatement)
             ((CFStatement)statement).prepareKeyspace(clientState);
