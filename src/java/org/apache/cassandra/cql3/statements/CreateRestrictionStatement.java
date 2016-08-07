@@ -18,9 +18,7 @@
 
 package org.apache.cassandra.cql3.statements;
 
-import org.apache.cassandra.auth.IResource;
-import org.apache.cassandra.auth.Permission;
-import org.apache.cassandra.auth.RoleResource;
+import org.apache.cassandra.auth.*;
 import org.apache.cassandra.auth.capability.*;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.cql3.RoleName;
@@ -78,6 +76,13 @@ public class CreateRestrictionStatement extends AuthorizationStatement
             throw new InvalidRequestException(String.format("%s cannot be used in restrictions with %s",
                                                             capability,
                                                             resource));
+
+        // Special case for QUERY_TRACING capability as this can only be applied to ALL KEYSPACES
+        // at the moment. The reason for this is that currently, a tracing session may be started
+        // before the query has been parsed, so at the point when the restrictions are checked, we
+        // don't yet know which keyspace/table is being interacted with.
+        if (capability.equals(Capabilities.System.QUERY_TRACING) && ! resource.equals(DataResource.root()))
+            throw new InvalidRequestException(String.format("Restriction of %s may only be applied to ALL KEYSPACES"));
     }
 
     public ResultMessage execute(ClientState state) throws RequestValidationException, RequestExecutionException
