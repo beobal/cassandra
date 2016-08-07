@@ -142,10 +142,10 @@ public class Restriction
 
         public String toString()
         {
-            return String.format("[role: %s, resource: %s, capability: %s]",
+            return String.format("Restriction ON %s USING %s WITH %s",
                                  role == ANY_ROLE ? "ANY ROLE" : role.getName(),
-                                 resource == ANY_RESOURCE ? "ANY RESOURCE" : resource.getName(),
-                                 capability == ANY_CAPABILITY ? "ANY CAPABILITY" : capability.getFullName());
+                                 capability == ANY_CAPABILITY ? "ANY CAPABILITY" : capability.getFullName(),
+                                 resource == ANY_RESOURCE ? "ANY RESOURCE" : resource.getName());
         }
 
         private static final class AnyResource implements IResource

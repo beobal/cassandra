@@ -34,12 +34,14 @@ public class DropRestrictionStatement extends AuthorizationStatement
     private final Capability capability;
     private final RoleResource role;
     private IResource resource;
+    private final boolean ifExists;
 
-    public DropRestrictionStatement(Capability capability, RoleName roleName, IResource resource)
+    public DropRestrictionStatement(Capability capability, RoleName roleName, IResource resource, boolean ifExists)
     {
         this.capability = capability;
         this.role = RoleResource.role(roleName.getName());
         this.resource = resource;
+        this.ifExists = ifExists;
     }
 
     public void checkAccess(ClientState state) throws UnauthorizedException, InvalidRequestException
@@ -50,10 +52,18 @@ public class DropRestrictionStatement extends AuthorizationStatement
     public void validate(ClientState state) throws RequestValidationException
     {
         resource = maybeCorrectResource(resource, state);
+
+        Restriction.Specification spec = new Restriction.Specification(role, resource, capability);
+        if (!ifExists && DatabaseDescriptor.getCapabilityManager().listRestrictions(spec, false).isEmpty())
+            throw new InvalidRequestException(String.format("%s not found", spec.toString()));
     }
 
     public ResultMessage execute(ClientState state) throws RequestValidationException, RequestExecutionException
     {
+        Restriction.Specification spec = new Restriction.Specification(role, resource, capability);
+        if (ifExists && DatabaseDescriptor.getCapabilityManager().listRestrictions(spec, false).isEmpty())
+            return null;
+
         DatabaseDescriptor.getCapabilityManager()
                           .dropRestriction(state.getUser(),new Restriction(role, resource.getName(), capability));
         return null;

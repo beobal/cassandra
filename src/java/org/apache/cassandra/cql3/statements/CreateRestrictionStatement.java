@@ -33,12 +33,14 @@ public class CreateRestrictionStatement extends AuthorizationStatement
     private final Capability capability;
     private final RoleResource role;
     private IResource resource;
+    private final boolean ifNotExists;
 
-    public CreateRestrictionStatement(Capability capability, RoleName roleName, IResource resource)
+    public CreateRestrictionStatement(Capability capability, RoleName roleName, IResource resource, boolean ifNotExists)
     {
         this.capability = capability;
         this.role = RoleResource.role(roleName.getName());
         this.resource = resource;
+        this.ifNotExists = ifNotExists;
     }
 
     public void checkAccess(ClientState state) throws UnauthorizedException, InvalidRequestException
@@ -52,10 +54,20 @@ public class CreateRestrictionStatement extends AuthorizationStatement
             throw new InvalidRequestException(String.format("Role %s doesn't exist", role.getRoleName()));
 
         resource = maybeCorrectResource(resource, state);
+
+        Restriction.Specification spec = new Restriction.Specification(role, resource, capability);
+        if (!ifNotExists && !DatabaseDescriptor.getCapabilityManager()
+                                               .listRestrictions(spec, false).isEmpty())
+            throw new InvalidRequestException(String.format("%s already exists", spec.toString()));
     }
 
     public ResultMessage execute(ClientState state) throws RequestValidationException, RequestExecutionException
     {
+        Restriction.Specification spec = new Restriction.Specification(role, resource, capability);
+        if (ifNotExists && !DatabaseDescriptor.getCapabilityManager()
+                                               .listRestrictions(spec, false).isEmpty())
+            return null;
+
         DatabaseDescriptor.getCapabilityManager()
                           .createRestriction(state.getUser(), new Restriction(role, resource.getName(), capability));
         return null;

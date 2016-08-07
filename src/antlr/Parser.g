@@ -1185,30 +1185,30 @@ listRestrictionsStatement returns [ListRestrictionsStatement stmt]
 
 createRestrictionStatement returns [CreateRestrictionStatement stmt]
     @init {
-
+        boolean ifNotExists = false;
     }
-    : K_CREATE K_RESTRICTION (K_IF K_NOT K_EXISTS)?
+    : K_CREATE K_RESTRICTION (K_IF K_NOT K_EXISTS { ifNotExists = true; })?
       K_ON
         role=userOrRoleName
       K_USING
         capability
       K_WITH
         resource
-      { $stmt = new CreateRestrictionStatement($capability.cap, role, $resource.res); }
+      { $stmt = new CreateRestrictionStatement($capability.cap, role, $resource.res, ifNotExists); }
     ;
 
 dropRestrictionStatement returns [DropRestrictionStatement stmt]
     @init {
-
+        boolean ifExists = false;
     }
-    : K_DROP K_RESTRICTION (K_IF K_EXISTS)?
+    : K_DROP K_RESTRICTION (K_IF K_EXISTS { ifExists = true; })?
       K_ON
         role=userOrRoleName
       K_USING
         capability
       K_WITH
         resource
-      { $stmt = new DropRestrictionStatement($capability.cap, role, $resource.res); }
+      { $stmt = new DropRestrictionStatement($capability.cap, role, $resource.res, ifExists); }
     ;
 
 capability returns [Capability cap]
