@@ -39,6 +39,8 @@ public interface ICapabilityManager
 
     CapabilitySet getRestricted(RoleResource primaryRole, IResource resource);
 
+    boolean validateForRestriction(Capability capability, IResource resource);
+
     /**
      * Hook to perform validation of an implementation's configuration (if supported).
      *

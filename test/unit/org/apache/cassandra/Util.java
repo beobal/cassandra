@@ -22,6 +22,7 @@ package org.apache.cassandra;
 import java.io.Closeable;
 import java.io.EOFException;
 import java.io.IOError;
+import java.lang.reflect.Field;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
@@ -700,5 +701,19 @@ public class Util
             // Expected -- marked all directories as unwritable
         }
         return () -> BlacklistedDirectories.clearUnwritableUnsafe();
+    }
+
+    public static void setDatabaseDescriptorField(String fieldName, Object value)
+    {
+        try
+        {
+            Field field = DatabaseDescriptor.class.getDeclaredField(fieldName);
+            field.setAccessible(true);
+            field.set(null, value);
+        }
+        catch (IllegalAccessException | NoSuchFieldException e)
+        {
+            throw new RuntimeException(e);
+        }
     }
 }

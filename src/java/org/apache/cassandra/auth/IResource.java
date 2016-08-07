@@ -19,6 +19,8 @@ package org.apache.cassandra.auth;
 
 import java.util.Set;
 
+import org.apache.cassandra.auth.capability.Capability;
+
 /**
  * The interface at the core of Cassandra authorization.
  *
@@ -65,4 +67,29 @@ public interface IResource
      * @return the permissions that may be granted on the specific resource
      */
     Set<Permission> applicablePermissions();
+
+    /**
+     * Returns a boolean indicating whether the specified Capablities can be used
+     * in restrictions with this resource.
+     *
+     * Capabilities can be restricted for a particular role and resource, giving
+     * operators the ability to prevent certain users from performing some actions
+     * on specified resources. For instance, removing the ability to perform LWT
+     * writes on a certain table.
+     *
+     * This method is used when creating such a restriction to determine if the
+     * capability being restricted is applicable for the resource. e.g. it only
+     * makes  sense to restrict CL_ONE reads (system.cl_one_read capability) on a
+     * DataResource, attempting to apply that restriction on a FunctionResource,
+     * JMXResource or RoleResource should result in an error.
+     *
+     * At present, only DataResources can be used in CreateRestrictions statements,
+     * so the default implementation is overridden there.
+     *
+     * @return the capabilities that may be restricted for use with this resource
+     */
+    default boolean validForCapabilityRestriction(Capability capability)
+    {
+        return false;
+    }
 }

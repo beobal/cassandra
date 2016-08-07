@@ -22,14 +22,13 @@ import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.*;
 
 import org.apache.cassandra.SchemaLoader;
 import org.apache.cassandra.auth.*;
@@ -53,12 +52,14 @@ import org.apache.cassandra.schema.KeyspaceParams;
 import org.apache.cassandra.service.QueryState;
 import org.apache.cassandra.utils.ByteBufferUtil;
 
+import static org.apache.cassandra.Util.setDatabaseDescriptorField;
 import static org.apache.cassandra.auth.capability.Restriction.Specification.ANY_CAPABILITY;
 import static org.apache.cassandra.auth.capability.Restriction.Specification.ANY_RESOURCE;
 import static org.apache.cassandra.auth.capability.Restriction.Specification.ANY_ROLE;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class CassandraCapabilityManagerTest
 {
@@ -176,13 +177,6 @@ public class CassandraCapabilityManagerTest
             roleManager.createRole(AuthenticatedUser.ANONYMOUS_USER, role, new RoleOptions());
     }
 
-    private static void setupPartitioner()
-    {
-        IPartitioner partitioner = new Murmur3Partitioner();
-        setDatabaseDescriptorField("partitioner", partitioner);
-        IPartitioner x = DatabaseDescriptor.getPartitioner();
-    }
-
     private static void setupRoleManager()
     {
         IRoleManager roleManager = new LocalExecutionRoleManager();
@@ -197,19 +191,6 @@ public class CassandraCapabilityManagerTest
         setDatabaseDescriptorField("capabilityManager", capabilityManager);
     }
 
-    private static void setDatabaseDescriptorField(String fieldName, Object value)
-    {
-        try
-        {
-            Field field = DatabaseDescriptor.class.getDeclaredField(fieldName);
-            field.setAccessible(true);
-            field.set(null, value);
-        }
-        catch (IllegalAccessException | NoSuchFieldException e)
-        {
-            throw new RuntimeException(e);
-        }
-    }
 
     // tests of checking the restrictions for a specific role & resource combination
     // used during acces checks at execution time
@@ -656,6 +637,34 @@ public class CassandraCapabilityManagerTest
         // and there should only be values in the lookup table for ROLE_B & ROLE_C
         assertExpectedLookupValues(TABLE, ROLE_B, ROLE_C);
         assertExpectedLookupValues(KEYSPACE, ROLE_B, ROLE_C);
+    }
+
+    @Test
+    public void deferValidationForRestrictionToResourceImpl()
+    {
+        final AtomicInteger delegatedCallCount = new AtomicInteger(0);
+        IResource dummyResource = new IResource()
+        {
+            public String getName() { return null; }
+            public IResource getParent() { return null; }
+            public boolean hasParent() { return false; }
+            public boolean exists() { return false; }
+            public Set<Permission> applicablePermissions() { return null; }
+
+            public boolean validForCapabilityRestriction(Capability capability)
+            {
+                delegatedCallCount.incrementAndGet();
+                return false;
+            }
+        };
+
+        ICapabilityManager capabilityManager = DatabaseDescriptor.getCapabilityManager();
+        // The implementation of validateForRestriction in CassandraCapabilityManager
+        // simply delegates to the IResource instance
+        for (Capability capability : Capabilities.System.ALL)
+           capabilityManager.validateForRestriction(capability, dummyResource);
+
+        assertEquals(Capabilities.System.ALL.length, delegatedCallCount.get());
     }
 
     private static void grantRolesTo(RoleResource grantee, RoleResource...granted)

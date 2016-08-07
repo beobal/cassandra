@@ -20,8 +20,7 @@ package org.apache.cassandra.cql3.statements;
 
 import org.apache.cassandra.auth.IResource;
 import org.apache.cassandra.auth.RoleResource;
-import org.apache.cassandra.auth.capability.Capability;
-import org.apache.cassandra.auth.capability.Restriction;
+import org.apache.cassandra.auth.capability.*;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.cql3.RoleName;
 import org.apache.cassandra.exceptions.*;
@@ -56,9 +55,14 @@ public class CreateRestrictionStatement extends AuthorizationStatement
         resource = maybeCorrectResource(resource, state);
 
         Restriction.Specification spec = new Restriction.Specification(role, resource, capability);
-        if (!ifNotExists && !DatabaseDescriptor.getCapabilityManager()
-                                               .listRestrictions(spec, false).isEmpty())
+        ICapabilityManager capabilityManager = DatabaseDescriptor.getCapabilityManager();
+        if (!ifNotExists && !capabilityManager.listRestrictions(spec, false).isEmpty())
             throw new InvalidRequestException(String.format("%s already exists", spec.toString()));
+
+        if (!Capabilities.validateForRestriction(capability, resource))
+            throw new InvalidRequestException(String.format("%s cannot be used in restrictions with %s",
+                                                            capability,
+                                                            resource));
     }
 
     public ResultMessage execute(ClientState state) throws RequestValidationException, RequestExecutionException

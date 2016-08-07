@@ -119,6 +119,13 @@ public class CassandraCapabilityManager implements ICapabilityManager
         return loader.fetch(spec, includeInherited);
     }
 
+    public boolean validateForRestriction(Capability capability, IResource resource)
+    {
+        // just defer to the IResource. With the default implementations,
+        // only DataResource can be used in a restriction
+        return resource.validForCapabilityRestriction(capability);
+    }
+
     private void scheduleClusterVersionCheck()
     {
         ScheduledExecutors.optionalTasks.schedule(() -> {

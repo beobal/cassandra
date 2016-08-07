@@ -23,6 +23,7 @@ import com.google.common.base.Objects;
 import com.google.common.collect.Sets;
 import org.apache.commons.lang3.StringUtils;
 
+import org.apache.cassandra.auth.capability.Capability;
 import org.apache.cassandra.config.Schema;
 
 /**
@@ -227,6 +228,11 @@ public class DataResource implements IResource
                 return TABLE_LEVEL_PERMISSIONS;
         }
         throw new AssertionError();
+    }
+
+    public boolean validForCapabilityRestriction(Capability capability)
+    {
+        return true;
     }
 
     @Override

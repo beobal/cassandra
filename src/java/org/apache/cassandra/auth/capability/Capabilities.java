@@ -18,16 +18,19 @@
 
 package org.apache.cassandra.auth.capability;
 
-import java.util.*;
+import java.util.Iterator;
+import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Maps;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.cassandra.auth.IResource;
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.cassandra.utils.FBUtilities;
 
@@ -37,7 +40,7 @@ public class Capabilities
     private static final Registry registry = new Registry();
     static
     {
-        FBUtilities.classForName(System.class.getName(), "System defined domainRegistries");
+        FBUtilities.classForName(System.class.getName(), "System defined capabilities");
     }
 
     public static Capability capability(String domain, String name)
@@ -56,6 +59,15 @@ public class Capabilities
         String domain = fullName.substring(0, delim);
         String name = fullName.substring(delim + 1);
         return capability(domain, name);
+    }
+
+    public static boolean validateForRestriction(Capability capability, IResource resource)
+    {
+        if (capability.getDomain().equals(System.DOMAIN))
+            return resource.validForCapabilityRestriction(capability);
+        else
+            // defer to ICapabilityManager
+            return DatabaseDescriptor.getCapabilityManager().validateForRestriction(capability, resource);
     }
 
     /**
