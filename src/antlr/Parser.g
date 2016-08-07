@@ -1732,5 +1732,10 @@ basic_unreserved_keyword returns [String str]
         | K_PER
         | K_PARTITION
         | K_GROUP
+        | K_ANY
+        | K_CAPABILITY
+        | K_RESTRICTION
+        | K_RESTRICTIONS
+        | K_RESOURCE
         ) { $str = $k.text; }
     ;

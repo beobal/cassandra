@@ -204,6 +204,7 @@ K_ANY:         A N Y;
 K_CAPABILITY:  C A P A B I L I T Y;
 K_RESTRICTION: R E S T R I C T I O N;
 K_RESTRICTIONS: R E S T R I C T I O N S;
+K_RESOURCE:    R E S O U R C E;
 
 // Case-insensitive alpha characters
 fragment A: ('a'|'A');

@@ -20,9 +20,7 @@ package org.apache.cassandra.cql3.statements;
 
 import java.util.*;
 
-import org.apache.cassandra.auth.AuthKeyspace;
-import org.apache.cassandra.auth.IResource;
-import org.apache.cassandra.auth.RoleResource;
+import org.apache.cassandra.auth.*;
 import org.apache.cassandra.auth.capability.Capability;
 import org.apache.cassandra.auth.capability.Restriction;
 import org.apache.cassandra.config.DatabaseDescriptor;
@@ -68,6 +66,25 @@ public class ListRestrictionsStatement extends AuthorizationStatement
 
     public void checkAccess(ClientState state) throws UnauthorizedException, InvalidRequestException
     {
+        // If the executing user has DESCRIBE permission on the
+        // root roles resource, let them list any and all restrictions
+        boolean hasRootLevelSelect = DatabaseDescriptor.getAuthorizer()
+                                                       .authorize(state.getUser(), RoleResource.root())
+                                                       .contains(Permission.DESCRIBE);
+
+        if (!hasRootLevelSelect)
+        {
+            RoleResource currentUser = RoleResource.role(state.getUser().getName());
+            if (role == Restriction.Specification.ANY_ROLE)
+                throw new UnauthorizedException(String.format("User %s is not authorized to view capability " +
+                                                              "restrictions on all roles",
+                                                              state.getUser().getName()));
+            else if (!DatabaseDescriptor.getRoleManager().getRoles(currentUser, true).contains(role))
+                throw new UnauthorizedException(String.format("User %s is not authorized to view capability " +
+                                                              "restrictions on %s",
+                                                              state.getUser().getName(),
+                                                              role.getRoleName()));
+        }
     }
 
     public void validate(ClientState state) throws RequestValidationException

@@ -19,6 +19,7 @@
 package org.apache.cassandra.cql3.statements;
 
 import org.apache.cassandra.auth.IResource;
+import org.apache.cassandra.auth.Permission;
 import org.apache.cassandra.auth.RoleResource;
 import org.apache.cassandra.auth.capability.Capability;
 import org.apache.cassandra.auth.capability.Restriction;
@@ -46,7 +47,18 @@ public class DropRestrictionStatement extends AuthorizationStatement
 
     public void checkAccess(ClientState state) throws UnauthorizedException, InvalidRequestException
     {
-
+        try
+        {
+            state.ensureHasPermission(Permission.AUTHORIZE, resource);
+            state.ensureHasPermission(Permission.AUTHORIZE, role);
+        }
+        catch (UnauthorizedException e)
+        {
+            // Catch and rethrow with a more friendly message
+            throw new UnauthorizedException(String.format("User %s does not have sufficient privileges " +
+                                                          "to perform the requested operation",
+                                                          state.getUser().getName()));
+        }
     }
 
     public void validate(ClientState state) throws RequestValidationException
