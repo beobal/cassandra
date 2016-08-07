@@ -351,6 +351,9 @@ public class ClientState
 
     public void ensureNotRestricted(IResource resource, CapabilitySet required)
     {
+        if (!DatabaseDescriptor.getCapabilityManager().enforcesRestrictions())
+            return;
+
         if (isInternal || user.isSuper())
             return;
 

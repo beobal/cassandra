@@ -36,7 +36,7 @@ public class RestrictionsCache extends AuthCache<Pair<RoleResource, IResource>, 
               DatabaseDescriptor::setCapabilityRestrictionsCacheMaxEntries,
               DatabaseDescriptor::getCapabilityRestrictionsCacheMaxEntries,
               (p) -> capabilityManager.getRestricted(p.left, p.right),
-              () -> true);
+              capabilityManager::enforcesRestrictions);
     }
 
     public CapabilitySet getRestrictedCapabilities(AuthenticatedUser user, IResource resource)

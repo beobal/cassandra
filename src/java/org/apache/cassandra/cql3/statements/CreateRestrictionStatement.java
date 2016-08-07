@@ -61,6 +61,9 @@ public class CreateRestrictionStatement extends AuthorizationStatement
 
     public void validate(ClientState state) throws RequestValidationException
     {
+        if (!DatabaseDescriptor.getCapabilityManager().enforcesRestrictions())
+            throw new InvalidRequestException("The configured capability manager does not support restrictions");
+
         if (!DatabaseDescriptor.getRoleManager().isExistingRole(role))
             throw new InvalidRequestException(String.format("Role %s doesn't exist", role.getRoleName()));
 

@@ -475,7 +475,7 @@ public class FBUtilities
     public static ICapabilityManager newCapabilityManager(String className) throws ConfigurationException
     {
         if (!className.contains("."))
-            className = "org.apache.cassandra.auth.capability" + className;
+            className = "org.apache.cassandra.auth.capability." + className;
         return FBUtilities.construct(className, "capability manager");
     }
 

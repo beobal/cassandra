@@ -21,6 +21,7 @@ package org.apache.cassandra.auth;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.cassandra.auth.capability.AllowAllCapabilityManager;
 import org.apache.cassandra.auth.capability.CassandraCapabilityManager;
 import org.apache.cassandra.auth.capability.ICapabilityManager;
 import org.apache.cassandra.config.Config;
@@ -98,10 +99,13 @@ public final class AuthConfig
 
         // capability manager
 
-        ICapabilityManager capabilityManager = new CassandraCapabilityManager();
+        ICapabilityManager capabilityManager = new AllowAllCapabilityManager();
 
         if (conf.capability_manager != null)
             capabilityManager = FBUtilities.newCapabilityManager(conf.capability_manager);
+
+        if (capabilityManager.enforcesRestrictions() && !authenticator.requireAuthentication())
+            throw new ConfigurationException(conf.authenticator + " can't be used with " + conf.capability_manager, false);
 
         DatabaseDescriptor.setCapabilityManager(capabilityManager);
 

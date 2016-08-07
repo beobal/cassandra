@@ -89,6 +89,9 @@ public class ListRestrictionsStatement extends AuthorizationStatement
 
     public void validate(ClientState state) throws RequestValidationException
     {
+        if (!DatabaseDescriptor.getCapabilityManager().enforcesRestrictions())
+            throw new InvalidRequestException("The configured capability manager does not support restrictions");
+
         // a check to ensure the existence of the user isn't being leaked by user existence check.
         state.ensureNotAnonymous();
 

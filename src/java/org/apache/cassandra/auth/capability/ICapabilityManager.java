@@ -41,6 +41,8 @@ public interface ICapabilityManager
 
     boolean validateForRestriction(Capability capability, IResource resource);
 
+    boolean enforcesRestrictions();
+
     /**
      * Hook to perform validation of an implementation's configuration (if supported).
      *

@@ -78,6 +78,11 @@ public class CassandraCapabilityManager implements ICapabilityManager
         }
     }
 
+    public boolean enforcesRestrictions()
+    {
+        return true;
+    }
+
     public void createRestriction(AuthenticatedUser performedBy, Restriction restriction)
     {
         checkReadyStatus();

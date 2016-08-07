@@ -63,6 +63,9 @@ public class DropRestrictionStatement extends AuthorizationStatement
 
     public void validate(ClientState state) throws RequestValidationException
     {
+        if (!DatabaseDescriptor.getCapabilityManager().enforcesRestrictions())
+            throw new InvalidRequestException("The configured capability manager does not support restrictions");
+
         resource = maybeCorrectResource(resource, state);
 
         Restriction.Specification spec = new Restriction.Specification(role, resource, capability);
