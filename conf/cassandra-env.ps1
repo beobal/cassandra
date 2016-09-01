@@ -441,11 +441,5 @@ Function SetCassandraEnvironment
     # set LD_LIBRARY_PATH=<JEMALLOC_HOME>/lib/
     # $env:JVM_OPTS="$env:JVM_OPTS -Djava.library.path=<JEMALLOC_HOME>/lib/"
 
-    # JMX SSL options
-    #$env:JVM_OPTS="$JVM_OPTS -Djavax.net.ssl.keyStore=C:/keystore"
-    #$env:JVM_OPTS="$JVM_OPTS -Djavax.net.ssl.keyStorePassword=<keystore-password>"
-    #$env:JVM_OPTS="$JVM_OPTS -Djavax.net.ssl.trustStore=C:/truststore"
-    #$env:JVM_OPTS="$JVM_OPTS -Djavax.net.ssl.trustStorePassword=<truststore-password>"
-
     $env:JVM_OPTS="$env:JVM_OPTS $env:JVM_EXTRA_OPTS"
 }

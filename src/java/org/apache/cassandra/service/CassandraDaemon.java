@@ -108,11 +108,11 @@ public class CassandraDaemon
         // then the JVM agent will have already started up a default JMX connector
         // server. This behaviour is deprecated, but some clients may be relying
         // on it, so log a warning and skip setting up the server with the settings
-        // as configured in cassandra-env.(sh|ps1)
+        // as configured in cassandra.yaml
         // See: CASSANDRA-11540 & CASSANDRA-11725
         if (System.getProperty("com.sun.management.jmxremote.port") != null)
         {
-            logger.warn("JMX settings in cassandra-env.sh have been bypassed as the JMX connector server is " +
+            logger.warn("JMX settings in cassandra.yaml have been bypassed as the JMX connector server is " +
                         "already initialized. Please refer to cassandra.yaml for JMX configuration info");
             return;
         }
@@ -125,22 +125,15 @@ public class CassandraDaemon
         // only to the loopback address. Auth options are applied to both
         // remote and local-only servers, but currently SSL is only
         // available for remote.
-        // If neither is remote nor local port is set in cassandra-env.(sh|ps)
-        // then JMX is effectively  disabled.
         JMXServerOptions jmxServerOptions = DatabaseDescriptor.getJmxOptions();
-        jmxServerOptions.maybeOverwriteSettingsFromSystemProperty();
-        
         if (!jmxServerOptions.enabled)
         {
         	return;
         }
         
-        boolean localOnly = !jmxServerOptions.remote;
-        int jmxPort = jmxServerOptions.port;
-
         try
         {
-            jmxServer = JMXServerUtils.createJMXServer(jmxPort, localOnly);
+            jmxServer = JMXServerUtils.createJMXServer();
             if (jmxServer == null)
                 return;
         }

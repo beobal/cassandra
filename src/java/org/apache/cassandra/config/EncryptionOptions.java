@@ -46,4 +46,10 @@ public abstract class EncryptionOptions
         }
         public InternodeEncryption internode_encryption = InternodeEncryption.none;
     }
+
+    public static class JMXEncryptionOptions extends EncryptionOptions
+    {
+        public boolean enabled = false;
+        public String[] supported_protocol_versions = null;
+    }
 }
