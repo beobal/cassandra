@@ -119,21 +119,13 @@ public class CassandraDaemon
 
         System.setProperty("java.rmi.server.randomIDs", "true");
 
-        // If a remote port has been specified then use that to set up a JMX
-        // connector server which can be accessed remotely. Otherwise, look
-        // for the local port property and create a server which is bound
-        // only to the loopback address. Auth options are applied to both
-        // remote and local-only servers, but currently SSL is only
-        // available for remote.
         JMXServerOptions jmxServerOptions = DatabaseDescriptor.getJmxOptions();
         if (!jmxServerOptions.enabled)
-        {
         	return;
-        }
-        
+
         try
         {
-            jmxServer = JMXServerUtils.createJMXServer();
+            jmxServer = JMXServerUtils.createJMXServer(jmxServerOptions);
             if (jmxServer == null)
                 return;
         }

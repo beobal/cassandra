@@ -39,6 +39,7 @@ import org.junit.Test;
 
 import org.apache.cassandra.auth.*;
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.config.JMXServerOptions;
 import org.apache.cassandra.cql3.CQLTester;
 import org.apache.cassandra.db.ColumnFamilyStoreMBean;
 import org.apache.cassandra.utils.JMXServerUtils;
@@ -86,11 +87,14 @@ public class JMXAuthTest extends CQLTester
     private static void setupJMXServer() throws Exception
     {
         String config = Paths.get(ClassLoader.getSystemResource("auth/cassandra-test-jaas.conf").toURI()).toString();
-        System.setProperty("com.sun.management.jmxremote.authenticate", "true");
-        System.setProperty("java.security.auth.login.config", config);
-        System.setProperty("cassandra.jmx.remote.login.config", "TestLogin");
-        System.setProperty("cassandra.jmx.authorizer", NoSuperUserAuthorizationProxy.class.getName());
-        jmxServer = JMXServerUtils.createJMXServer(9999, true);
+        JMXServerOptions options = new JMXServerOptions();
+        options.authenticate = true;
+        options.login_config_file = config;
+        options.login_config_name = "TestLogin";
+        options.authorizer = NoSuperUserAuthorizationProxy.class.getName();
+        options.port = 9999;
+
+        jmxServer = JMXServerUtils.createJMXServer(options);
         jmxServer.start();
 
         JMXServiceURL jmxUrl = new JMXServiceURL("service:jmx:rmi:///jndi/rmi://localhost:9999/jmxrmi");

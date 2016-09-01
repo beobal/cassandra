@@ -10,7 +10,7 @@ public class JMXServerOptions
     public boolean authenticate = false;
 
     // ssl options
-    public EncryptionOptions.JMXEncryptionOptions encryption_options;
+    public EncryptionOptions.JMXEncryptionOptions encryption_options = new EncryptionOptions.JMXEncryptionOptions();
 
     // location for credentials file if using JVM's file-based authentication
     public String password_file;

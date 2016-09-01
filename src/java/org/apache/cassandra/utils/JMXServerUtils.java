@@ -46,26 +46,25 @@ import org.slf4j.LoggerFactory;
 import com.sun.jmx.remote.internal.RMIExporter;
 import com.sun.jmx.remote.security.JMXPluggableAuthenticator;
 import org.apache.cassandra.auth.jmx.AuthenticationProxy;
-import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.config.EncryptionOptions;
 import org.apache.cassandra.config.JMXServerOptions;
-import sun.rmi.registry.RegistryImpl;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.security.SSLFactory;
+import sun.rmi.registry.RegistryImpl;
 import sun.rmi.server.UnicastServerRef2;
 
 public class JMXServerUtils
 {
     private static final Logger logger = LoggerFactory.getLogger(JMXServerUtils.class);
-    private static final JMXServerOptions options = DatabaseDescriptor.getJmxOptions();
 
     private static java.rmi.registry.Registry registry;
 
     /**
      * Creates a server programmatically. This allows us to set parameters which normally are
-     * inaccessable.
+     * inaccessable. Authentication & authorization options are applied to both remote and
+     * local-only servers, but SSL is only applicable for remote.
      */
-    public static JMXConnectorServer createJMXServer()
+    public static JMXConnectorServer createJMXServer(JMXServerOptions options)
     throws IOException
     {
         Map<String, Object> env = new HashMap<>();
@@ -79,19 +78,19 @@ public class JMXServerUtils
         }
 
         // Configure the RMI client & server socket factories, including SSL config.
-        env.putAll(configureJmxSocketFactories(serverAddress));
+        env.putAll(configureJmxSocketFactories(serverAddress, options));
 
 
         // Configure authn, using a JMXAuthenticator which either wraps a set log LoginModules configured
         // via a JAAS configuration entry, or one which delegates to the standard file based authenticator.
         // Authn is disabled if com.sun.management.jmxremote.authenticate=false
-        env.putAll(configureJmxAuthentication());
+        env.putAll(configureJmxAuthentication(options));
 
         // Configure authz - if a custom proxy class is specified an instance will be returned.
         // If not, but a location for the standard access file is set in system properties, the
         // return value is null, and an entry is added to the env map detailing that location
         // If neither method is specified, no access control is applied
-        MBeanServerForwarder authzProxy = configureJmxAuthorization(env);
+        MBeanServerForwarder authzProxy = configureJmxAuthorization(env, options);
 
         // Make sure we use our custom exporter so a full GC doesn't get scheduled every
         // sun.rmi.dgc.server.gcInterval millis (default is 3600000ms/1 hour)
@@ -136,7 +135,7 @@ public class JMXServerUtils
         }
     }
 
-    private static Map<String, Object> configureJmxAuthentication()
+    private static Map<String, Object> configureJmxAuthentication(JMXServerOptions options)
     {
         Map<String, Object> env = new HashMap<>();
         if (!options.authenticate)
@@ -188,7 +187,7 @@ public class JMXServerUtils
         return env;
     }
 
-    private static MBeanServerForwarder configureJmxAuthorization(Map<String, Object> env)
+    private static MBeanServerForwarder configureJmxAuthorization(Map<String, Object> env, JMXServerOptions options)
     {
         // If a custom authz proxy is supplied (Cassandra ships with AuthorizationProxy, which
         // delegates to its own role based IAuthorizer), then instantiate and return one which
@@ -215,7 +214,7 @@ public class JMXServerUtils
         }
     }
 
-    private static Map<String, Object> configureJmxSocketFactories(InetAddress serverAddress)
+    private static Map<String, Object> configureJmxSocketFactories(InetAddress serverAddress, JMXServerOptions options)
     throws IOException
     {
         Map<String, Object> env = new HashMap<>();
