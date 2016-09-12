@@ -459,6 +459,8 @@ public class Config
     private static final List<String> SENSITIVE_KEYS = new ArrayList<String>() {{
         add("client_encryption_options");
         add("server_encryption_options");
+        // jmx_server_options output (JMXServerOptions.toString()) doesn't
+        // include sensitive encryption config so no need to blacklist here
     }};
 
     public static void log(Config config)

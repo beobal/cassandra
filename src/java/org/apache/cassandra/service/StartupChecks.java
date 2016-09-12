@@ -29,10 +29,7 @@ import com.google.common.collect.Iterables;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.cassandra.config.CFMetaData;
-import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.config.Schema;
-import org.apache.cassandra.config.SchemaConstants;
+import org.apache.cassandra.config.*;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.Directories;
 import org.apache.cassandra.db.SystemKeyspace;
@@ -151,30 +148,65 @@ public class StartupChecks
     {
         public void execute()
         {
-            String jmxPort = System.getProperty("cassandra.jmx.remote.port");
-            if (jmxPort == null)
+            JMXServerOptions jmxOptions = DatabaseDescriptor.getJmxOptions();
+            if (!jmxOptions.enabled)
             {
-                logger.warn("JMX is not enabled to receive remote connections. Please see cassandra-env.sh for more info.");
-                jmxPort = System.getProperty("cassandra.jmx.local.port");
-                if (jmxPort == null)
-                    logger.error("cassandra.jmx.local.port missing from cassandra-env.sh, unable to start local JMX service.");
+                logger.warn("JMX connection server is not enabled for either local or remote connections. " +
+                            "Please see jmx_server_options in cassandra.yaml for more info");
+            }
+            if (!jmxOptions.remote)
+            {
+                logger.warn("JMX is not enabled to receive remote connections. " +
+                            "Please see jmx_server_options in cassandra.yaml for more info.");
             }
             else
             {
-                logger.info("JMX is enabled to receive remote connections on port: {}", jmxPort);
+                logger.info("JMX is enabled to receive remote connections on port: {}", jmxOptions.port);
             }
         }
     };
 
     public static final StartupCheck checkJMXProperties = new StartupCheck()
     {
+        private final String[] deprecatedProperties = new String[]
+        {
+            "cassandra.jmx.local.port",
+            "cassandra.jmx.remote.port",
+            "cassandra.jmx.remote.login.config=CassandraLogin",
+            "com.sun.management.jmxremote.authenticate",
+            "com.sun.management.jmxremote.rmi.port",
+            "com.sun.management.jmxremote.authenticate",
+            "com.sun.management.jmxremote.ssl",
+            "com.sun.management.jmxremote.ssl.need.client.auth",
+            "com.sun.management.jmxremote.ssl.enabled.protocols",
+            "com.sun.management.jmxremote.ssl.enabled.cipher.suites",
+            "com.sun.management.jmxremote.password.file",
+            "com.sun.management.jmxremote.access.file"
+        };
+
         public void execute()
         {
-            if (System.getProperty("com.sun.management.jmxremote.port") != null)
+            // If the old JMX settings are still present in cassandra-env, warn that those
+            // are now deprecated in favor of cassandra.yaml.
+            // See: CASSANDRA-11695
+            boolean hasDeprecated = false;
+            for (String property : deprecatedProperties)
             {
-                logger.warn("Use of com.sun.management.jmxremote.port at startup is deprecated. " +
-                            "Please use cassandra.jmx.remote.port instead.");
+                if (System.getProperty(property) != null)
+                {
+                    hasDeprecated = true;
+                    break;
+                }
             }
+
+            if (hasDeprecated)
+                logger.warn("JMX settings in cassandra-env.(sh|ps1) have been deprecated and are no longer used. " +
+                            "Please configure the JMX connection server via the jmx_server_options " +
+                            "section of cassandra.yaml");
+
+            if (System.getProperty("com.sun.management.jmxremote.port") != null)
+                logger.warn("Use of com.sun.management.jmxremote.port at startup is deprecated. " +
+                            "Please use the jmx_server_options section of cassandra.yaml instead.");
         }
     };
 

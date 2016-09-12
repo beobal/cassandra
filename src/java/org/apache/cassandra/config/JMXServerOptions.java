@@ -26,4 +26,14 @@ public class JMXServerOptions
     // refer to o.a.c.auth.jmx.AuthorizationProxy which delegates to the IAuthorizer
     // configured in cassandra.yaml
     public String authorizer;
+
+    public String toString()
+    {
+        return String.format("{ enabled: %s, remote: %s, port: %d, rmi_port: %d, authenticate: %s, " +
+                             "password_file: %s, login_config_name: %s, login_config_file: %s, " +
+                             "access_file: %s, authorizer: %s, encryption: %s }",
+                             enabled, remote, port, rmi_port, authenticate,
+                             password_file, login_config_name, login_config_file,
+                             access_file, authorizer, encryption_options.enabled);
+    }
 }

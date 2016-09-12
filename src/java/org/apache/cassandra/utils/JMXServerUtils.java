@@ -111,27 +111,27 @@ public class JMXServerUtils
         jmxServer.start();
 
         // use a custom Registry to avoid having to interact with it internally using the remoting interface
-        configureRMIRegistry(options.port, env);
+        configureRMIRegistry(options, env);
 
         logger.info("Configured JMX server at: {}", url);
         return jmxServer;
     }
 
-    private static void configureRMIRegistry(int port, Map<String, Object> env) throws RemoteException
+    private static void configureRMIRegistry(JMXServerOptions options, Map<String, Object> env) throws RemoteException
     {
         Exporter exporter = (Exporter)env.get(RMIExporter.EXPORTER_ATTRIBUTE);
         // If ssl is enabled, make sure it's also in place for the RMI registry
         // by using the SSL socket factories already created and stashed in env
-        if (Boolean.getBoolean("com.sun.management.jmxremote.ssl"))
+        if (options.encryption_options.enabled)
         {
-            registry = new Registry(port,
+            registry = new Registry(options.port,
                                    (RMIClientSocketFactory)env.get(RMIConnectorServer.RMI_CLIENT_SOCKET_FACTORY_ATTRIBUTE),
                                    (RMIServerSocketFactory)env.get(RMIConnectorServer.RMI_SERVER_SOCKET_FACTORY_ATTRIBUTE),
                                    exporter.connectorServer);
         }
         else
         {
-            registry = new Registry(port, exporter.connectorServer);
+            registry = new Registry(options.port, exporter.connectorServer);
         }
     }
 

@@ -65,6 +65,14 @@ New features
 
 Upgrading
 ---------
+    - JMX server configuration has been moved from cassandra-env.(sh|ps1) to cassandra.yaml.
+      All of the JMX related settings in cassandra-env now have no effect and should
+      be removed. The one exception to this is MX4J, which is still configured using the
+      MX4J_ADDRESS and MX4J_PORT settings in cassandra-env. During upgrade, operators should
+      update the jmx_server_options section of cassandra.yaml before restarting a node.
+      Without doing so, the JMX server will be started in its default configuration, which
+      as before will only accept connections from local clients. See CASSANDRA-11695 for more
+      details.
     - Request timeouts in cassandra.yaml (read_request_timeout_in_ms, etc) now apply to the
       "full" request time on the coordinator.  Previously, they only covered the time from
       when the coordinator sent a message to a replica until the time that the replica
