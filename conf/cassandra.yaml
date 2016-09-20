@@ -1150,13 +1150,13 @@ transparent_data_encryption_options:
 jmx_server_options:
     enabled: true
     remote: false
-    port: 7199
+    jmx_port: 7199
     # port used by the RMI registry when remote connections are enabled.
     # To simplify firewall configs, this can be set to the same as the JMX server port (port). See CASSANDRA-7087.
     # However, if ssl is enabled the same port cannot be used for both jmx and rmi so either
     # pick another value for this property. Alternatively, comment out or set to 0 to use a random
     # port (pre-CASSANDRA-7087 behaviour)
-    rmi_port: 7199
+    # rmi_port: 7199
 
     # jmx ssl options - only apply when remote connections are enabled
     encryption_options:

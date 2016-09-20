@@ -55,15 +55,13 @@ if [ -z "$CASSANDRA_CONF" -o -z "$CLASSPATH" ]; then
     exit 1
 fi
 
-# Run cassandra-env.sh to pick up JMX_PORT
-if [ -f "$CASSANDRA_CONF/cassandra-env.sh" ]; then
-    JVM_OPTS_SAVE=$JVM_OPTS
-    . "$CASSANDRA_CONF/cassandra-env.sh"
-    JVM_OPTS=$JVM_OPTS_SAVE
+# Search cassandra.yaml for jmx port
+if [ -f "$CASSANDRA_CONF/cassandra.yaml" ]; then
+    JMX_PORT=`grep jmx_port $CASSANDRA_CONF/cassandra.yaml | cut -d ':' -f 2 | tr -d '[[:space:]]'`
 fi
 
 # JMX Port passed via cmd line args (-p 9999 / --port 9999 / --port=9999)
-# should override the value from cassandra-env.sh
+# should override the value from cassandra.yaml
 ARGS=""
 JVM_ARGS=""
 SSL_FILE=$HOME/.cassandra/nodetool-ssl.properties

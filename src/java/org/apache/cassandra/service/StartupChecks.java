@@ -161,7 +161,7 @@ public class StartupChecks
             }
             else
             {
-                logger.info("JMX is enabled to receive remote connections on port: {}", jmxOptions.port);
+                logger.info("JMX is enabled to receive remote connections on port: {}", jmxOptions.jmx_port);
             }
         }
     };
@@ -172,7 +172,7 @@ public class StartupChecks
         {
             "cassandra.jmx.local.port",
             "cassandra.jmx.remote.port",
-            "cassandra.jmx.remote.login.config=CassandraLogin",
+            "cassandra.jmx.remote.login.config",
             "com.sun.management.jmxremote.authenticate",
             "com.sun.management.jmxremote.rmi.port",
             "com.sun.management.jmxremote.authenticate",

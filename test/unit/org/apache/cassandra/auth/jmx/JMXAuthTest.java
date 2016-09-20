@@ -92,7 +92,7 @@ public class JMXAuthTest extends CQLTester
         options.login_config_file = config;
         options.login_config_name = "TestLogin";
         options.authorizer = NoSuperUserAuthorizationProxy.class.getName();
-        options.port = 9999;
+        options.jmx_port = 9999;
 
         jmxServer = JMXServerUtils.createJMXServer(options);
         jmxServer.start();

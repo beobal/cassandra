@@ -5,7 +5,7 @@ public class JMXServerOptions
     //jmx server settings
     public boolean enabled = true; 
     public boolean remote = true;
-    public int port = 7199;
+    public int jmx_port = 7199;
     public int rmi_port = 0;
     public boolean authenticate = false;
 
@@ -29,10 +29,10 @@ public class JMXServerOptions
 
     public String toString()
     {
-        return String.format("{ enabled: %s, remote: %s, port: %d, rmi_port: %d, authenticate: %s, " +
+        return String.format("{ enabled: %s, remote: %s, jmx_port: %d, rmi_port: %d, authenticate: %s, " +
                              "password_file: %s, login_config_name: %s, login_config_file: %s, " +
                              "access_file: %s, authorizer: %s, encryption: %s }",
-                             enabled, remote, port, rmi_port, authenticate,
+                             enabled, remote, jmx_port, rmi_port, authenticate,
                              password_file, login_config_name, login_config_file,
                              access_file, authorizer, encryption_options.enabled);
     }

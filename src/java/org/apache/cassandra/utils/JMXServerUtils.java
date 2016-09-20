@@ -96,7 +96,7 @@ public class JMXServerUtils
         // sun.rmi.dgc.server.gcInterval millis (default is 3600000ms/1 hour)
         env.put(RMIExporter.EXPORTER_ATTRIBUTE, new Exporter());
 
-        String url = String.format(urlTemplate, (serverAddress != null ? serverAddress.getHostAddress() : "0.0.0.0"), options.port);
+        String url = String.format(urlTemplate, (serverAddress != null ? serverAddress.getHostAddress() : "0.0.0.0"), options.jmx_port);
 
         int rmiPort = options.remote ? options.rmi_port : 0;
         JMXConnectorServer jmxServer =
@@ -124,14 +124,14 @@ public class JMXServerUtils
         // by using the SSL socket factories already created and stashed in env
         if (options.encryption_options.enabled)
         {
-            registry = new Registry(options.port,
+            registry = new Registry(options.jmx_port,
                                    (RMIClientSocketFactory)env.get(RMIConnectorServer.RMI_CLIENT_SOCKET_FACTORY_ATTRIBUTE),
                                    (RMIServerSocketFactory)env.get(RMIConnectorServer.RMI_SERVER_SOCKET_FACTORY_ATTRIBUTE),
                                    exporter.connectorServer);
         }
         else
         {
-            registry = new Registry(options.port, exporter.connectorServer);
+            registry = new Registry(options.jmx_port, exporter.connectorServer);
         }
     }
 
@@ -160,9 +160,10 @@ public class JMXServerUtils
                 if (Strings.isNullOrEmpty(options.login_config_file))
                 {
                     throw new ConfigurationException(String.format("Login config name %s specified for JMX auth, but no " +
-                                                                   "configuration is available. Please set config " +
-                                                                   "location in cassandra.yaml or with the " +
-                                                                   "'java.security.auth.login.config' system property",
+                                                                   "configuration is available. Please set " +
+                                                                   "jmx_server_options.login_config_file in cassandra.yaml " +
+                                                                   "or with the 'java.security.auth.login.config' " +
+                                                                   "system property",
                                                                    configEntry));
                 }
                 else
