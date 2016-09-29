@@ -260,6 +260,20 @@ public class CapabilitiesTest
         assertEquals(dataResources.length + nonDataResources.length, manager.delegatedCallCount);
     }
 
+    @Test
+    public void systemDomainIsReserved()
+    {
+        try
+        {
+            Capabilities.register(randomCapability(Capabilities.System.DOMAIN));
+            fail("Expected exception");
+        }
+        catch(IllegalArgumentException e)
+        {
+            // expected
+        }
+    }
+
     private String randomDomain()
     {
         return UUID.randomUUID().toString();

@@ -92,6 +92,9 @@ public class Capabilities
 
     public static void register(Capability capability)
     {
+        if (capability.getDomain().equals(System.DOMAIN) && capability.getClass() != System.SystemCapability.class)
+            throw new IllegalArgumentException(String.format("The capability domain '%s' is reserved", System.DOMAIN));
+
         registry.register(capability);
     }
 
