@@ -40,6 +40,7 @@ import org.apache.cassandra.db.SystemKeyspace;
 import org.apache.cassandra.exceptions.AuthenticationException;
 import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.exceptions.UnauthorizedException;
+import org.apache.cassandra.metrics.AuthMetrics;
 import org.apache.cassandra.schema.SchemaKeyspace;
 import org.apache.cassandra.thrift.ThriftValidation;
 import org.apache.cassandra.utils.CassandraVersion;
@@ -351,50 +352,67 @@ public class ClientState
 
     public void ensureNotRestricted(IResource resource, CapabilitySet required)
     {
-        if (!DatabaseDescriptor.getCapabilityManager().enforcesRestrictions())
-            return;
-
-        if (isInternal || user.isSuper())
-            return;
-
-        if (required.isEmpty())
-            return;
-
-        if (resource instanceof DataResource && SchemaConstants.isSystemKeyspace(((DataResource)resource).getKeyspace()))
-            return;
-
-        Set<Capability> requiredAndRestricted = new HashSet<>();
-        for (IResource res : Resources.chain(resource))
+        long start = System.nanoTime();
+        try
         {
-            CapabilitySet restricted = getRestrictions(res);
-            requiredAndRestricted.addAll(required.intersection(restricted));
+            if (!DatabaseDescriptor.getCapabilityManager().enforcesRestrictions())
+                return;
+
+            if (isInternal || user.isSuper())
+                return;
+
+            if (required.isEmpty())
+                return;
+
+            if (resource instanceof DataResource && SchemaConstants.isSystemKeyspace(((DataResource) resource).getKeyspace()))
+                return;
+
+            Set<Capability> requiredAndRestricted = new HashSet<>();
+            for (IResource res : Resources.chain(resource))
+            {
+                CapabilitySet restricted = getRestrictions(res);
+                requiredAndRestricted.addAll(required.intersection(restricted));
+            }
+
+            if (!requiredAndRestricted.isEmpty())
+            {
+                AuthMetrics.instance.markRestricted();
+                throw new UnauthorizedException(String.format("Role %s or one of its granted roles has restrictions on one " +
+                                                              "or more capabilities required for this operation which apply " +
+                                                              "to %s or one of its parents. Required but restricted " +
+                                                              "capabilities : %s",
+                                                              user.getName(),
+                                                              resource.toString(),
+                                                              requiredAndRestricted.stream()
+                                                                                   .map(Capability::toString)
+                                                                                   .collect(Collectors.joining(", "))));
+            }
         }
-
-        if (!requiredAndRestricted.isEmpty())
+        finally
         {
-            throw new UnauthorizedException(String.format("Role %s or one of its granted roles has restrictions on one " +
-                                                          "or more capabilities required for this operation which apply " +
-                                                          "to %s or one of its parents. Required but restricted " +
-                                                          "capabilities : %s",
-                                                          user.getName(),
-                                                          resource.toString(),
-                                                          requiredAndRestricted.stream()
-                                                                 .map(Capability::toString)
-                                                                 .collect(Collectors.joining(", "))));
-
+            AuthMetrics.instance.updateRestrictionCheckLatencyNanos(System.nanoTime() - start);
         }
     }
 
     public boolean isTracingRestricted()
     {
-        boolean restricted = !TRACING_CAPABILITY.intersection(getRestrictions(DataResource.root())).isEmpty();
-
-        if (restricted)
-            ClientWarn.instance.warn(String.format("Query tracing was triggered either explicitly or probabilistically " +
-                                                   "but is restricted for role %s or one of its granted roles.",
-                                                   user.getName()));
-
-        return restricted;
+        long start = System.nanoTime();
+        try
+        {
+            boolean restricted = !TRACING_CAPABILITY.intersection(getRestrictions(DataResource.root())).isEmpty();
+            if (restricted)
+            {
+                AuthMetrics.instance.markRestricted();
+                ClientWarn.instance.warn(String.format("Query tracing was triggered either explicitly or probabilistically " +
+                                                       "but is restricted for role %s or one of its granted roles.",
+                                                       user.getName()));
+            }
+            return restricted;
+        }
+        finally
+        {
+            AuthMetrics.instance.updateRestrictionCheckLatencyNanos(System.nanoTime() - start);
+        }
     }
 
     private void checkPermissionOnResourceChain(Permission perm, IResource resource)

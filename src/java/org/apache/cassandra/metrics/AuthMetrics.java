@@ -1,13 +1,16 @@
 package org.apache.cassandra.metrics;
 
+import java.util.concurrent.TimeUnit;
+
+import com.codahale.metrics.Counter;
 import com.codahale.metrics.Meter;
+import com.codahale.metrics.Timer;
 
 /**
- * Metrics about authentication
+ * Metrics about authentication & authorization
  */
 public class AuthMetrics
 {
-
     public static final AuthMetrics instance = new AuthMetrics();
 
     public static void init()
@@ -16,25 +19,45 @@ public class AuthMetrics
     }
 
     /** Number and rate of successful logins */
-    protected final Meter success;
+    private final Meter authSuccess;
 
     /** Number and rate of login failures */
-    protected final Meter failure;
+    private final Meter authFailure;
+
+    /** Number and rate of operations being rejected due to a capability restriction **/
+    private final Meter capRestrictionEnforced;
+
+    /** Latency of capability restriction lookups **/
+    private final Timer capRestrictionCheckLatency;
+    private final Counter capRestrictionCheckTotalLatencyMicros;
 
     private AuthMetrics()
     {
-
-        success = ClientMetrics.instance.addMeter("AuthSuccess");
-        failure = ClientMetrics.instance.addMeter("AuthFailure");
+        authSuccess = ClientMetrics.instance.addMeter("AuthSuccess");
+        authFailure = ClientMetrics.instance.addMeter("AuthFailure");
+        capRestrictionEnforced = ClientMetrics.instance.addMeter("CapRestrictionEnforced");
+        capRestrictionCheckLatency = ClientMetrics.instance.addTimer("CapRestrictionCheckLatency");
+        capRestrictionCheckTotalLatencyMicros = ClientMetrics.instance.addCounter("CapRestrictionTotalCheckLatencyMicros");
     }
 
     public void markSuccess()
     {
-        success.mark();
+        authSuccess.mark();
     }
 
     public void markFailure()
     {
-        failure.mark();
+        authFailure.mark();
+    }
+
+    public void markRestricted()
+    {
+        capRestrictionEnforced.mark();
+    }
+
+    public void updateRestrictionCheckLatencyNanos(long latency)
+    {
+        capRestrictionCheckLatency.update(latency, TimeUnit.NANOSECONDS);
+        capRestrictionCheckTotalLatencyMicros.inc(TimeUnit.MICROSECONDS.convert(latency, TimeUnit.NANOSECONDS));
     }
 }

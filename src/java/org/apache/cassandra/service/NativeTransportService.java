@@ -108,7 +108,7 @@ public class NativeTransportService
         }
 
         // register metrics
-        ClientMetrics.instance.addCounter("connectedNativeClients", () ->
+        ClientMetrics.instance.addGauge("connectedNativeClients", () ->
         {
             int ret = 0;
             for (Server server : servers)

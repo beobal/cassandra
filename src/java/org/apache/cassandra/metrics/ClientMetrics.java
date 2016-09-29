@@ -20,8 +20,10 @@ package org.apache.cassandra.metrics;
 
 import java.util.concurrent.Callable;
 
+import com.codahale.metrics.Counter;
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Meter;
+import com.codahale.metrics.Timer;
 
 import static org.apache.cassandra.metrics.CassandraMetricsRegistry.Metrics;
 
@@ -36,7 +38,7 @@ public class ClientMetrics
     {
     }
 
-    public void addCounter(String name, final Callable<Integer> provider)
+    public void addGauge(String name, final Callable<Integer> provider)
     {
         Metrics.register(factory.createMetricName(name), (Gauge<Integer>) () -> {
             try
@@ -53,4 +55,15 @@ public class ClientMetrics
     {
         return Metrics.meter(factory.createMetricName(name));
     }
+
+    public Timer addTimer(String name)
+    {
+        return Metrics.timer(factory.createMetricName(name));
+    }
+
+    public Counter addCounter(String name)
+    {
+        return Metrics.counter(factory.createMetricName(name));
+    }
+
 }
