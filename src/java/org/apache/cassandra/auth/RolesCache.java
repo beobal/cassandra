@@ -19,11 +19,37 @@ package org.apache.cassandra.auth;
 
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
 
-public class RolesCache extends AuthCache<RoleResource, Set<RoleResource>> implements RolesCacheMBean
+public class RolesCache extends AuthCache<RoleResource, Set<RolesCache.RoleCacheEntry>> implements RolesCacheMBean
 {
+    static class RoleCacheEntry
+    {
+        public final RoleResource role;
+        public final boolean isSuper;
+
+        RoleCacheEntry(RoleResource role, boolean isSuper)
+        {
+            this.role = role;
+            this.isSuper = isSuper;
+        }
+    }
+
+    private static Set<RoleCacheEntry> toCacheEntries(Set<RoleResource> roles)
+    {
+        IRoleManager roleManager = DatabaseDescriptor.getRoleManager();
+        return roles.stream()
+                    .map(role -> new RoleCacheEntry(role, roleManager.isSuper(role)))
+                    .collect(Collectors.toSet());
+    }
+
+    private static Set<RoleResource> toResources(Set<RoleCacheEntry> entries)
+    {
+        return entries.stream().map(entry -> entry.role).collect(Collectors.toSet());
+    }
+
     public RolesCache(IRoleManager roleManager)
     {
         super("RolesCache",
@@ -33,7 +59,7 @@ public class RolesCache extends AuthCache<RoleResource, Set<RoleResource>> imple
               DatabaseDescriptor::getRolesUpdateInterval,
               DatabaseDescriptor::setRolesCacheMaxEntries,
               DatabaseDescriptor::getRolesCacheMaxEntries,
-              (r) -> roleManager.getRoles(r, true),
+              (r) -> toCacheEntries(roleManager.getRoles(r, true)),
               () -> DatabaseDescriptor.getAuthenticator().requireAuthentication());
     }
 
@@ -41,11 +67,27 @@ public class RolesCache extends AuthCache<RoleResource, Set<RoleResource>> imple
     {
         try
         {
-            return get(role);
+            return toResources(get(role));
         }
         catch (ExecutionException e)
         {
             throw new RuntimeException(e);
+        }
+    }
+
+    public boolean getSuperUserStatus(RoleResource role)
+    {
+        try
+        {
+            for (RoleCacheEntry entry : get(role))
+                if (entry.isSuper)
+                    return true;
+
+            return false;
+        }
+        catch (ExecutionException e)
+        {
+                throw new RuntimeException(e);
         }
     }
 }

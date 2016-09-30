@@ -18,6 +18,7 @@
 package org.apache.cassandra.auth;
 
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
 
@@ -47,10 +48,6 @@ public class Roles
      */
     public static boolean hasSuperuserStatus(RoleResource role)
     {
-        IRoleManager roleManager = DatabaseDescriptor.getRoleManager();
-        for (RoleResource r : cache.getRoles(role))
-            if (roleManager.isSuper(r))
-                return true;
-        return false;
+        return cache.getSuperUserStatus(role);
     }
 }
