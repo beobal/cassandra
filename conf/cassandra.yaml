@@ -122,7 +122,16 @@ authorizer: AllowAllAuthorizer
 #   increase system_auth keyspace replication factor if you use this role manager.
 role_manager: CassandraRoleManager
 
-#
+# As a complement to authorization performed by the IAuthorizer, user operations (such
+# as performing CQL queries) are composed of sets of capabilities. Operators can
+# specify blacklists to restrict certain roles from using those capabilities,
+# effectively blocking any user with those roles from excuting operations which
+# require the blacklisted capabilities.
+# Aside from AllowAllCapabilityManager, which does not perform any enforcement of
+# restrictions, Cassandra provides CassandraCapabilityManager which uses tables in
+# the system_auth keyspace to manage metadata about defined restrictions.
+# Using any ICapabilityManager implementation which actually enforces restrictions
+# requires authentication to be enabled.
 
 capability_manager: AllowAllCapabilityManager
 
@@ -175,7 +184,9 @@ credentials_validity_in_ms: 2000
 # Defaults to the same value as credentials_validity_in_ms.
 # credentials_update_interval_in_ms: 2000
 
-# Validity period for capability restrictions cache.
+# Validity period for capability restrictions cache. Looking up restrictions
+# for role/resource combinations may be expensive (CassandraCapabilityManager
+# reads them from internal tables, which may involve distributed queries).
 # Defaults to 2000, set to 0 to disable caching completely.
 capability_restrictions_validity_in_ms: 2000
 
