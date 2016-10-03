@@ -22,6 +22,29 @@ import java.util.Locale;
 
 import com.google.common.base.Objects;
 
+/**
+ * Base class for Capability implementations.
+ *
+ * Before use, any Capability instance must be registered by calling
+ * {@link org.apache.cassandra.auth.capability.Capabilities#register(Capability)}.
+ * This makes it available for use in DCL statements (CREATE/DROP RESTRICTION) and enables
+ * it to be used in execution paths which include third party extensions, such as in custom
+ * index or trigger implementations.
+ *
+ * A key part of the registration process is to assign an ordinal to the instance. This is
+ * simply an auto-incrementing counter, maintained per capability domain by the system's
+ * capability registry. It allows a capability domain to be represented as a bitset, with
+ * set bits indicating either required or restricted capabilities, dependent on context. See
+ * {@link org.apache.cassandra.auth.capability.CapabilitySet} for details of this usage.
+ *
+ * As these ordinals are purely node-local and never shared between nodes, or otherwise
+ * serialized, the exact assignment of ordinal values is not meaningful, as long as each
+ * Capability instance is immutable.
+ *
+ * For this reason, {@link org.apache.cassandra.auth.capability.ICapabilityManager}
+ * implementations must not store ordinal values, which should not be necessary anyway as
+ * a {@link org.apache.cassandra.auth.capability.Capability}'s full name uniquely identifies it.
+ */
 public abstract class Capability
 {
     private final String domain;
@@ -41,6 +64,8 @@ public abstract class Capability
 
     Capability withOrdinal(int ordinal)
     {
+        assert this.ordinal == -1 : String.format("Attempted to remap an already assigned ordinal for capability %s. " +
+                               "Is this capability being registered multiple times?", this.fullName);
         this.ordinal = ordinal;
         return this;
     }

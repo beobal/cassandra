@@ -34,6 +34,9 @@ import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.cassandra.utils.FBUtilities;
 
+/**
+ * Utility methods for dealing with system defined and custom Capabilities.
+ */
 public class Capabilities
 {
     private static final Logger logger = LoggerFactory.getLogger(Capabilities.class);
@@ -43,6 +46,14 @@ public class Capabilities
         FBUtilities.classForName(System.class.getName(), "System defined capabilities");
     }
 
+    /**
+     * Get a previously registered Capability, given its domain and name.
+     * Attempting to retrieve an unregistered Capability will result in an
+     * IllegalArgumentException.
+     * @param domain the domain of the Capabilty
+     * @param name the domain-local name of the Capability
+     * @return The registered Capability instance
+     */
     public static Capability capability(String domain, String name)
     {
         Capability capability = registry.lookup(domain, name);
@@ -51,6 +62,13 @@ public class Capabilities
         return capability;
     }
 
+    /**
+     * Get a previously registered Capability, given its fully qualified name.
+     * Attempting to retrieve an unregistered Capability will result in an
+     * IllegalArgumentException.
+     * @param fullName the fully qualified name, in the form "domain.capability_name"
+     * @return The registered Capability instance
+     */
     public static Capability capability(String fullName)
     {
         int delim = fullName.indexOf('.');
@@ -61,12 +79,29 @@ public class Capabilities
         return capability(domain, name);
     }
 
+    /**
+     * Checks whether a capability and resource are a valid combination to be used in
+     * a restriction. For the default system capabilities, this defers to the IResource
+     * instance and in the initial implementation, only DataResources support this feature.
+     * So for instance, a restriction is not valid if it references a JMXResource,
+     * FunctionResource or RoleResource currently.
+     *
+     * For custom Capabilities outside of the SYSTEM domain, this method delegates to the
+     * configured ICapabilityManager (which then needs to be aware of any custom
+     * Capability instances).
+     *
+     * See ICapabilityManager::validateForRestriction
+     *
+     * @param capability to check
+     * @param resource to check
+     * @return True if the capability can be used in conjunction with the resource to
+     *         define a restriction, false otherwise.
+     */
     public static boolean validateForRestriction(Capability capability, IResource resource)
     {
         if (capability.getDomain().equals(System.DOMAIN))
             return resource.validForCapabilityRestriction(capability);
         else
-            // defer to ICapabilityManager
             return DatabaseDescriptor.getCapabilityManager().validateForRestriction(capability, resource);
     }
 
@@ -90,6 +125,15 @@ public class Capabilities
         return capability;
     }
 
+    /**
+     * Register a Capability. For a capability to be used, either in a DCL statement (CREATE/DROP RESTRICTION)
+     * or by being referenced in the access control checks of a user operation (i.e. if a statement class
+     * says that the capability is required for a particular execution), it must first be registered here.
+     * It is recommended that any custom capability be registered during system initialisation.
+     * Capabilities should be immutable and unique, so this operation is intended idempotent. Duplicate attempts
+     * are silently permitted.
+     * @param capability The capability to be registered.
+     */
     public static void register(Capability capability)
     {
         if (capability.getDomain().equals(System.DOMAIN) && capability.getClass() != System.SystemCapability.class)
@@ -98,6 +142,11 @@ public class Capabilities
         registry.register(capability);
     }
 
+    /**
+     * Pre-defined system capabilities. The Capability class can be extended to provide custom
+     * capabilities for third party extensions, but this class represents the default set of
+     * capabilities. Custom capabilities may not use the "system" domain.
+     */
     public static final class System
     {
         public static final String DOMAIN = "system";
@@ -158,6 +207,13 @@ public class Capabilities
             }
         }
 
+        /**
+         * Get the system capability which represents performing reads at a given
+         * consistency level.
+         *
+         * @param cl read consistency level
+         * @return Capability required to perform reads at the given CL.
+         */
         public static Capability forReadConsistencyLevel(ConsistencyLevel cl)
         {
             switch(cl)
@@ -187,6 +243,13 @@ public class Capabilities
             }
         }
 
+        /**
+         * Get the system capability which represents performing writes at a given
+         * consistency level.
+         *
+         * @param cl read consistency level
+         * @return Capability required to perform writes at the given CL.
+         */
         public static Capability forWriteConsistencyLevel(ConsistencyLevel cl)
         {
             switch(cl)
@@ -246,7 +309,7 @@ public class Capabilities
 
         private final Map<String, DomainRegistry> domainRegistries = new ConcurrentHashMap<>();
 
-        public Capability lookup(String domain, String name)
+        private Capability lookup(String domain, String name)
         {
             String d = domain.toLowerCase(Locale.US);
             if (!domainRegistries.containsKey(d))
@@ -255,7 +318,7 @@ public class Capabilities
             return domainRegistries.get(d).get(name.toLowerCase(Locale.US));
         }
 
-        public Capability getByIndex(String domain, int index)
+        private Capability getByIndex(String domain, int index)
         {
             String d = domain.toLowerCase(Locale.US);
             for (Capability capability : domainRegistries.get(d))
@@ -268,7 +331,7 @@ public class Capabilities
 
         private void register(Capability capability)
         {
-            logger.trace("Registering CAPABILITY {}", capability);
+            logger.trace("Registering capability {}", capability);
             domainRegistries.computeIfAbsent(capability.getDomain(), (s) -> new DomainRegistry())
                             .put(capability);
 

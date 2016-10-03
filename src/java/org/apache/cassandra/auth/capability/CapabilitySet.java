@@ -25,11 +25,33 @@ import com.google.common.base.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Capabiliies are namespaced by their domain, and when registered (in Capabilities::register)
+ * a per-domain counter is incremented and assigned to the Capability. This allows Capabilities
+ * for a given domain to be represented as a BitSet, where a set bit represents a restricted
+ * capability. CapabilitySet is essentially a map of domain->bitset and is used to represents
+ * capabilities as they relate to a specific user & resource.
+ *
+ * For instance, if the role 'db_user' is the subject of a restriction which prevents
+ * ALLOW FILTERING queries to be run on 'table_foo', then the bitset mapped to the 'system'
+ * domain will have the corresponding bit set. This CapabilitySet is obtained from
+ * ICapabilityManager::getRestricted and may be cached for the client session in
+ * AuthenticatedUser.restrictionCache.
+ *
+ * To continue this example, during the execution of a query, a CapabilitySet representing the
+ * capabilities required to execute the statement is constructed. This is then compared to the
+ * compared to the user's restricted capabilites for the target table. Any intersection indicates
+ * that a required capability is restricted for that user and results in an AuthenticationException.
+ * This comparison takes into account both the hierarchy of granted roles (so the restrictions for
+ * all roles granted to the authenticated user are checked) and the resource hierarchy (so
+ * restrictions defined against a specific table, its enclosing keyspace and all keyspaces are
+ * also checked).
+ */
 public class CapabilitySet
 {
     private static final CapabilitySet EMPTY_SET = new CapabilitySet();
 
-    public static final CapabilitySet emptySet()
+    public static CapabilitySet emptySet()
     {
         return EMPTY_SET;
     }
@@ -143,10 +165,8 @@ public class CapabilitySet
             capabilities.add(capability);
             return this;
         }
-private static final Logger logger = LoggerFactory.getLogger(Builder.class);
         public CapabilitySet build()
         {
-//            logger.info("XXX Set of collected caps: {}", capabilities.stream().map(Capability::toString).collect(Collectors.joining(",")));
             return new CapabilitySet(capabilities);
         }
     }
