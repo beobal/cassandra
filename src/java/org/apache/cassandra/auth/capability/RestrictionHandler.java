@@ -38,6 +38,10 @@ public interface RestrictionHandler
         }
     }
 
+    void init();
+
+    CapabilitySet getRestrictions(RoleResource primaryRole, IResource resource);
+
     ImmutableSet<Restriction> fetch(Restriction.Specification spec, boolean includeInherited);
 
     void modifyForRole(Restriction restriction, Operator operator) throws RequestExecutionException;

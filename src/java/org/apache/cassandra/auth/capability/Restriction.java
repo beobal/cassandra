@@ -24,6 +24,7 @@ import java.util.Set;
 
 import com.google.common.base.Objects;
 import com.google.common.base.Strings;
+import com.google.common.collect.ComparisonChain;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,7 +33,7 @@ import org.apache.cassandra.auth.IResource;
 import org.apache.cassandra.auth.Permission;
 import org.apache.cassandra.auth.RoleResource;
 
-public class Restriction
+public class Restriction implements Comparable<Restriction>
 {
     private final RoleResource role;
     private final String resource;
@@ -84,6 +85,16 @@ public class Restriction
         return Objects.hashCode(capability, resource, role);
     }
 
+    public int compareTo(Restriction o)
+    {
+        return ComparisonChain.start()
+                              .compare(this.getRole(), o.getRole())
+                              .compare(this.getResourceName(), o.getResourceName())
+                              .compare(this.getCapability().getFullName(), o.getCapability().getFullName())
+                              .result();
+
+    }
+
     public static final class Specification
     {
         public static final RoleResource ANY_ROLE = RoleResource.role("");
@@ -109,10 +120,12 @@ public class Restriction
             if (this.resource != ANY_RESOURCE && !this.resource.getName().equals(resourceName))
                 return false;
 
-            if (this.capability != ANY_CAPABILITY && !this.capability.equals(capability))
-                return false;
+            return !(this.capability != ANY_CAPABILITY && !this.capability.equals(capability));
+        }
 
-            return true;
+        public boolean matches(Restriction restriction)
+        {
+            return matches(restriction.getRole(), restriction.getResourceName(), restriction.getCapability());
         }
 
         public boolean isAnyRole()

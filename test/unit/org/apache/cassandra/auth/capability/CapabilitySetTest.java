@@ -18,10 +18,10 @@
 
 package org.apache.cassandra.auth.capability;
 
+import java.util.Arrays;
 import java.util.Collections;
 
 import com.google.common.collect.Sets;
-import org.junit.Assert;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -143,10 +143,67 @@ public class CapabilitySetTest
         }
     }
 
+    @Test
+    public void testUnion()
+    {
+        // 2 empty sets
+        assertTrue(union(CapabilitySet.emptySet(), CapabilitySet.emptySet()).isEmpty());
+
+        // single domain, same capabilities
+        assertEquals(new CapabilitySet(LWT),
+                     union(new CapabilitySet(LWT), new CapabilitySet(LWT)));
+
+        // single domain, disjoint capabilities
+        assertEquals(new CapabilitySet(LWT, FILTERING, TRUNCATE, CL_ALL_WRITE),
+                     union(new CapabilitySet(LWT, FILTERING), new CapabilitySet(TRUNCATE, CL_ALL_WRITE)));
+
+        // single domain, intersecting capabilities
+        assertEquals(new CapabilitySet(LWT, FILTERING, CL_ALL_WRITE, TRUNCATE),
+                     union(new CapabilitySet(LWT, FILTERING, CL_ALL_WRITE), new CapabilitySet(CL_ALL_WRITE, TRUNCATE, LWT)));
+
+        // 1 empty, 1 single domain
+        assertEquals(new CapabilitySet(LWT, TRUNCATE),
+                     union(CapabilitySet.emptySet(), new CapabilitySet(LWT, TRUNCATE)));
+        assertEquals(new CapabilitySet(LWT, TRUNCATE),
+                     union(new CapabilitySet(LWT, TRUNCATE), CapabilitySet.emptySet()));
+
+        // 2 disjoint single domains
+        assertEquals(new CapabilitySet(LWT, TRUNCATE, CAP_A, CAP_B),
+                     union(new CapabilitySet(LWT, TRUNCATE), new CapabilitySet(CAP_A, CAP_B)));
+
+        // multiple domains, all disjoint capabilities
+        assertEquals(new CapabilitySet(LWT, TRUNCATE, CAP_A, FILTERING, CAP_B),
+                     union(new CapabilitySet(LWT, TRUNCATE, CAP_A), new CapabilitySet(FILTERING, CAP_B)));
+
+        // multiple domains, intersecting in 1 domain
+        assertEquals(new CapabilitySet(LWT, TRUNCATE, FILTERING, CAP_A, CAP_B, CAP_C),
+                     union(new CapabilitySet(LWT, CAP_C, CAP_A, TRUNCATE), new CapabilitySet(CAP_A, FILTERING, CAP_B)));
+
+        // multiple identical domains
+        assertEquals(new CapabilitySet(CAP_A, CAP_C, LWT, TRUNCATE),
+                     union(new CapabilitySet(TRUNCATE, CAP_C, LWT, CAP_A), new CapabilitySet(LWT, TRUNCATE, CAP_A, CAP_C)));
+
+        // multiple intersection & disjoint domains
+        assertEquals(new CapabilitySet(CAP_A, CAP_B, CAP_C, CL_ALL_WRITE, FILTERING, LWT, TRUNCATE),
+                     union(new CapabilitySet(TRUNCATE),
+                           new CapabilitySet(CAP_A, LWT),
+                           new CapabilitySet(CAP_A),
+                           new CapabilitySet(CAP_B),
+                           new CapabilitySet(FILTERING, CAP_B),
+                           new CapabilitySet(CL_ALL_WRITE, CAP_B, CAP_C),
+                           new CapabilitySet(CAP_A, CAP_B, CAP_C),
+                           CapabilitySet.emptySet()));
+    }
+
+    public static CapabilitySet union(CapabilitySet...sets)
+    {
+        return CapabilitySet.union(Arrays.asList(sets));
+    }
+
     private static class TestCapability extends Capability
     {
         private static final String domain = "TESTING";
-        protected TestCapability(String name)
+        TestCapability(String name)
         {
             super(domain, name);
         }

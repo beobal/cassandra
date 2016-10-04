@@ -18,7 +18,6 @@
 
 package org.apache.cassandra.auth.capability;
 
-import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.Callable;
@@ -27,15 +26,13 @@ import java.util.function.Function;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Sets;
-import org.junit.*;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 import org.apache.cassandra.SchemaLoader;
 import org.apache.cassandra.auth.*;
-import org.apache.cassandra.config.CFMetaData;
-import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.config.Schema;
-import org.apache.cassandra.config.SchemaConstants;
+import org.apache.cassandra.config.*;
 import org.apache.cassandra.cql3.QueryOptions;
 import org.apache.cassandra.cql3.QueryProcessor;
 import org.apache.cassandra.cql3.UntypedResultSet;
@@ -44,8 +41,6 @@ import org.apache.cassandra.cql3.statements.SelectStatement;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.cassandra.db.Keyspace;
-import org.apache.cassandra.dht.IPartitioner;
-import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.exceptions.RequestExecutionException;
 import org.apache.cassandra.exceptions.RequestValidationException;
 import org.apache.cassandra.schema.KeyspaceParams;
@@ -56,10 +51,8 @@ import static org.apache.cassandra.Util.setDatabaseDescriptorField;
 import static org.apache.cassandra.auth.capability.Restriction.Specification.ANY_CAPABILITY;
 import static org.apache.cassandra.auth.capability.Restriction.Specification.ANY_RESOURCE;
 import static org.apache.cassandra.auth.capability.Restriction.Specification.ANY_ROLE;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 public class CassandraCapabilityManagerTest
 {
@@ -199,9 +192,9 @@ public class CassandraCapabilityManagerTest
     public void getDirectRestrictions()
     {
         ICapabilityManager capabilityManager = DatabaseDescriptor.getCapabilityManager();
-        Set<Capability> expected = Sets.newHashSet(Capabilities.System.FILTERING,
+        Capability[] expected = new Capability[] { Capabilities.System.FILTERING,
                                                    Capabilities.System.LWT,
-                                                   Capabilities.System.TRUNCATE);
+                                                   Capabilities.System.TRUNCATE };
         addRestrictions(ROLE_A, TABLE, expected);
         assertEquals(new CapabilitySet(expected), capabilityManager.getRestricted(ROLE_A, TABLE));
     }
@@ -209,14 +202,14 @@ public class CassandraCapabilityManagerTest
     @Test
     public void getInheritedRestrictions()
     {
-        addRestriction(ROLE_B, TABLE, Capabilities.System.LWT);
-        addRestriction(ROLE_C, TABLE, Capabilities.System.TRUNCATE);
+        addRestrictions(ROLE_B, TABLE, Capabilities.System.LWT);
+        addRestrictions(ROLE_C, TABLE, Capabilities.System.TRUNCATE);
 
         grantRolesTo(ROLE_A, ROLE_B, ROLE_C);
 
         ICapabilityManager capabilityManager = DatabaseDescriptor.getCapabilityManager();
-        Set<Capability> expected = Sets.newHashSet(Capabilities.System.LWT,
-                                                   Capabilities.System.TRUNCATE);
+        Capability[] expected = new Capability[] { Capabilities.System.LWT,
+                                                   Capabilities.System.TRUNCATE };
 
         assertEquals(new CapabilitySet(expected), capabilityManager.getRestricted(ROLE_A, TABLE));
     }
@@ -224,16 +217,16 @@ public class CassandraCapabilityManagerTest
     @Test
     public void getDirectAndInheritedRestrictions()
     {
-        addRestriction(ROLE_A, TABLE, Capabilities.System.FILTERING);
-        addRestriction(ROLE_B, TABLE, Capabilities.System.LWT);
-        addRestriction(ROLE_C, TABLE, Capabilities.System.TRUNCATE);
+        addRestrictions(ROLE_A, TABLE, Capabilities.System.FILTERING);
+        addRestrictions(ROLE_B, TABLE, Capabilities.System.LWT);
+        addRestrictions(ROLE_C, TABLE, Capabilities.System.TRUNCATE);
 
         grantRolesTo(ROLE_A, ROLE_B, ROLE_C);
 
         ICapabilityManager capabilityManager = DatabaseDescriptor.getCapabilityManager();
-        Set<Capability> expected = Sets.newHashSet(Capabilities.System.FILTERING,
+        Capability[] expected = new Capability[] { Capabilities.System.FILTERING,
                                                    Capabilities.System.LWT,
-                                                   Capabilities.System.TRUNCATE);
+                                                   Capabilities.System.TRUNCATE };
 
         assertEquals(new CapabilitySet(expected), capabilityManager.getRestricted(ROLE_A, TABLE));
     }
@@ -363,12 +356,12 @@ public class CassandraCapabilityManagerTest
         // its keyspace is redundant, but it illustrates the selection
         // likewise, both ROLE_A and ROLE_B have LWT restricted on KEYSPACE, which
         // again is redundant given ROLE_A is granted ROLE_B
-        addRestriction(ROLE_A, TABLE, Capabilities.System.LWT);
-        addRestriction(ROLE_A, TABLE, Capabilities.System.FILTERING);
-        addRestriction(ROLE_A, KEYSPACE, Capabilities.System.LWT);
-        addRestriction(ROLE_B, TABLE, Capabilities.System.TRUNCATE);
-        addRestriction(ROLE_B, KEYSPACE, Capabilities.System.LWT);
-        addRestriction(ROLE_C, KEYSPACE, Capabilities.System.CL_ALL_WRITE);
+        addRestrictions(ROLE_A, TABLE, Capabilities.System.LWT);
+        addRestrictions(ROLE_A, TABLE, Capabilities.System.FILTERING);
+        addRestrictions(ROLE_A, KEYSPACE, Capabilities.System.LWT);
+        addRestrictions(ROLE_B, TABLE, Capabilities.System.TRUNCATE);
+        addRestrictions(ROLE_B, KEYSPACE, Capabilities.System.LWT);
+        addRestrictions(ROLE_C, KEYSPACE, Capabilities.System.CL_ALL_WRITE);
 
         grantRolesTo(ROLE_A, ROLE_B, ROLE_C);
 
@@ -391,12 +384,12 @@ public class CassandraCapabilityManagerTest
         // its keyspace is redundant, but it illustrates the selection
         // likewise, both ROLE_A and ROLE_B have LWT restricted on KEYSPACE, which
         // again is redundant given ROLE_A is granted ROLE_B
-        addRestriction(ROLE_A, TABLE, Capabilities.System.LWT);
-        addRestriction(ROLE_A, TABLE, Capabilities.System.FILTERING);
-        addRestriction(ROLE_A, KEYSPACE, Capabilities.System.LWT);
-        addRestriction(ROLE_B, TABLE, Capabilities.System.TRUNCATE);
-        addRestriction(ROLE_B, KEYSPACE, Capabilities.System.LWT);
-        addRestriction(ROLE_C, KEYSPACE, Capabilities.System.CL_ALL_WRITE);
+        addRestrictions(ROLE_A, TABLE, Capabilities.System.LWT);
+        addRestrictions(ROLE_A, TABLE, Capabilities.System.FILTERING);
+        addRestrictions(ROLE_A, KEYSPACE, Capabilities.System.LWT);
+        addRestrictions(ROLE_B, TABLE, Capabilities.System.TRUNCATE);
+        addRestrictions(ROLE_B, KEYSPACE, Capabilities.System.LWT);
+        addRestrictions(ROLE_C, KEYSPACE, Capabilities.System.CL_ALL_WRITE);
 
         grantRolesTo(ROLE_A, ROLE_B, ROLE_C);
 
@@ -418,12 +411,12 @@ public class CassandraCapabilityManagerTest
         // its keyspace is redundant, but it illustrates the selection
         // likewise, both ROLE_A and ROLE_B have LWT restricted on KEYSPACE, which
         // again is redundant given ROLE_A is granted ROLE_B
-        addRestriction(ROLE_A, TABLE, Capabilities.System.LWT);
-        addRestriction(ROLE_A, TABLE, Capabilities.System.FILTERING);
-        addRestriction(ROLE_A, KEYSPACE, Capabilities.System.LWT);
-        addRestriction(ROLE_B, TABLE, Capabilities.System.TRUNCATE);
-        addRestriction(ROLE_B, KEYSPACE, Capabilities.System.LWT);
-        addRestriction(ROLE_C, KEYSPACE, Capabilities.System.CL_ALL_WRITE);
+        addRestrictions(ROLE_A, TABLE, Capabilities.System.LWT);
+        addRestrictions(ROLE_A, TABLE, Capabilities.System.FILTERING);
+        addRestrictions(ROLE_A, KEYSPACE, Capabilities.System.LWT);
+        addRestrictions(ROLE_B, TABLE, Capabilities.System.TRUNCATE);
+        addRestrictions(ROLE_B, KEYSPACE, Capabilities.System.LWT);
+        addRestrictions(ROLE_C, KEYSPACE, Capabilities.System.CL_ALL_WRITE);
 
         grantRolesTo(ROLE_A, ROLE_B, ROLE_C);
 
@@ -445,12 +438,12 @@ public class CassandraCapabilityManagerTest
         // its keyspace is redundant, but it illustrates the selection
         // likewise, both ROLE_A and ROLE_B have LWT restricted on KEYSPACE, which
         // again is redundant given ROLE_A is granted ROLE_B
-        addRestriction(ROLE_A, TABLE, Capabilities.System.LWT);
-        addRestriction(ROLE_A, TABLE, Capabilities.System.FILTERING);
-        addRestriction(ROLE_A, KEYSPACE, Capabilities.System.LWT);
-        addRestriction(ROLE_B, TABLE, Capabilities.System.TRUNCATE);
-        addRestriction(ROLE_B, KEYSPACE, Capabilities.System.LWT);
-        addRestriction(ROLE_C, KEYSPACE, Capabilities.System.CL_ALL_WRITE);
+        addRestrictions(ROLE_A, TABLE, Capabilities.System.LWT);
+        addRestrictions(ROLE_A, TABLE, Capabilities.System.FILTERING);
+        addRestrictions(ROLE_A, KEYSPACE, Capabilities.System.LWT);
+        addRestrictions(ROLE_B, TABLE, Capabilities.System.TRUNCATE);
+        addRestrictions(ROLE_B, KEYSPACE, Capabilities.System.LWT);
+        addRestrictions(ROLE_C, KEYSPACE, Capabilities.System.CL_ALL_WRITE);
 
         grantRolesTo(ROLE_A, ROLE_B, ROLE_C);
 
@@ -470,13 +463,13 @@ public class CassandraCapabilityManagerTest
 
         // note: includeInherited argument to listRestrictions is irrelevant here
         // as we're interested in ANY_ROLE anyway
-        addRestriction(ROLE_A, TABLE, Capabilities.System.LWT);
-        addRestriction(ROLE_A, TABLE, Capabilities.System.FILTERING);
-        addRestriction(ROLE_A, KEYSPACE, Capabilities.System.LWT);
-        addRestriction(ROLE_B, TABLE, Capabilities.System.TRUNCATE);
-        addRestriction(ROLE_B, KEYSPACE, Capabilities.System.LWT);
-        addRestriction(ROLE_C, TABLE, Capabilities.System.LWT);
-        addRestriction(ROLE_C, KEYSPACE, Capabilities.System.CL_ALL_WRITE);
+        addRestrictions(ROLE_A, TABLE, Capabilities.System.LWT);
+        addRestrictions(ROLE_A, TABLE, Capabilities.System.FILTERING);
+        addRestrictions(ROLE_A, KEYSPACE, Capabilities.System.LWT);
+        addRestrictions(ROLE_B, TABLE, Capabilities.System.TRUNCATE);
+        addRestrictions(ROLE_B, KEYSPACE, Capabilities.System.LWT);
+        addRestrictions(ROLE_C, TABLE, Capabilities.System.LWT);
+        addRestrictions(ROLE_C, KEYSPACE, Capabilities.System.CL_ALL_WRITE);
 
         ICapabilityManager capabilityManager = DatabaseDescriptor.getCapabilityManager();
         ImmutableSet<Restriction> restrictions =
@@ -518,12 +511,12 @@ public class CassandraCapabilityManagerTest
 
         // note: includeInherited argument to listRestrictions is irrelevant here
         // as we're interested in ANY_ROLE anyway
-        addRestriction(ROLE_A, TABLE, Capabilities.System.LWT);
-        addRestriction(ROLE_A, TABLE, Capabilities.System.FILTERING);
-        addRestriction(ROLE_B, TABLE, Capabilities.System.LWT);
-        addRestriction(ROLE_B, KEYSPACE, Capabilities.System.TRUNCATE);
-        addRestriction(ROLE_B, TABLE, Capabilities.System.CL_ALL_WRITE);
-        addRestriction(ROLE_C, KEYSPACE, Capabilities.System.MULTI_PARTITION_AGGREGATION);
+        addRestrictions(ROLE_A, TABLE, Capabilities.System.LWT);
+        addRestrictions(ROLE_A, TABLE, Capabilities.System.FILTERING);
+        addRestrictions(ROLE_B, TABLE, Capabilities.System.LWT);
+        addRestrictions(ROLE_B, KEYSPACE, Capabilities.System.TRUNCATE);
+        addRestrictions(ROLE_B, TABLE, Capabilities.System.CL_ALL_WRITE);
+        addRestrictions(ROLE_C, KEYSPACE, Capabilities.System.MULTI_PARTITION_AGGREGATION);
 
         ICapabilityManager capabilityManager = DatabaseDescriptor.getCapabilityManager();
         ImmutableSet<Restriction> restrictions =
@@ -549,10 +542,10 @@ public class CassandraCapabilityManagerTest
         // drop restriction on ROLE_A + KEYSPACE
         // verify index table
 
-        addRestriction(ROLE_A, TABLE, Capabilities.System.LWT);
-        addRestriction(ROLE_A, KEYSPACE, Capabilities.System.TRUNCATE);
-        addRestriction(ROLE_B, KEYSPACE, Capabilities.System.FILTERING);
-        addRestriction(ROLE_C, KEYSPACE, Capabilities.System.CL_ALL_READ);
+        addRestrictions(ROLE_A, TABLE, Capabilities.System.LWT);
+        addRestrictions(ROLE_A, KEYSPACE, Capabilities.System.TRUNCATE);
+        addRestrictions(ROLE_B, KEYSPACE, Capabilities.System.FILTERING);
+        addRestrictions(ROLE_C, KEYSPACE, Capabilities.System.CL_ALL_READ);
 
         assertExpectedLookupValues(KEYSPACE, ROLE_A, ROLE_B, ROLE_C);
         assertExpectedLookupValues(TABLE, ROLE_A);
@@ -676,31 +669,26 @@ public class CassandraCapabilityManagerTest
 
     private static void addMultipleRestrictions()
     {
-        addRestriction(ROLE_A, TABLE, Capabilities.System.FILTERING);
-        addRestriction(ROLE_A, TABLE, Capabilities.System.LWT);
-        addRestriction(ROLE_A, KEYSPACE, Capabilities.System.NON_LWT_UPDATE);
-        addRestriction(ROLE_A, KEYSPACE, Capabilities.System.TRUNCATE);
-        addRestriction(ROLE_B, TABLE, Capabilities.System.MULTI_PARTITION_READ);
-        addRestriction(ROLE_B, TABLE, Capabilities.System.MULTI_PARTITION_AGGREGATION);
-        addRestriction(ROLE_B, KEYSPACE, Capabilities.System.PARTITION_RANGE_READ);
-        addRestriction(ROLE_B, KEYSPACE, Capabilities.System.CL_ANY_WRITE);
-        addRestriction(ROLE_C, TABLE, Capabilities.System.CL_ALL_READ);
-        addRestriction(ROLE_C, TABLE, Capabilities.System.CL_ALL_WRITE);
-        addRestriction(ROLE_C, KEYSPACE, Capabilities.System.CL_ONE_READ);
-        addRestriction(ROLE_C, KEYSPACE, Capabilities.System.CL_ONE_WRITE);
+        addRestrictions(ROLE_A, TABLE, Capabilities.System.FILTERING);
+        addRestrictions(ROLE_A, TABLE, Capabilities.System.LWT);
+        addRestrictions(ROLE_A, KEYSPACE, Capabilities.System.NON_LWT_UPDATE);
+        addRestrictions(ROLE_A, KEYSPACE, Capabilities.System.TRUNCATE);
+        addRestrictions(ROLE_B, TABLE, Capabilities.System.MULTI_PARTITION_READ);
+        addRestrictions(ROLE_B, TABLE, Capabilities.System.MULTI_PARTITION_AGGREGATION);
+        addRestrictions(ROLE_B, KEYSPACE, Capabilities.System.PARTITION_RANGE_READ);
+        addRestrictions(ROLE_B, KEYSPACE, Capabilities.System.CL_ANY_WRITE);
+        addRestrictions(ROLE_C, TABLE, Capabilities.System.CL_ALL_READ);
+        addRestrictions(ROLE_C, TABLE, Capabilities.System.CL_ALL_WRITE);
+        addRestrictions(ROLE_C, KEYSPACE, Capabilities.System.CL_ONE_READ);
+        addRestrictions(ROLE_C, KEYSPACE, Capabilities.System.CL_ONE_WRITE);
     }
 
-    private static void addRestriction(RoleResource role, IResource resource, Capability capability)
-    {
-        addRestrictions(role, resource, Collections.singleton(capability));
-    }
-
-    private static void addRestrictions(RoleResource role, IResource resource, Iterable<Capability> capabilities)
+    private static void addRestrictions(RoleResource role, IResource resource, Capability...capabilities)
     {
         ICapabilityManager capabilityManager = DatabaseDescriptor.getCapabilityManager();
-        capabilities.forEach(capability ->
-                             capabilityManager.createRestriction(AuthenticatedUser.ANONYMOUS_USER,
-                                                                 new Restriction(role, resource.getName(), capability)));
+        for (Capability capability : capabilities)
+            capabilityManager.createRestriction(AuthenticatedUser.ANONYMOUS_USER,
+                                                new Restriction(role, resource.getName(), capability));
     }
 
     private static void dropRestriction(RoleResource role, DataResource resource, Capability capability)

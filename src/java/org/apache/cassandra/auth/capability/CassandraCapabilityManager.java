@@ -69,6 +69,7 @@ public class CassandraCapabilityManager implements ICapabilityManager
         if (StorageService.instance.getTokenMetadata().countAllEndpoints() <= 1)
         {
             logger.debug("TokenMetadata contains only single endpoint, skipping peer version checks");
+            loader.init();
             isClusterReady = true;
             logger.info("CassandraCapabilityManager initialized");
         }
@@ -109,13 +110,7 @@ public class CassandraCapabilityManager implements ICapabilityManager
 
     public CapabilitySet getRestricted(RoleResource primaryRole, IResource resource)
     {
-        CapabilitySet.Builder restricted = new CapabilitySet.Builder();
-        Restriction.Specification spec = new Restriction.Specification(primaryRole, resource, ANY_CAPABILITY);
-        loader.fetch(spec, true)
-              .stream()
-              .map(Restriction::getCapability)
-              .forEach(restricted::add);
-        return restricted.build();
+        return loader.getRestrictions(primaryRole, resource);
     }
 
     public ImmutableSet<Restriction> listRestrictions(Restriction.Specification spec, boolean includeInherited)
@@ -147,6 +142,7 @@ public class CassandraCapabilityManager implements ICapabilityManager
                 scheduleClusterVersionCheck();
                 return;
             }
+            loader.init();
             isClusterReady = true;
             logger.info("CassandraCapabilityManager initialized");
       }, AuthKeyspace.SUPERUSER_SETUP_DELAY, TimeUnit.MILLISECONDS);

@@ -20,12 +20,15 @@ package org.apache.cassandra.cql3.statements;
 
 import java.util.*;
 
+import com.google.common.collect.ComparisonChain;
+
 import org.apache.cassandra.auth.*;
 import org.apache.cassandra.auth.capability.Capability;
 import org.apache.cassandra.auth.capability.Restriction;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.config.SchemaConstants;
 import org.apache.cassandra.cql3.*;
+import org.apache.cassandra.cql3.restrictions.Restrictions;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.exceptions.*;
 import org.apache.cassandra.service.ClientState;
@@ -105,18 +108,18 @@ public class ListRestrictionsStatement extends AuthorizationStatement
         Set<Restriction> restrictions = DatabaseDescriptor.getCapabilityManager()
                                                           .listRestrictions(spec, includeInherited);
         ResultSet result = new ResultSet(metadata);
-        for (Restriction r : restrictions)
-        {
+        // for consistency in display, sort restrictions by role -> resource -> domain -> capability
+        restrictions.stream().sorted().forEach((r) -> {
             result.addColumnValue(UTF8Type.instance.decompose(r.getRole().getRoleName()));
             result.addColumnValue(UTF8Type.instance.decompose(formatResourceName(r.getResourceName())));
             result.addColumnValue(UTF8Type.instance.decompose(r.getCapability().getFullName()));
-        }
+        });
         return new ResultMessage.Rows(result);
     }
 
     private String formatResourceName(String resourceName)
     {
-        // this is an ugly, but until we rework IResources to be properly extendible,
+        // this is ugly, but until we rework IResources to be properly extendible,
         // it's a simple way to get the user friendly string representation of a
         // resource.
         try

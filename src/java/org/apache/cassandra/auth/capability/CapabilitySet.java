@@ -19,14 +19,11 @@
 package org.apache.cassandra.auth.capability;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 import com.google.common.base.Objects;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
- * Capabiliies are namespaced by their domain, and when registered (in Capabilities::register)
+ * Capabilities are namespaced by their domain, and when registered (in Capabilities::register)
  * a per-domain counter is incremented and assigned to the Capability. This allows Capabilities
  * for a given domain to be represented as a BitSet, where a set bit represents a restricted
  * capability. CapabilitySet is essentially a map of domain->bitset and is used to represents
@@ -47,7 +44,7 @@ import org.slf4j.LoggerFactory;
  * restrictions defined against a specific table, its enclosing keyspace and all keyspaces are
  * also checked).
  */
-public class CapabilitySet
+public class CapabilitySet implements Iterable<Capability>
 {
     private static final CapabilitySet EMPTY_SET = new CapabilitySet();
 
@@ -63,7 +60,7 @@ public class CapabilitySet
         this(Arrays.asList(capabilities));
     }
 
-    public CapabilitySet(Iterable<Capability> capabilities)
+    private CapabilitySet(Iterable<Capability> capabilities)
     {
         for (Capability capability : capabilities)
         {
@@ -73,6 +70,47 @@ public class CapabilitySet
             BitSet domain = domains.computeIfAbsent(capability.getDomain(), (s) -> new BitSet());
             domain.set(capability.getOrdinal());
         }
+    }
+
+    private CapabilitySet(Map<String, BitSet> domains)
+    {
+        this.domains.putAll(domains);
+    }
+
+    /**
+     * Return a union of the supplied CapabilitySets, by first identifying all named domains
+     * represented in them, then for each ORing together all present BitSets for each domain.
+     *
+     * @param sets A list of CapabilitySets to combine into a single instance.
+     * @return A new CapabilitySet representing the logical union of the list provided
+     */
+    public static CapabilitySet union(List<CapabilitySet> sets)
+    {
+        Map<String, BitSet> union = new HashMap<>();
+
+        // First, initialize the aggregate domains from all the CapabilitySets
+        for (CapabilitySet capSet : sets)
+        {
+            for (String domain : capSet.domains.keySet())
+            {
+                union.putIfAbsent(domain, new BitSet());
+            }
+        }
+
+        // For each domain, OR each bitset that we have for that domain
+        for (Map.Entry<String, BitSet> unionedDomain : union.entrySet())
+        {
+            BitSet unionedBits = unionedDomain.getValue();
+            for (CapabilitySet capSet : sets)
+            {
+                BitSet caps = capSet.domains.get(unionedDomain.getKey());
+                if (caps != null)
+                {
+                    unionedBits.or(caps);
+                }
+            }
+        }
+        return new CapabilitySet(union);
     }
 
     public boolean isEmpty()
@@ -123,6 +161,18 @@ public class CapabilitySet
             }
         }
         return intersection == null ? Collections.emptySet() : intersection;
+    }
+
+    public Iterator<Capability> iterator()
+    {
+        List<Capability> list = new ArrayList<>();
+        for (Map.Entry<String, BitSet> entry : domains.entrySet())
+        {
+            BitSet thisDomain = entry.getValue();
+            for ( int i = thisDomain.nextSetBit(0); i >= 0; i = thisDomain.nextSetBit(i + 1) )
+                list.add(Capabilities.getByIndex(entry.getKey(), i));
+        }
+        return list.iterator();
     }
 
     public String toString()

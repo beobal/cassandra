@@ -38,6 +38,8 @@ import org.apache.cassandra.exceptions.RequestValidationException;
 import org.apache.cassandra.service.ClientState;
 import org.apache.cassandra.service.QueryState;
 
+import static org.apache.cassandra.auth.capability.Restriction.Specification.ANY_CAPABILITY;
+
 public class TableBasedRestrictionHandler implements RestrictionHandler
 {
     private final AuthLookupTableSupport<RoleResource, IResource> lookup;
@@ -84,6 +86,20 @@ public class TableBasedRestrictionHandler implements RestrictionHandler
     public void removeAllForResource(IResource resource)
     {
         lookup.removeAllEntriesForLookupKey(resource);
+    }
+
+    public void init()
+    {
+    }
+
+    public CapabilitySet getRestrictions(RoleResource primaryRole, IResource resource)
+    {
+        CapabilitySet.Builder restricted = new CapabilitySet.Builder();
+        Restriction.Specification spec = new Restriction.Specification(primaryRole, resource, ANY_CAPABILITY);
+        fetch(spec, true).stream()
+                         .map(Restriction::getCapability)
+                         .forEach(restricted::add);
+        return restricted.build();
     }
 
     public ImmutableSet<Restriction> fetch(Restriction.Specification spec, boolean includeInherited)
@@ -170,6 +186,8 @@ public class TableBasedRestrictionHandler implements RestrictionHandler
         return StringUtils.replace(name, "'", "''");
     }
 
+    // protected so it can be overridden in subclasses with a version that
+    // executes purely locally, which is useful for testing
     protected UntypedResultSet process(String query) throws RequestExecutionException
     {
         return QueryProcessor.process(query, ConsistencyLevel.LOCAL_ONE);
