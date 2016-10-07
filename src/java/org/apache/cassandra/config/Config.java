@@ -63,6 +63,7 @@ public class Config
     public volatile int capability_restrictions_validity_in_ms = 2000;
     public volatile int capability_restrictions_cache_max_entries = 1000;
     public volatile int capability_restrictions_update_interval_in_ms = -1;
+    public int auth_aggressive_caching_update_interval_in_ms = -1;
 
     /* Hashing strategy Random or OPHF */
     public String partitioner;

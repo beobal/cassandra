@@ -101,6 +101,19 @@ public final class AuthConfig
 
         ICapabilityManager capabilityManager = new AllowAllCapabilityManager();
 
+        // aggressive caching is currently only available for capability restrictions
+        // if enabled, the regular AuthCache for restrictions is turned off.
+        // minimum refresh interval for the aggressive caching is 1000ms, so if a
+        // lower value is set in yaml, log a warning and disable it.
+        int aggressiveCacheRefreshInterval = DatabaseDescriptor.getAuthAggressiveCachingUpdateInterval();
+        if (aggressiveCacheRefreshInterval < 1000 && aggressiveCacheRefreshInterval != -1) // -1 is the unset default
+        {
+            logger.warn("Invalid configuration detected. auth_aggressive_cache_update_interval_in_ms is set below" +
+                        "minimum threshold of 1000ms. Aggressive caching will be disabled and non-aggressive caching" +
+                        "may be turned on instead");
+            conf.auth_aggressive_caching_update_interval_in_ms = -1;
+        }
+
         if (conf.capability_manager != null)
             capabilityManager = FBUtilities.newCapabilityManager(conf.capability_manager);
 

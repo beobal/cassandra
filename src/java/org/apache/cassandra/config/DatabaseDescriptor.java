@@ -1152,6 +1152,16 @@ public class DatabaseDescriptor
         return conf.credentials_cache_max_entries = maxEntries;
     }
 
+    public static boolean isAuthAggressiveCachingEnabled()
+    {
+        return conf.auth_aggressive_caching_update_interval_in_ms != -1;
+    }
+
+    public static int getAuthAggressiveCachingUpdateInterval()
+    {
+        return conf.auth_aggressive_caching_update_interval_in_ms;
+    }
+
     public static int getCapabilityRestrictionsValidity()
     {
         return conf.capability_restrictions_validity_in_ms;

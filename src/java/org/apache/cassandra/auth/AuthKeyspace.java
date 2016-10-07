@@ -37,6 +37,7 @@ public final class AuthKeyspace
     public static final String RESOURCE_ROLE_INDEX = "resource_role_permissons_index";
     public static final String ROLE_CAP_RESTRICTIONS = "role_capability_restrictions";
     public static final String RESOURCE_RESTRICTIONS_INDEX = "resource_role_restrictions_index";
+    public static final String CACHE_METADATA = "cache_metadata";
 
 
     public static final long SUPERUSER_SETUP_DELAY = Long.getLong("cassandra.superuser_setup_delay_ms", 10000);
@@ -94,6 +95,14 @@ public final class AuthKeyspace
                 + "role text,"
                 + "PRIMARY KEY(resource, role))");
 
+    private static final CFMetaData CacheMetadata =
+        compile(CACHE_METADATA,
+                "system metadata for auth specific caches",
+                "CREATE TABLE %s ("
+                + "id text,"
+                + "generation bigint,"
+                + "PRIMARY KEY(id))");
+
     private static CFMetaData compile(String name, String description, String schema)
     {
         return CFMetaData.compile(String.format(schema, name), SchemaConstants.AUTH_KEYSPACE_NAME)
@@ -110,6 +119,7 @@ public final class AuthKeyspace
                                                  RolePermissions,
                                                  ResourceRoleIndex,
                                                  RoleRestrictions,
-                                                 ResourceRestrictionIndex));
+                                                 ResourceRestrictionIndex,
+                                                 CacheMetadata));
     }
 }

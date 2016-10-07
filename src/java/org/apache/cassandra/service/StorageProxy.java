@@ -40,6 +40,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.cassandra.auth.cache.GenerationalCacheService;
 import org.apache.cassandra.batchlog.Batch;
 import org.apache.cassandra.batchlog.BatchlogManager;
 import org.apache.cassandra.batchlog.LegacyBatchlogMigrator;
@@ -127,6 +128,7 @@ public class StorageProxy implements StorageProxyMBean
 
         HintsService.instance.registerMBean();
         HintedHandOffManager.instance.registerMBean();
+        GenerationalCacheService.instance.registerMBean();
 
         standardWritePerformer = new WritePerformer()
         {

@@ -28,6 +28,7 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.auth.*;
 import org.apache.cassandra.concurrent.ScheduledExecutors;
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.gms.ApplicationState;
@@ -36,8 +37,6 @@ import org.apache.cassandra.gms.Gossiper;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.utils.CassandraVersion;
 import org.apache.cassandra.utils.FBUtilities;
-
-import static org.apache.cassandra.auth.capability.Restriction.Specification.ANY_CAPABILITY;
 
 public class CassandraCapabilityManager implements ICapabilityManager
 {
@@ -51,7 +50,9 @@ public class CassandraCapabilityManager implements ICapabilityManager
     // needs a public, no-args constructor for FBUtilities.newCapabilityManager
     public CassandraCapabilityManager()
     {
-        loader = new TableBasedRestrictionHandler();
+        loader = DatabaseDescriptor.isAuthAggressiveCachingEnabled()
+                 ? new SnapshotRestrictionHandler()
+                 : new TableBasedRestrictionHandler();
     }
 
     @VisibleForTesting

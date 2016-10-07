@@ -135,6 +135,45 @@ role_manager: CassandraRoleManager
 
 capability_manager: AllowAllCapabilityManager
 
+# If a compatible Capability Manager is configured, this enables aggressive
+# caching of capability restrictions. As this is typically a small dataset with
+# low update frequency it can be beneficial to read it into a local snapshot
+# which is refreshed when a change is made. All defined restrictions are read
+# into memory at startup and distributed metadata is checked periodically to see
+# if the local cache should be invalidated. If it should, a background task
+# re-reads the data in its entirity, then atomically swaps it for the old view.
+# While the background task is running, the cache will continue to serve the
+# stale data, so the maximum latency from an update being applied to it being
+# visible is 2 * refresh interval.
+# The minimum value for this setting is 1000ms, if unset, or set to any value
+# below that threshold means aggressive caching is disabled.
+# If aggressive caching is enabled, the non-aggressive cache is redundant, so
+# any settings for capability_restrictions_validity_in_ms and/or
+# capability_restrictions_update_interval_in_ms is ignored.
+auth_aggressive_caching_update_interval_in_ms: 10000
+
+# Refresh interval for credentials cache (if enabled).
+# After this interval, cache entries become eligible for refresh. Upon next
+# access, an async reload is scheduled and the old value returned until it
+# completes. If credentials_validity_in_ms is non-zero, then this must be
+# also.
+# Defaults to the same value as credentials_validity_in_ms.
+# credentials_update_interval_in_ms: 2000
+
+# Validity period for capability restrictions cache. Looking up restrictions
+# for role/resource combinations may be expensive (CassandraCapabilityManager
+# reads them from internal tables, which may involve distributed queries).
+# Defaults to 2000, set to 0 to disable caching completely.
+capability_restrictions_validity_in_ms: 2000
+
+# Refresh interval for capability restrictions cache (if enabled).
+# After this interval, cache entries become eligible for refresh. Upon next
+# access, an async reload is scheduled and the old value returned until it
+# completes. If capability_restrictions_validity_in_ms is non-zero, then this must be
+# also.
+# Defaults to the same value as capability_restrictions_validity_in_ms.
+# capability_restrictions_update_interval_in_ms: 2000
+
 # Validity period for roles cache (fetching granted roles can be an expensive
 # operation depending on the role manager, CassandraRoleManager is one example)
 # Granted roles are cached for authenticated sessions in AuthenticatedUser and
@@ -175,28 +214,6 @@ permissions_validity_in_ms: 2000
 # latency of individual authentication attempts.
 # Defaults to 2000, set to 0 to disable credentials caching.
 credentials_validity_in_ms: 2000
-
-# Refresh interval for credentials cache (if enabled).
-# After this interval, cache entries become eligible for refresh. Upon next
-# access, an async reload is scheduled and the old value returned until it
-# completes. If credentials_validity_in_ms is non-zero, then this must be
-# also.
-# Defaults to the same value as credentials_validity_in_ms.
-# credentials_update_interval_in_ms: 2000
-
-# Validity period for capability restrictions cache. Looking up restrictions
-# for role/resource combinations may be expensive (CassandraCapabilityManager
-# reads them from internal tables, which may involve distributed queries).
-# Defaults to 2000, set to 0 to disable caching completely.
-capability_restrictions_validity_in_ms: 2000
-
-# Refresh interval for capability restrictions cache (if enabled).
-# After this interval, cache entries become eligible for refresh. Upon next
-# access, an async reload is scheduled and the old value returned until it
-# completes. If capability_restrictions_validity_in_ms is non-zero, then this must be
-# also.
-# Defaults to the same value as capability_restrictions_validity_in_ms.
-# capability_restrictions_update_interval_in_ms: 2000
 
 # The partitioner is responsible for distributing groups of rows (by
 # partition key) across nodes in the cluster.  You should leave this
