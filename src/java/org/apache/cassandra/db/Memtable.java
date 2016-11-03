@@ -252,6 +252,11 @@ public class Memtable implements Comparable<Memtable>
         return pair[1];
     }
 
+    public Iterator<PartitionPosition> allPartitionKeys()
+    {
+        return partitions.keySet().iterator();
+    }
+
     public int partitionCount()
     {
         return partitions.size();
