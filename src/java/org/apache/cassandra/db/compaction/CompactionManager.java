@@ -269,7 +269,6 @@ public class CompactionManager implements CompactionManagerMBean
                     logger.trace("No tasks available");
                     return;
                 }
-                this.priorities = task.getPriorities();
                 task.execute(metrics);
             }
             finally
