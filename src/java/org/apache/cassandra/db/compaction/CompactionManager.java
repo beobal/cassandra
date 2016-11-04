@@ -235,15 +235,14 @@ public class CompactionManager implements CompactionManagerMBean
 
     // the actual sstables to compact are not determined until we run the BCT; that way, if new sstables
     // are created between task submission and execution, we execute against the most up-to-date information
-    class BackgroundCompactionCandidate implements Runnable, Prioritized
+    class BackgroundCompactionCandidate extends PrioritizedCompactionRunnable
     {
         private final ColumnFamilyStore cfs;
-        private final Priorities priorities;
 
         BackgroundCompactionCandidate(ColumnFamilyStore cfs)
         {
+            super(TaskPriority.COMPACTION);
             this.cfs = cfs;
-            priorities = new Priorities(TaskPriority.COMPACTION);
         }
 
         public Priorities getPriorities()
@@ -312,7 +311,7 @@ public class CompactionManager implements CompactionManagerMBean
             {
                 final LifecycleTransaction txn = compacting.split(singleton(sstable));
                 transactions.add(txn);
-                Callable<Object> callable = new PrioritizedCompactionCallable<Object>(priority)
+                PrioritizedCompactionCallable<Object> callable = new PrioritizedCompactionCallable<Object>(priority)
                 {
                     @Override
                     public Object call() throws Exception
@@ -578,7 +577,7 @@ public class CompactionManager implements CompactionManagerMBean
                                           final Refs<SSTableReader> sstables,
                                           final long repairedAt)
     {
-        Runnable runnable = new PrioritizedCompactionWrappedRunnable(TaskPriority.ANTICOMPACTION)
+        PrioritizedCompactionWrappedRunnable runnable = new PrioritizedCompactionWrappedRunnable(TaskPriority.ANTICOMPACTION)
         {
             @Override
             @SuppressWarnings("resource")
@@ -723,7 +722,7 @@ public class CompactionManager implements CompactionManagerMBean
             if (task.transaction.originals().size() > 0)
                 nonEmptyTasks++;
 
-            Runnable runnable = new PrioritizedCompactionWrappedRunnable(TaskPriority.COMPACTION)
+            PrioritizedCompactionWrappedRunnable runnable = new PrioritizedCompactionWrappedRunnable(TaskPriority.COMPACTION)
             {
                 protected void runMayThrow()
                 {
@@ -873,7 +872,7 @@ public class CompactionManager implements CompactionManagerMBean
 
     public Future<?> submitUserDefined(final ColumnFamilyStore cfs, final Collection<Descriptor> dataFiles, final int gcBefore)
     {
-        Runnable runnable = new PrioritizedCompactionWrappedRunnable(TaskPriority.USER_DEFINED_COMPACTION)
+        PrioritizedCompactionWrappedRunnable runnable = new PrioritizedCompactionWrappedRunnable(TaskPriority.USER_DEFINED_COMPACTION)
         {
             protected void runMayThrow()
             {
@@ -930,7 +929,7 @@ public class CompactionManager implements CompactionManagerMBean
      */
     public Future<?> submitValidation(final ColumnFamilyStore cfStore, final Validator validator)
     {
-        Callable<Object> callable = new PrioritizedCompactionCallable<Object>(TaskPriority.VALIDATION)
+        PrioritizedCompactionCallable<Object> callable = new PrioritizedCompactionCallable<Object>(TaskPriority.VALIDATION)
         {
             public Object call() throws IOException
             {
@@ -1583,7 +1582,7 @@ public class CompactionManager implements CompactionManagerMBean
      */
     public Future<?> submitIndexBuild(final SecondaryIndexBuilder builder)
     {
-        Runnable runnable = new PrioritizedCompactionRunnable(TaskPriority.INDEX_BUILD)
+        PrioritizedCompactionRunnable runnable = new PrioritizedCompactionRunnable(TaskPriority.INDEX_BUILD)
         {
             public void run()
             {
@@ -1604,7 +1603,7 @@ public class CompactionManager implements CompactionManagerMBean
 
     public Future<?> submitCacheWrite(final AutoSavingCache.Writer writer)
     {
-        Runnable runnable = new PrioritizedCompactionRunnable(TaskPriority.forCacheWrite(writer.type()))
+        PrioritizedCompactionRunnable runnable = new PrioritizedCompactionRunnable(TaskPriority.forCacheWrite(writer.type()))
         {
             public void run()
             {
@@ -1742,22 +1741,36 @@ public class CompactionManager implements CompactionManagerMBean
             this(Math.max(1, DatabaseDescriptor.getConcurrentCompactors()), "CompactionExecutor");
         }
 
-        // We override newTaskFor to return a future with access to priority
+        // newTaskFor is called by ExecutorService::submit, we expect the Runnable/Callable
+        // being submitted to always be a Prioritized either:
+        //   * a PrioritizedCompactionFutureTask if the call came via submitIfRunning
+        //   * a PrioritizedCallable/Runnable/WrappedRunnable if the call came via submit
+        // In the first case, we can optimize by just handing back the original argument and
+        // in the second, we can construct the PrioritizedCompactionFutureTask with the supplied Priorities
+        // In the worst case, where a vanilla Runnable/Callable is supplied, we again create a
+        // PrioritizedCompactionFutureTask with the default priorities.
+        @SuppressWarnings("unchecked")
         protected <T> RunnableFuture<T> newTaskFor(Runnable runnable, T value)
         {
+            if (runnable instanceof PrioritizedCompactionFutureTask)
+                return (RunnableFuture<T>)runnable;
+
             if(runnable instanceof Prioritized)
                 return new PrioritizedCompactionFutureTask<>(runnable, value, ((Prioritized)runnable).getPriorities());
-            else
-                return new PrioritizedCompactionFutureTask<>(runnable, value);
+
+            return new PrioritizedCompactionFutureTask<>(runnable, value);
         }
 
-        // We override newTaskFor to return a future with access to priority
+        @SuppressWarnings("unchecked")
         protected <T> RunnableFuture<T> newTaskFor(Callable<T> callable)
         {
-            if(callable instanceof Prioritized)
+            if (callable instanceof PrioritizedCompactionFutureTask)
+                return (RunnableFuture<T>)callable;
+
+            if (callable instanceof Prioritized)
                 return new PrioritizedCompactionFutureTask<>(callable, ((Prioritized)callable).getPriorities());
-            else
-                return new PrioritizedCompactionFutureTask<>(callable);
+
+            return new PrioritizedCompactionFutureTask<>(callable);
         }
 
         protected void beforeExecute(Thread t, Runnable r)
@@ -1797,9 +1810,19 @@ public class CompactionManager implements CompactionManagerMBean
             SnapshotDeletingTask.rescheduleFailedTasks();
         }
 
-        public ListenableFuture<?> submitIfRunning(Runnable task, String name)
+        public ListenableFuture<?> submitIfRunning(PrioritizedCompactionRunnable task, String name)
         {
-            return submitIfRunning(Executors.callable(task, null), name);
+            return doSubmitIfRunning(new PrioritizedCompactionFutureTask<>(task, null), name);
+        }
+
+        public ListenableFuture<?> submitIfRunning(PrioritizedCompactionWrappedRunnable task, String name)
+        {
+            return doSubmitIfRunning(new PrioritizedCompactionFutureTask<>(task, null), name);
+        }
+
+        public ListenableFuture<?> submitIfRunning(PrioritizedCompactionCallable<?> callable, String name)
+        {
+            return doSubmitIfRunning(new PrioritizedCompactionFutureTask<>(callable), name);
         }
 
         /**
@@ -1812,7 +1835,7 @@ public class CompactionManager implements CompactionManagerMBean
          * @return the future that will deliver the task result, or a future that has already been
          *         cancelled if the task could not be submitted.
          */
-        public ListenableFuture<?> submitIfRunning(Callable<?> task, String name)
+        private ListenableFuture<?> doSubmitIfRunning(PrioritizedCompactionFutureTask<?>task, String name)
         {
             if (isShutdown())
             {
@@ -1822,9 +1845,8 @@ public class CompactionManager implements CompactionManagerMBean
 
             try
             {
-                ListenableFutureTask ret = ListenableFutureTask.create(task);
-                submit(ret);
-                return ret;
+                submit(task);
+                return task;
             }
             catch (RejectedExecutionException ex)
             {
