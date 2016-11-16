@@ -21,6 +21,9 @@ import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.StringUtils;
 import org.junit.Test;
@@ -1232,35 +1235,76 @@ public class SecondaryIndexTest extends CQLTester
             }
         }
 
+        AtomicBoolean hasFlushed = new AtomicBoolean(false);
         beforeAndAfterFlush(() -> {
+            ColumnFamilyStore indexCfs = getCurrentColumnFamilyStore().indexManager.getIndexByName("v_idx_1")
+                                                                                   .getBackingTable()
+                                                                                   .get();
+            if (hasFlushed.get())
+            {
+                logger.info("Pausing before executing post-flush queries");
+                TimeUnit.MILLISECONDS.sleep(20000);
+                logIndexSSTableInfo(indexCfs);
+            }
+
             assertEmpty(execute("SELECT * FROM %s WHERE pk1 = 1 AND  c1 > 0 AND c1 < 5 AND c2 = 1 AND v = 3 ALLOW FILTERING;"));
 
+            if (hasFlushed.get())
+                logIndexSSTableInfo(indexCfs);
             assertRows(execute("SELECT * FROM %s WHERE pk1 = 1 AND  c1 > 0 AND c1 < 5 AND c2 = 3 AND v = 3 ALLOW FILTERING;"),
                        row(1, 3, 3, 3, 3),
                        row(1, 1, 1, 3, 3),
                        row(1, 1, 3, 3, 3));
 
+            if (hasFlushed.get())
+                logIndexSSTableInfo(indexCfs);
             assertEmpty(execute("SELECT * FROM %s WHERE pk1 = 1 AND  c2 > 1 AND c2 < 5 AND v = 1 ALLOW FILTERING;"));
 
+            if (hasFlushed.get())
+                logIndexSSTableInfo(indexCfs);
             assertRows(execute("SELECT * FROM %s WHERE pk1 = 1 AND  c1 > 1 AND c2 > 2 AND v = 3 ALLOW FILTERING;"),
                        row(1, 3, 3, 3, 3),
                        row(1, 1, 3, 3, 3));
 
+            if (hasFlushed.get())
+                logIndexSSTableInfo(indexCfs);
             assertRows(execute("SELECT * FROM %s WHERE pk1 = 1 AND  pk2 > 1 AND c2 > 2 AND v = 3 ALLOW FILTERING;"),
                        row(1, 3, 3, 3, 3));
 
+            if (hasFlushed.get())
+                logIndexSSTableInfo(indexCfs);
             assertRowsIgnoringOrder(execute("SELECT * FROM %s WHERE pk2 > 1 AND  c1 IN(0,1,2) AND v <= 3 ALLOW FILTERING;"),
                                     row(1, 2, 2, 2, 2),
                                     row(2, 2, 2, 2, 2));
 
+            if (hasFlushed.get())
+                logIndexSSTableInfo(indexCfs);
             assertRows(execute("SELECT * FROM %s WHERE pk1 >= 2 AND pk2 <=3 AND  c1 IN(0,1,2) AND c2 IN(0,1,2) AND v < 3  ALLOW FILTERING;"),
                        row(2, 2, 2, 2, 2),
                        row(2, 1, 1, 2, 2),
                        row(2, 1, 2, 2, 2));
 
+            if (hasFlushed.get())
+                logIndexSSTableInfo(indexCfs);
             assertInvalidMessage(StatementRestrictions.REQUIRES_ALLOW_FILTERING_MESSAGE,
                                  "SELECT * FROM %s WHERE pk1 >= 1 AND pk2 <=3 AND  c1 IN(0,1,2) AND c2 IN(0,1,2) AND v = 3");
+
+            hasFlushed.set(true);
         });
+    }
+
+    private void logIndexSSTableInfo(ColumnFamilyStore indexCfs)
+    {
+        logger.info("Index CFS live memtables: [{}] ",
+                    indexCfs.getTracker()
+                            .getView()
+                            .liveSSTables()
+                            .stream()
+                            .map(sstable -> String.format("DataFile: %s, Min: %s, Max: %s",
+                                                          sstable.getFilename(),
+                                                          sstable.first,
+                                                          sstable.last))
+                            .collect(Collectors.joining(",", "(", ")")));
     }
 
     @Test
