@@ -47,6 +47,7 @@ import org.apache.cassandra.db.compaction.CompactionManager;
 import org.apache.cassandra.db.filter.RowFilter;
 import org.apache.cassandra.db.lifecycle.SSTableSet;
 import org.apache.cassandra.db.lifecycle.View;
+import org.apache.cassandra.db.partitions.PartitionIterators;
 import org.apache.cassandra.db.partitions.PartitionUpdate;
 import org.apache.cassandra.db.rows.*;
 import org.apache.cassandra.exceptions.InvalidRequestException;
@@ -56,7 +57,9 @@ import org.apache.cassandra.io.sstable.ReducingKeyIterator;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.schema.Indexes;
+import org.apache.cassandra.service.pager.SinglePartitionPager;
 import org.apache.cassandra.tracing.Tracing;
+import org.apache.cassandra.transport.Server;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.concurrent.OpOrder;
 import org.apache.cassandra.utils.concurrent.Refs;
@@ -97,6 +100,9 @@ import org.apache.cassandra.utils.concurrent.Refs;
 public class SecondaryIndexManager implements IndexRegistry
 {
     private static final Logger logger = LoggerFactory.getLogger(SecondaryIndexManager.class);
+
+    // default page size (in rows) when rebuilding the index for a whole partition
+    private static final int DEFAULT_PAGE_SIZE = 10000;
 
     private Map<String, Index> indexes = Maps.newConcurrentMap();
 
@@ -517,36 +523,67 @@ public class SecondaryIndexManager implements IndexRegistry
     /**
      * When building an index against existing data in sstables, add the given partition to the index
      */
-    public void indexPartition(UnfilteredRowIterator partition, OpOrder.Group opGroup, Set<Index> indexes, int nowInSec)
+    public void indexPartition(DecoratedKey key, Set<Index> indexes)
     {
+        if (logger.isTraceEnabled())
+            logger.trace("Indexing partition {} ", baseCfs.metadata.getKeyValidator().getString(key.getKey()));
+
         if (!indexes.isEmpty())
         {
-            DecoratedKey key = partition.partitionKey();
-            Set<Index.Indexer> indexers = indexes.stream()
-                                                 .map(index -> index.indexerFor(key,
-                                                                                partition.columns(),
-                                                                                nowInSec,
-                                                                                opGroup,
-                                                                                IndexTransaction.Type.UPDATE))
-                                                 .filter(Objects::nonNull)
-                                                 .collect(Collectors.toSet());
-
-            indexers.forEach(Index.Indexer::begin);
-
-            try (RowIterator filtered = UnfilteredRowIterators.filter(partition, nowInSec))
+            SinglePartitionReadCommand cmd = SinglePartitionReadCommand.fullPartitionRead(baseCfs.metadata,
+                                                                                          FBUtilities.nowInSeconds(),
+                                                                                          key);
+            int nowInSec = cmd.nowInSec();
+            int pageSize = calculateIndexingPageSize();
+            boolean readStatic = false;
+            SinglePartitionPager pager = new SinglePartitionPager(cmd, null, Server.CURRENT_VERSION);
+            while (!pager.isExhausted())
             {
-                if (!filtered.staticRow().isEmpty())
-                    indexers.forEach(indexer -> indexer.insertRow(filtered.staticRow()));
-
-                while (filtered.hasNext())
+                try (ReadOrderGroup readGroup = cmd.startOrderGroup();
+                     OpOrder.Group writeGroup = Keyspace.writeOrder.start();
+                     RowIterator partition = PartitionIterators.getOnlyElement(pager.fetchPageInternal(pageSize,
+                                                                                                       readGroup),
+                                                                               cmd))
                 {
-                    Row row = filtered.next();
-                    indexers.forEach(indexer -> indexer.insertRow(row));
+                    Set<Index.Indexer> indexers = indexes.stream()
+                                                         .map(index -> index.indexerFor(key,
+                                                                                        partition.columns(),
+                                                                                        nowInSec,
+                                                                                        writeGroup,
+                                                                                        IndexTransaction.Type.UPDATE))
+                                                         .filter(Objects::nonNull)
+                                                         .collect(Collectors.toSet());
+
+                    indexers.forEach(Index.Indexer::begin);
+
+                    if (!readStatic && !partition.staticRow().isEmpty())
+                    {
+                        indexers.forEach(indexer -> indexer.insertRow(partition.staticRow()));
+                        readStatic = true;
+                    }
+
+                    while (partition.hasNext())
+                    {
+                        Row row = partition.next();
+                        indexers.forEach(indexer -> indexer.insertRow(row));
+                    }
+
+                    indexers.forEach(Index.Indexer::finish);
                 }
             }
-
-            indexers.forEach(Index.Indexer::finish);
         }
+    }
+
+    /**
+     * Return the page size used when indexing an entire partition
+     */
+    private int calculateIndexingPageSize()
+    {
+        double averageRowSize = baseCfs.getMeanPartitionSize();
+        if (averageRowSize <= 0)
+            return DEFAULT_PAGE_SIZE;
+
+        return (int) Math.max(1, Math.min(DEFAULT_PAGE_SIZE, 4 * 1024 * 1024 / averageRowSize));
     }
 
     /**
