@@ -633,9 +633,9 @@ public class CustomIndexTest extends CQLTester
         createTable("CREATE TABLE %s(k int, c int, v int, PRIMARY KEY(k,c))");
         ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
         SecondaryIndexManager indexManager = cfs.indexManager;
-
+        int totalRows = SimulateConcurrentFlushingIndex.ROWS_IN_PARTITION;
         // Insert a single wide partition to be indexed
-        for (int i = 0; i < SimulateConcurrentFlushingIndex.ROWS_IN_PARTITION; i++)
+        for (int i = 0; i < totalRows; i++)
             execute("INSERT INTO %s (k, c, v) VALUES (0, ?, ?)", i, i);
         cfs.forceBlockingFlush();
 
@@ -648,7 +648,7 @@ public class CustomIndexTest extends CQLTester
         // Index the partition with an Indexer which artificially simulates additional concurrent
         // flush activity by periodically issuing barriers on the read & write op groupings
         DecoratedKey targetKey = getCurrentColumnFamilyStore().decorateKey(ByteBufferUtil.bytes(0));
-        indexManager.indexPartition(targetKey, Collections.singleton(index));
+        indexManager.indexPartition(targetKey, Collections.singleton(index), totalRows / 10);
 
         // When indexing is done check that:
         // * The base table's read ordering at finish was > the one at the start (i.e. that

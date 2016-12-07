@@ -102,7 +102,7 @@ public class SecondaryIndexManager implements IndexRegistry
     private static final Logger logger = LoggerFactory.getLogger(SecondaryIndexManager.class);
 
     // default page size (in rows) when rebuilding the index for a whole partition
-    private static final int DEFAULT_PAGE_SIZE = 10000;
+    public static final int DEFAULT_PAGE_SIZE = 10000;
 
     private Map<String, Index> indexes = Maps.newConcurrentMap();
 
@@ -523,7 +523,7 @@ public class SecondaryIndexManager implements IndexRegistry
     /**
      * When building an index against existing data in sstables, add the given partition to the index
      */
-    public void indexPartition(DecoratedKey key, Set<Index> indexes)
+    public void indexPartition(DecoratedKey key, Set<Index> indexes, int pageSize)
     {
         if (logger.isTraceEnabled())
             logger.trace("Indexing partition {} ", baseCfs.metadata.getKeyValidator().getString(key.getKey()));
@@ -534,16 +534,16 @@ public class SecondaryIndexManager implements IndexRegistry
                                                                                           FBUtilities.nowInSeconds(),
                                                                                           key);
             int nowInSec = cmd.nowInSec();
-            int pageSize = calculateIndexingPageSize();
             boolean readStatic = false;
+
             SinglePartitionPager pager = new SinglePartitionPager(cmd, null, Server.CURRENT_VERSION);
             while (!pager.isExhausted())
             {
                 try (ReadOrderGroup readGroup = cmd.startOrderGroup();
                      OpOrder.Group writeGroup = Keyspace.writeOrder.start();
-                     RowIterator partition = PartitionIterators.getOnlyElement(pager.fetchPageInternal(pageSize,
-                                                                                                       readGroup),
-                                                                               cmd))
+                     RowIterator partition =
+                        PartitionIterators.getOnlyElement(pager.fetchPageInternal(pageSize,readGroup),
+                                                          cmd))
                 {
                     Set<Index.Indexer> indexers = indexes.stream()
                                                          .map(index -> index.indexerFor(key,
@@ -556,6 +556,7 @@ public class SecondaryIndexManager implements IndexRegistry
 
                     indexers.forEach(Index.Indexer::begin);
 
+                    // only process the static row once per partition
                     if (!readStatic && !partition.staticRow().isEmpty())
                     {
                         indexers.forEach(indexer -> indexer.insertRow(partition.staticRow()));
@@ -577,13 +578,33 @@ public class SecondaryIndexManager implements IndexRegistry
     /**
      * Return the page size used when indexing an entire partition
      */
-    private int calculateIndexingPageSize()
+    public int calculateIndexingPageSize()
     {
-        double averageRowSize = baseCfs.getMeanPartitionSize();
-        if (averageRowSize <= 0)
+        if (Boolean.getBoolean("cassandra.force_default_indexing_page_size"))
             return DEFAULT_PAGE_SIZE;
 
-        return (int) Math.max(1, Math.min(DEFAULT_PAGE_SIZE, 4 * 1024 * 1024 / averageRowSize));
+        double targetPageSizeInBytes = 32 * 1024 * 1024;
+        double meanPartitionSize = baseCfs.getMeanPartitionSize();
+        if (meanPartitionSize <= 0)
+            return DEFAULT_PAGE_SIZE;
+
+        int meanCellsPerPartition = baseCfs.getMeanColumns();
+        if (meanCellsPerPartition <= 0)
+            return DEFAULT_PAGE_SIZE;
+
+        int columnsPerRow = baseCfs.metadata.partitionColumns().regulars.size();
+        if (meanCellsPerPartition <= 0)
+            return DEFAULT_PAGE_SIZE;
+
+        int meanRowsPerPartition = meanCellsPerPartition / columnsPerRow;
+        double meanRowSize = meanPartitionSize / meanRowsPerPartition;
+
+        int pageSize = (int) Math.max(1, Math.min(DEFAULT_PAGE_SIZE, targetPageSizeInBytes / meanRowSize));
+
+        logger.trace("Calculated page size for indexing {} ({}/{}/{}/{})",
+                     pageSize, meanPartitionSize, meanCellsPerPartition, meanRowsPerPartition, meanRowSize);
+
+        return pageSize;
     }
 
     /**
