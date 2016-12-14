@@ -20,6 +20,7 @@ package org.apache.cassandra.cql3.validation.operations;
 
 import org.junit.Test;
 
+import org.apache.cassandra.schema.SchemaConstants;
 import org.apache.cassandra.cql3.CQLTester;
 
 public class DropTest extends CQLTester
@@ -34,4 +35,10 @@ public class DropTest extends CQLTester
         execute("DROP TABLE IF EXISTS keyspace_does_not_exist.table_does_not_exist");
     }
 
+    @Test
+     public void testDroppingSystemKeyspacesIsNotAllowed() throws Throwable
+     {
+            assertInvalidMessage("system keyspace is not user-modifiable", "DROP KEYSPACE " + SchemaConstants.SYSTEM_KEYSPACE_NAME);
+            assertInvalidMessage("Keyspace " + SchemaConstants.AUTH_KEYSPACE_NAME + " can not be dropped by a user", "DROP KEYSPACE " + SchemaConstants.AUTH_KEYSPACE_NAME);
+        }
 }

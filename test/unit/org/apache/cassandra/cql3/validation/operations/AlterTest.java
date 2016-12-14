@@ -17,16 +17,24 @@
  */
 package org.apache.cassandra.cql3.validation.operations;
 
+import java.net.InetAddress;
+import java.util.Collection;
+import java.util.List;
+import java.util.UUID;
+
 import org.junit.Assert;
 import org.junit.Test;
 
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.schema.SchemaConstants;
 import org.apache.cassandra.cql3.CQLTester;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.exceptions.SyntaxException;
+import org.apache.cassandra.locator.IEndpointSnitch;
 import org.apache.cassandra.schema.SchemaKeyspace;
+import org.apache.cassandra.service.StorageService;
 
 import static java.lang.String.format;
 import static org.junit.Assert.assertEquals;
@@ -271,6 +279,40 @@ public class AlterTest extends CQLTester
         // clean-up
         execute("DROP KEYSPACE IF EXISTS testABC");
     }
+
+    /**
+     * Test {@link ConfigurationException} thrown when removing a DC with active cassandra instances from replication configuration of system_auth keyspace.
+     */
+    @Test
+     public void testAlterKeyspaceSystem_AuthWithNTSOnlyAcceptsConfiguredDataCenterNames() throws Throwable
+     {
+         // Add a peer
+         StorageService.instance.getTokenMetadata().updateHostId(UUID.randomUUID(), InetAddress.getByName("127.0.0.2"));
+         // Register an Endpoint snitch which returns fixed value for data center.
+         DatabaseDescriptor.setEndpointSnitch(new IEndpointSnitch()
+         {
+            public String getRack(InetAddress endpoint) { return null; }
+            public String getDatacenter(InetAddress endpoint) {
+                if(endpoint.getHostAddress().equalsIgnoreCase("127.0.0.2"))
+                    return "datacenter2";
+                return DATA_CENTER;
+            }
+            public List<InetAddress> getSortedListByProximity(InetAddress address, Collection<InetAddress> unsortedAddress) { return null; }
+            public void sortByProximity(InetAddress address, List<InetAddress> addresses) {  } // NO OP
+            public int compareEndpoints(InetAddress target, InetAddress a1, InetAddress a2) { return 0; }
+            public void gossiperStarting() { } // NO OP
+            public boolean isWorthMergingForRangeQuery(List<InetAddress> merged, List<InetAddress> l1, List<InetAddress> l2) { return false; }
+         });
+
+         // Create a keyspace with expected DC name.
+         execute("CREATE KEYSPACE " + SchemaConstants.AUTH_KEYSPACE_NAME + " WITH replication = {'class' : 'NetworkTopologyStrategy', '" + DATA_CENTER + "' : 2 , 'datacenter2' : 2 }");
+
+         // Try modifying the system_auth keyspace without second DC which has active node. ConfigurationException is expected.
+         assertInvalidThrow(ConfigurationException.class, "ALTER KEYSPACE system_auth WITH replication = { 'class' : 'NetworkTopologyStrategy', '" + DATA_CENTER + "' : 2 }");
+
+         // Make sure that altering system_auth keyspace with correct DC names is successful
+         execute("ALTER KEYSPACE " + SchemaConstants.AUTH_KEYSPACE_NAME + " WITH replication = {'class' : 'NetworkTopologyStrategy', '" + DATA_CENTER + "' : 1 , 'datacenter2' : 1 }");
+     }
 
     /**
      * Test for bug of 5232,
