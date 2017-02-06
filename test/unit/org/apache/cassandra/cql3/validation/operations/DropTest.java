@@ -18,10 +18,14 @@
 
 package org.apache.cassandra.cql3.validation.operations;
 
+import com.datastax.driver.core.exceptions.UnauthorizedException;
+import org.apache.cassandra.transport.ProtocolVersion;
 import org.junit.Test;
 
 import org.apache.cassandra.schema.SchemaConstants;
 import org.apache.cassandra.cql3.CQLTester;
+
+import java.util.Optional;
 
 public class DropTest extends CQLTester
 {
@@ -36,9 +40,18 @@ public class DropTest extends CQLTester
     }
 
     @Test
-     public void testDroppingSystemKeyspacesIsNotAllowed() throws Throwable
-     {
-            assertInvalidMessage("system keyspace is not user-modifiable", "DROP KEYSPACE " + SchemaConstants.SYSTEM_KEYSPACE_NAME);
-            assertInvalidMessage("Keyspace " + SchemaConstants.AUTH_KEYSPACE_NAME + " can not be dropped by a user", "DROP KEYSPACE " + SchemaConstants.AUTH_KEYSPACE_NAME);
-        }
+    public void testDroppingSystemKeyspacesIsNotAllowed() throws Throwable
+    {
+        // Uses CQLTester::executeNet under the hood to behave like a real client,
+        // specifically to have ClientState validate access to the keyspace
+        assertUnauthorized("DROP KEYSPACE " + SchemaConstants.SYSTEM_KEYSPACE_NAME,
+                           "system keyspace is not user-modifiable");
+        assertUnauthorized("DROP KEYSPACE " + SchemaConstants.AUTH_KEYSPACE_NAME,
+                           "Cannot DROP <keyspace system_auth>");
+    }
+
+    private void assertUnauthorized(String statement, String message) throws Throwable
+    {
+        assertInvalidThrowMessage(Optional.of(ProtocolVersion.CURRENT), message, UnauthorizedException.class, statement);
+    }
 }
