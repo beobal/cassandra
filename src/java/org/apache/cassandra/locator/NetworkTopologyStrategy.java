@@ -256,9 +256,10 @@ public class NetworkTopologyStrategy extends AbstractReplicationStrategy
         // Validate the data center names
         super.validateExpectedOptions();
 
+        // system_auth must be replicated to all DCs
         if (SchemaConstants.AUTH_KEYSPACE_NAME.equalsIgnoreCase(keyspaceName))
         {
-            Set<String> differenceSet = Sets.difference((Set<String>) recognizedOptions(), this.configOptions.keySet());
+            Set<String> differenceSet = Sets.difference(buildValidDataCentersSet(), this.configOptions.keySet());
             if (!differenceSet.isEmpty())
             {
                 throw new ConfigurationException("Following datacenters have active nodes and must be present in replication options for keyspace "
