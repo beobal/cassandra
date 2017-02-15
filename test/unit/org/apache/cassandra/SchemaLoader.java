@@ -247,9 +247,15 @@ public class SchemaLoader
                         + "quz text, "
                         + "foo text, "
                         + "PRIMARY KEY((bar, baz), qux, quz) ) "
-                        + "WITH COMPACT STORAGE", ks_cql)
+                        + "WITH COMPACT STORAGE", ks_cql),
+                CFMetaData.compile("CREATE TABLE with_static ("
+                        + "pk text, "
+                        + "ck int, "
+                        + "st int static, "
+                        + "v1 int, "
+                        + "v2 int, "
+                        + "PRIMARY KEY(pk, ck))", ks_cql)
         )));
-
 
         if (Boolean.parseBoolean(System.getProperty("cassandra.test.compression", "false")))
             useCompression(schema);
