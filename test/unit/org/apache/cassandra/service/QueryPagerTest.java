@@ -29,6 +29,7 @@ import org.junit.runner.RunWith;
 import org.apache.cassandra.Util;
 import org.apache.cassandra.SchemaLoader;
 import org.apache.cassandra.OrderedJUnit4ClassRunner;
+import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.db.*;
 import org.apache.cassandra.db.composites.*;
 import org.apache.cassandra.db.filter.*;
@@ -353,5 +354,49 @@ public class QueryPagerTest extends SchemaLoader
             // The only live cell we should have each time is the row marker
             assertRow(page.get(0), "k0", ct.decompose("c" + i, ""));
         }
+    }
+
+    @Test
+    public void pagingReversedQueriesWithStaticColumnsTest() throws Exception
+    {
+        String keyspace = "cql_keyspace";
+        String table = "with_static";
+        // insert some rows into a single partition
+        for (int i=0; i < 5; i++)
+            executeInternal(String.format("INSERT INTO %s.%s (pk, ck, st, v1, v2) VALUES ('k0', %3$s, %3$s, %3$s, %3$s)",
+                                          keyspace, table, i));
+
+        // query the table in reverse with page size = 1 & check that the returned rows contain the correct cells
+        CFMetaData cfm = Keyspace.open(keyspace).getColumnFamilyStore(table).metadata;
+        queryAndVerifyCells(cfm, true, "k0");
+    }
+
+    private void queryAndVerifyCells(CFMetaData cfm, boolean reversed, String key) throws Exception
+    {
+        SliceQueryFilter filter = new SliceQueryFilter(ColumnSlice.ALL_COLUMNS_ARRAY, reversed, 100, 1);
+        QueryPager pager = QueryPagers.localPager(new SliceFromReadCommand(cfm.ksName, bytes(key), cfm.cfName, 0, filter));
+        CellName staticCellName = cfm.comparator.create(cfm.comparator.staticPrefix(),
+                                                        cfm.staticColumns().iterator().next());
+        for (int i=0; i<5; i++)
+        {
+            List<Row> page = pager.fetchPage(1);
+            assertEquals(1, page.size());
+            Row row = page.get(0);
+            assertCell(row.cf, staticCellName, 4);
+            int cellIndex = !reversed ? i : 4 - i;
+            assertCell(row.cf, Util.cellname(ByteBufferUtil.bytes(cellIndex), ByteBufferUtil.bytes("v1")), cellIndex);
+            assertCell(row.cf, Util.cellname(ByteBufferUtil.bytes(cellIndex), ByteBufferUtil.bytes("v2")), cellIndex);
+        }
+
+        // After processing the 5 rows there should be no more rows to return
+        List<Row> page = pager.fetchPage(1);
+        assertTrue(page.isEmpty());
+    }
+
+    private void assertCell(ColumnFamily cf, CellName cellName, int value)
+    {
+        Cell cell = cf.getColumn(cellName);
+        assertNotNull(cell);
+        assertEquals(value, ByteBufferUtil.toInt(cell.value()));
     }
 }
