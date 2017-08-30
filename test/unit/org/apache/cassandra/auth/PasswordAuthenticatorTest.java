@@ -18,22 +18,47 @@
 package org.apache.cassandra.auth;
 
 
-import org.junit.Assert;
 import org.junit.Test;
 
-import org.mindrot.jbcrypt.BCrypt;
+import static org.apache.cassandra.auth.CassandraRoleManager.*;
+import static org.apache.cassandra.auth.PasswordAuthenticator.*;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.mindrot.jbcrypt.BCrypt.hashpw;
+import static org.mindrot.jbcrypt.BCrypt.gensalt;
 
 public class PasswordAuthenticatorTest
 {
-    private final static PasswordAuthenticator pwa = new PasswordAuthenticator();
-    private final static String hash = BCrypt.hashpw(CassandraRoleManager.DEFAULT_SUPERUSER_PASSWORD,
-                                                     BCrypt.gensalt(CassandraRoleManager.getGensaltLogRounds()));
-
-
     @Test
     public void testCheckpw() throws Exception
     {
-        Assert.assertTrue(PasswordAuthenticator.checkpw(CassandraRoleManager.DEFAULT_SUPERUSER_PASSWORD, hash));
-        Assert.assertFalse(PasswordAuthenticator.checkpw(CassandraRoleManager.DEFAULT_SUPERUSER_PASSWORD,""));
+        // Valid and correct
+        assertTrue(checkpw(DEFAULT_SUPERUSER_PASSWORD, hashpw(DEFAULT_SUPERUSER_PASSWORD, gensalt(getGensaltLogRounds()))));
+        assertTrue(checkpw(DEFAULT_SUPERUSER_PASSWORD, hashpw(DEFAULT_SUPERUSER_PASSWORD, gensalt(4))));
+        assertTrue(checkpw(DEFAULT_SUPERUSER_PASSWORD, hashpw(DEFAULT_SUPERUSER_PASSWORD, gensalt(31))));
+
+        // Valid but incorrect hashes
+        assertFalse(checkpw(DEFAULT_SUPERUSER_PASSWORD, hashpw("incorrect0", gensalt(4))));
+        assertFalse(checkpw(DEFAULT_SUPERUSER_PASSWORD, hashpw("incorrect1", gensalt(10))));
+        assertFalse(checkpw(DEFAULT_SUPERUSER_PASSWORD, hashpw("incorrect2", gensalt(31))));
+
+        // Invalid hash values, the jBCrypt library implementation
+        // throws an exception which we catch and treat as a failure
+        assertFalse(checkpw(DEFAULT_SUPERUSER_PASSWORD, ""));
+        assertFalse(checkpw(DEFAULT_SUPERUSER_PASSWORD, "0"));
+        assertFalse(checkpw(DEFAULT_SUPERUSER_PASSWORD,
+                            "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"));
+
+        // Format is structurally right, but actually invalid
+        // bad salt version
+        assertFalse(checkpw(DEFAULT_SUPERUSER_PASSWORD, "$5x$10$abcdefghijklmnopqrstuvABCDEFGHIJKLMNOPQRSTUVWXYZ01234"));
+        // invalid number of rounds, multiple salt versions but it's the rounds that are incorrect
+        assertFalse(checkpw(DEFAULT_SUPERUSER_PASSWORD, "$2$02$abcdefghijklmnopqrstuvABCDEFGHIJKLMNOPQRSTUVWXYZ01234"));
+        assertFalse(checkpw(DEFAULT_SUPERUSER_PASSWORD, "$2a$02$abcdefghijklmnopqrstuvABCDEFGHIJKLMNOPQRSTUVWXYZ01234"));
+        assertFalse(checkpw(DEFAULT_SUPERUSER_PASSWORD, "$2$99$abcdefghijklmnopqrstuvABCDEFGHIJKLMNOPQRSTUVWXYZ01234"));
+        assertFalse(checkpw(DEFAULT_SUPERUSER_PASSWORD, "$2a$99$abcdefghijklmnopqrstuvABCDEFGHIJKLMNOPQRSTUVWXYZ01234"));
+        // unpadded rounds
+        assertFalse(checkpw(DEFAULT_SUPERUSER_PASSWORD, "$2$6$abcdefghijklmnopqrstuvABCDEFGHIJKLMNOPQRSTUVWXYZ01234"));
+        assertFalse(checkpw(DEFAULT_SUPERUSER_PASSWORD, "$2a$6$abcdefghijklmnopqrstuvABCDEFGHIJKLMNOPQRSTUVWXYZ01234"));
     }
 }
