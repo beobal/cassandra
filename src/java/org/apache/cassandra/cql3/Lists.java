@@ -25,6 +25,8 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import org.apache.cassandra.config.ColumnDefinition;
 import org.apache.cassandra.cql3.functions.Function;
 import org.apache.cassandra.db.*;
@@ -251,10 +253,11 @@ public abstract class Lists
      * do rely on the fact that the user will only provide decreasing
      * milliseconds timestamp for that purpose.
      */
-    private static class PrecisionTime
+    static class PrecisionTime
     {
         // Our reference time (1 jan 2010, 00:00:00) in milliseconds.
         private static final long REFERENCE_TIME = 1262304000000L;
+        static final int MAX_NANOS = 10000;
         private static final AtomicReference<PrecisionTime> last = new AtomicReference<>(new PrecisionTime(Long.MAX_VALUE, 0));
 
         public final long millis;
@@ -266,20 +269,50 @@ public abstract class Lists
             this.nanos = nanos;
         }
 
-        static PrecisionTime getNext(long millis)
+        static PrecisionTime getNext(long millis, int count)
         {
+            assert count > 0 && count < MAX_NANOS;
+
             while (true)
             {
                 PrecisionTime current = last.get();
 
-                assert millis <= current.millis;
-                PrecisionTime next = millis < current.millis
-                    ? new PrecisionTime(millis, 9999)
-                    : new PrecisionTime(millis, Math.max(0, current.nanos - 1));
+                final PrecisionTime next;
+                if (millis < current.millis)
+                {
+                    next = new PrecisionTime(millis, MAX_NANOS - count);
+                }
+                else
+                {
+                    // in addition to being at the same millisecond, handle the unexpected case of the millis parameter
+                    // being in the past. That could happen if the System.currentTimeMillis() not operating montonically
+                    // or if one thread is just a really big loser in the compareAndSet game of life.
+                    long miilisToUse = millis <= current.millis ? millis : current.millis;
+
+                    // if we will go below zero on the nanos, decrement the millis by one
+                    final int nanosToUse;
+                    if (current.nanos - count >= 0)
+                    {
+                        nanosToUse = current.nanos - count;
+                    }
+                    else
+                    {
+                        nanosToUse = MAX_NANOS - count;
+                        miilisToUse -= 1;
+                    }
+
+                    next = new PrecisionTime(miilisToUse, nanosToUse);
+                }
 
                 if (last.compareAndSet(current, next))
                     return next;
             }
+        }
+
+        @VisibleForTesting
+        static void set(long millis, int nanos)
+        {
+            last.set(new PrecisionTime(millis, nanos));
         }
     }
 
@@ -423,12 +456,13 @@ public abstract class Lists
                 return;
 
             long time = PrecisionTime.REFERENCE_TIME - (System.currentTimeMillis() - PrecisionTime.REFERENCE_TIME);
-
             List<ByteBuffer> toAdd = ((Value) value).elements;
-            for (int i = toAdd.size() - 1; i >= 0; i--)
+            int count = toAdd.size();
+            PrecisionTime pt = PrecisionTime.getNext(time, count);
+
+            for (int i = count - 1; i >= 0; i--)
             {
-                PrecisionTime pt = PrecisionTime.getNext(time);
-                ByteBuffer uuid = ByteBuffer.wrap(UUIDGen.getTimeUUIDBytes(pt.millis, pt.nanos));
+                ByteBuffer uuid = ByteBuffer.wrap(UUIDGen.getTimeUUIDBytes(pt.millis, pt.nanos + i));
                 params.addCell(column, CellPath.create(uuid), toAdd.get(i));
             }
         }
