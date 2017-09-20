@@ -31,7 +31,6 @@ import org.junit.Test;
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.config.ColumnDefinition;
 import org.apache.cassandra.cql3.Lists.PrecisionTime;
-import org.apache.cassandra.db.CBuilder;
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.rows.Cell;
@@ -46,7 +45,7 @@ public class ListsTest extends CQLTester
     private static final int DEFAULT_NANOS = PrecisionTime.MAX_NANOS;
 
     @Test
-    public void PrecisionTime_getNext_simple()
+    public void testPrecisionTime_getNext_simple()
     {
         PrecisionTime.set(DEFAULT_MILLIS, DEFAULT_NANOS);
 
@@ -62,7 +61,7 @@ public class ListsTest extends CQLTester
     }
 
     @Test
-    public void PrecisionTime_getNext_Mulitple()
+    public void testPrecisionTime_getNext_Mulitple()
     {
         PrecisionTime.set(DEFAULT_MILLIS, DEFAULT_NANOS);
 
@@ -74,7 +73,7 @@ public class ListsTest extends CQLTester
     }
 
     @Test
-    public void PrecisionTime_getNext_RollOverNanos()
+    public void testPrecisionTime_getNext_RollOverNanos()
     {
         final int remainingNanos = 0;
         PrecisionTime.set(DEFAULT_MILLIS, remainingNanos);
@@ -91,7 +90,7 @@ public class ListsTest extends CQLTester
     }
 
     @Test
-    public void PrecisionTime_getNext_BorkedClock()
+    public void testPrecisionTime_getNext_BorkedClock()
     {
         final int remainingNanos = 1;
         PrecisionTime.set(DEFAULT_MILLIS, remainingNanos);
@@ -109,15 +108,33 @@ public class ListsTest extends CQLTester
     }
 
     @Test
-    public void Prepender_execute()
+    public void testPrepender_SmallList()
+    {
+        List<ByteBuffer> terms = new ArrayList<>();
+        terms.add(ByteBufferUtil.bytes(1));
+        terms.add(ByteBufferUtil.bytes(2));
+        terms.add(ByteBufferUtil.bytes(3));
+        terms.add(ByteBufferUtil.bytes(4));
+        terms.add(ByteBufferUtil.bytes(5));
+        testPrepender_execute(terms);
+    }
+
+    @Test
+    public void testPrepender_HugeList()
+    {
+        List<ByteBuffer> terms = new ArrayList<>();
+        // create a large enough array, then remove some off the end, just to make it an odd size
+        for (int i = 0; i < PrecisionTime.MAX_NANOS * 4 - 287; i++)
+            terms.add(ByteBufferUtil.bytes(i));
+        testPrepender_execute(terms);
+    }
+
+    private void testPrepender_execute(List<ByteBuffer> terms)
     {
         createTable("CREATE TABLE %s (k int PRIMARY KEY, l list<text>)");
         CFMetaData metaData = currentTableMetadata();
 
         ColumnDefinition columnDefinition = metaData.getColumnDefinition(ByteBufferUtil.bytes("l"));
-        List<ByteBuffer> terms = new ArrayList<>();
-        terms.add(ByteBufferUtil.bytes("dog"));
-        terms.add(ByteBufferUtil.bytes("cat"));
         Term term = new Lists.Value(terms);
         Lists.Prepender prepender = new Lists.Prepender(columnDefinition, term);
 
@@ -141,7 +158,8 @@ public class ListsTest extends CQLTester
                 Assert.assertTrue(last.compareTo(uuid) < 0);
             last = uuid;
 
-            Assert.assertEquals(terms.get(idx), cell.value());
+            Assert.assertEquals(String.format("different values found: expected: '%d', found '%d'", ByteBufferUtil.toInt(terms.get(idx)), ByteBufferUtil.toInt(cell.value())),
+                                terms.get(idx), cell.value());
             idx++;
         }
     }

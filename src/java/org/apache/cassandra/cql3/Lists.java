@@ -245,19 +245,17 @@ public abstract class Lists
         }
     }
 
-    /*
+    /**
      * For prepend, we need to be able to generate unique but decreasing time
-     * UUID, which is a bit challenging. To do that, given a time in milliseconds,
-     * we adds a number representing the 100-nanoseconds precision and make sure
-     * that within the same millisecond, that number is always decreasing. We
-     * do rely on the fact that the user will only provide decreasing
-     * milliseconds timestamp for that purpose.
+     * UUIDs, which is a bit challenging. To do that, given a time in milliseconds,
+     * we add a number representing the 100-nanoseconds precision and make sure
+     * that within the same millisecond, that number is always decreasing.
      */
     static class PrecisionTime
     {
         // Our reference time (1 jan 2010, 00:00:00) in milliseconds.
         private static final long REFERENCE_TIME = 1262304000000L;
-        static final int MAX_NANOS = 10000;
+        static final int MAX_NANOS = 9999;
         private static final AtomicReference<PrecisionTime> last = new AtomicReference<>(new PrecisionTime(Long.MAX_VALUE, 0));
 
         public final long millis;
@@ -271,7 +269,8 @@ public abstract class Lists
 
         static PrecisionTime getNext(long millis, int count)
         {
-            assert count > 0 && count < MAX_NANOS;
+            if (count == 0)
+                return last.get();
 
             while (true)
             {
@@ -284,10 +283,10 @@ public abstract class Lists
                 }
                 else
                 {
-                    // in addition to being at the same millisecond, handle the unexpected case of the millis parameter
+                    // in addition to being at the same millisecond, we handle the unexpected case of the millis parameter
                     // being in the past. That could happen if the System.currentTimeMillis() not operating montonically
                     // or if one thread is just a really big loser in the compareAndSet game of life.
-                    long miilisToUse = millis <= current.millis ? millis : current.millis;
+                    long millisToUse = millis <= current.millis ? millis : current.millis;
 
                     // if we will go below zero on the nanos, decrement the millis by one
                     final int nanosToUse;
@@ -298,10 +297,10 @@ public abstract class Lists
                     else
                     {
                         nanosToUse = MAX_NANOS - count;
-                        miilisToUse -= 1;
+                        millisToUse -= 1;
                     }
 
-                    next = new PrecisionTime(miilisToUse, nanosToUse);
+                    next = new PrecisionTime(millisToUse, nanosToUse);
                 }
 
                 if (last.compareAndSet(current, next))
@@ -455,14 +454,24 @@ public abstract class Lists
             if (value == null || value == UNSET_VALUE)
                 return;
 
-            long time = PrecisionTime.REFERENCE_TIME - (System.currentTimeMillis() - PrecisionTime.REFERENCE_TIME);
             List<ByteBuffer> toAdd = ((Value) value).elements;
-            int count = toAdd.size();
-            PrecisionTime pt = PrecisionTime.getNext(time, count);
+            final int totalCount = toAdd.size();
 
-            for (int i = count - 1; i >= 0; i--)
+            // we have to obey MAX_NANOS per batch - in the unlikely event a client has decided to prepend a list with
+            // an insane number of entries.
+            PrecisionTime pt = null;
+            int currentBatchSize = 0;
+            int batchOffset = 0;
+            for (int i = totalCount - 1; i >= 0; i--)
             {
-                ByteBuffer uuid = ByteBuffer.wrap(UUIDGen.getTimeUUIDBytes(pt.millis, pt.nanos + i));
+                if (pt == null || i - batchOffset == currentBatchSize)
+                {
+                    long time = PrecisionTime.REFERENCE_TIME - (System.currentTimeMillis() - PrecisionTime.REFERENCE_TIME);
+                    batchOffset = Math.max(0, (i + 1) - PrecisionTime.MAX_NANOS);
+                    currentBatchSize = (i + 1) - batchOffset;
+                    pt = PrecisionTime.getNext(time, currentBatchSize);
+                }
+                ByteBuffer uuid = ByteBuffer.wrap(UUIDGen.getTimeUUIDBytes(pt.millis, pt.nanos + (i - batchOffset)));
                 params.addCell(column, CellPath.create(uuid), toAdd.get(i));
             }
         }
