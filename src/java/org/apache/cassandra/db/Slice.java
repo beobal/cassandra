@@ -547,7 +547,7 @@ public class Slice
             {
                 int size = in.readUnsignedShort();
                 if (size == 0)
-                    return kind.isStart() ? BOTTOM : TOP;
+                    return kind.isStart() ? BOTTOM.withNewKind(kind): TOP.withNewKind(kind);
 
                 ByteBuffer[] values = ClusteringPrefix.serializer.deserializeValuesWithoutSize(in, size, version, types);
                 return Slice.Bound.create(kind, values);

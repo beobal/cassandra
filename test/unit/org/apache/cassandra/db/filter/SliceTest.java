@@ -19,18 +19,26 @@
 package org.apache.cassandra.db.filter;
 
 
-import java.awt.*;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.List;
 
-import org.apache.cassandra.config.ColumnDefinition;
+import com.google.common.collect.Lists;
+
 import org.apache.cassandra.db.*;
 import org.junit.Test;
 
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.marshal.Int32Type;
+import org.apache.cassandra.io.util.DataInputBuffer;
+import org.apache.cassandra.io.util.DataInputPlus;
+import org.apache.cassandra.io.util.DataOutputBuffer;
+import org.apache.cassandra.transport.Server;
 import org.apache.cassandra.utils.ByteBufferUtil;
+
+import static org.apache.cassandra.db.Slice.serializer;
+import static org.apache.cassandra.db.ClusteringPrefix.Kind.*;
 
 import static org.junit.Assert.*;
 
@@ -365,6 +373,46 @@ public class SliceTest
         assertSlicesNormalization(cc, slices(s(0, 2), s(3, 4), s(3, 4)), slices(s(0, 2), s(3, 4)));
         assertSlicesNormalization(cc, slices(s(-1, 3), s(-1, 4)), slices(s(-1, 4)));
         assertSlicesNormalization(cc, slices(s(-1, 2), s(-1, 3), s(5, 9)), slices(s(-1, 3), s(5, 9)));
+    }
+
+    @Test
+    public void testSerialization() throws Exception
+    {
+        // with single element
+        roundTripSerialization(Slice.make(makeBound(INCL_START_BOUND, 0), makeBound(INCL_END_BOUND, 1)),
+                               Int32Type.instance);
+        roundTripSerialization(Slice.make(makeBound(INCL_START_BOUND, 0), makeBound(EXCL_END_BOUND, 1)),
+                               Int32Type.instance);
+        roundTripSerialization(Slice.make(makeBound(EXCL_START_BOUND, 0), makeBound(INCL_END_BOUND, 1)),
+                               Int32Type.instance);
+        roundTripSerialization(Slice.make(makeBound(EXCL_START_BOUND, 0), makeBound(EXCL_END_BOUND, 1)),
+                               Int32Type.instance);
+
+        // with multiple elements
+        roundTripSerialization(Slice.make(makeBound(INCL_START_BOUND, 0, 0), makeBound(INCL_END_BOUND, 1, 1)),
+                               Int32Type.instance, Int32Type.instance);
+        roundTripSerialization(Slice.make(makeBound(INCL_START_BOUND, 0, 0), makeBound(EXCL_END_BOUND, 1, 1)),
+                               Int32Type.instance, Int32Type.instance);
+        roundTripSerialization(Slice.make(makeBound(EXCL_START_BOUND, 0, 0), makeBound(INCL_END_BOUND, 1, 1)),
+                               Int32Type.instance, Int32Type.instance);
+        roundTripSerialization(Slice.make(makeBound(EXCL_START_BOUND, 0, 0), makeBound(EXCL_END_BOUND, 1, 1)),
+                               Int32Type.instance, Int32Type.instance);
+
+        // without any elements
+        roundTripSerialization(Slice.make(makeBound(INCL_START_BOUND), makeBound(INCL_END_BOUND)));
+        roundTripSerialization(Slice.make(makeBound(INCL_START_BOUND), makeBound(EXCL_END_BOUND)));
+        roundTripSerialization(Slice.make(makeBound(EXCL_START_BOUND), makeBound(INCL_END_BOUND)));
+        roundTripSerialization(Slice.make(makeBound(EXCL_START_BOUND), makeBound(EXCL_END_BOUND)));
+    }
+
+    private void roundTripSerialization(Slice slice, AbstractType<?>...types) throws Exception
+    {
+        List<AbstractType<?>> typesList = Lists.newArrayList(types);
+        DataOutputBuffer output = new DataOutputBuffer();
+        serializer.serialize(slice, output, Server.CURRENT_VERSION, typesList);
+        assertEquals(serializer.serializedSize(slice, Server.CURRENT_VERSION, typesList), output.position());
+        DataInputPlus input = new DataInputBuffer(output.buffer(), false);
+        assertEquals(serializer.deserialize(input, Server.CURRENT_VERSION, typesList), slice);
     }
 
     private static Slice.Bound makeBound(ClusteringPrefix.Kind kind, Integer... components)
