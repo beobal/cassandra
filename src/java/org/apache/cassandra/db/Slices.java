@@ -607,6 +607,9 @@ public abstract class Slices implements Iterable<Slice>
         @Override
         public String toString()
         {
+            if (slices.length == 1)
+                return slices[0].toString(comparator);
+
             StringBuilder sb = new StringBuilder();
             sb.append("{");
             for (int i = 0; i < slices.length; i++)

@@ -280,6 +280,9 @@ public class Slice
 
     public String toString(ClusteringComparator comparator)
     {
+        if (start.isInclusive() && start.size() == 0 && end.isInclusive() && end.isInclusive())
+            return "ALL";
+
         StringBuilder sb = new StringBuilder();
         sb.append(start.isInclusive() ? "[" : "(");
         for (int i = 0; i < start.size(); i++)
