@@ -460,18 +460,17 @@ public abstract class Lists
             // we have to obey MAX_NANOS per batch - in the unlikely event a client has decided to prepend a list with
             // an insane number of entries.
             PrecisionTime pt = null;
-            int currentBatchSize = 0;
-            int batchOffset = 0;
+            int remainingInBatch = 0;
             for (int i = totalCount - 1; i >= 0; i--)
             {
-                if (pt == null || i - batchOffset == currentBatchSize)
+                if (remainingInBatch == 0)
                 {
                     long time = PrecisionTime.REFERENCE_TIME - (System.currentTimeMillis() - PrecisionTime.REFERENCE_TIME);
-                    batchOffset = Math.max(0, (i + 1) - PrecisionTime.MAX_NANOS);
-                    currentBatchSize = (i + 1) - batchOffset;
-                    pt = PrecisionTime.getNext(time, currentBatchSize);
+                    remainingInBatch = Math.min(PrecisionTime.MAX_NANOS, i) + 1;
+                    pt = PrecisionTime.getNext(time, remainingInBatch);
                 }
-                ByteBuffer uuid = ByteBuffer.wrap(UUIDGen.getTimeUUIDBytes(pt.millis, pt.nanos + (i - batchOffset)));
+
+                ByteBuffer uuid = ByteBuffer.wrap(UUIDGen.getTimeUUIDBytes(pt.millis, (pt.nanos + remainingInBatch--)));
                 params.addCell(column, CellPath.create(uuid), toAdd.get(i));
             }
         }
