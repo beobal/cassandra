@@ -129,7 +129,7 @@ public class MessagePayloadTest extends CQLTester
                                                    new EncryptionOptions());
             try
             {
-                client.connect(false);
+                client.connect(false, true);
 
                 Map<String, ByteBuffer> reqMap;
                 Map<String, ByteBuffer> respMap;
@@ -205,7 +205,7 @@ public class MessagePayloadTest extends CQLTester
             SimpleClient client = new SimpleClient(nativeAddr.getHostAddress(), nativePort);
             try
             {
-                client.connect(false);
+                client.connect(false, true);
 
                 Map<String, ByteBuffer> reqMap;
                 Map<String, ByteBuffer> respMap;

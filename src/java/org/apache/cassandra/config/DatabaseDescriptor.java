@@ -2620,4 +2620,9 @@ public class DatabaseDescriptor
     {
         conf.corrupted_tombstone_strategy = strategy;
     }
+
+    public static boolean isNativeTransportChecksummingEnabled()
+    {
+        return conf.enable_checksumming_in_native_transport;
+    }
 }

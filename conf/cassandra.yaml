@@ -1205,3 +1205,10 @@ audit_logging_options:
 # validate tombstones on reads and compaction
 # can be either "disabled", "warn" or "exception"
 # corrupted_tombstone_strategy: disabled
+
+# Disable or disable checksums in the native transport between this instance and a client. If you exclusivly
+# use SSL enabled connections with the native transport it might make sense to disable this. In all other
+# cases, this is almost always the wrong option. CRC32 checksums are hardware accelerated and add very little
+# overhead. The alternative is undetectable corrupted data as recieved from the client (in the form of bit flips etc)
+# which will most likely make you and your users very sad.
+# enable_checksumming_in_native_transport: true

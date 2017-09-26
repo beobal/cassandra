@@ -385,6 +385,9 @@ public class Config
     public volatile AuditLogOptions audit_logging_options = new AuditLogOptions();
 
     public CorruptedTombstoneStrategy corrupted_tombstone_strategy = CorruptedTombstoneStrategy.disabled;
+
+    public boolean enable_checksumming_in_native_transport = true;
+    
     /**
      * @deprecated migrate to {@link DatabaseDescriptor#isClientInitialized()}
      */

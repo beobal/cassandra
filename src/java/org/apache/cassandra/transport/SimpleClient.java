@@ -45,6 +45,11 @@ import org.apache.cassandra.config.EncryptionOptions;
 import org.apache.cassandra.cql3.QueryOptions;
 import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.cassandra.security.SSLFactory;
+import org.apache.cassandra.transport.frame.ChecksummingFrameCompressor;
+import org.apache.cassandra.transport.frame.LegacyLZ4FrameCompressor;
+import org.apache.cassandra.transport.frame.checksum.ChecksummingTransformer;
+import org.apache.cassandra.transport.frame.compress.LZ4Compressor;
+import org.apache.cassandra.transport.frame.compress.NoOpCompressor;
 import org.apache.cassandra.transport.messages.ErrorMessage;
 import org.apache.cassandra.transport.messages.EventMessage;
 import org.apache.cassandra.transport.messages.ExecuteMessage;
@@ -52,6 +57,8 @@ import org.apache.cassandra.transport.messages.PrepareMessage;
 import org.apache.cassandra.transport.messages.QueryMessage;
 import org.apache.cassandra.transport.messages.ResultMessage;
 import org.apache.cassandra.transport.messages.StartupMessage;
+import org.apache.cassandra.utils.ChecksumType;
+import org.apache.cassandra.utils.MD5Digest;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
@@ -119,15 +126,44 @@ public class SimpleClient implements Closeable
 
     public SimpleClient connect(boolean useCompression) throws IOException
     {
+        return connect(useCompression, version.supportsChecksums());
+    }
+
+    public SimpleClient connect(boolean useCompression, boolean enableChecksumming) throws IOException
+    {
         establishConnection();
 
         Map<String, String> options = new HashMap<>();
         options.put(StartupMessage.CQL_VERSION, "3.0.0");
         if (useCompression)
         {
-            options.put(StartupMessage.COMPRESSION, "snappy");
-            connection.setCompressor(FrameCompressor.SnappyCompressor.instance);
+            options.put(StartupMessage.COMPRESSION, "lz4");
+            if (version.supportsChecksums())
+            {
+                ChecksumType checksumType = ChecksumType.CRC32;
+                options.put(StartupMessage.CHECKSUM, checksumType.toString());
+
+                ChecksummingFrameCompressor lz4ChecksummingFrameCompressor = new ChecksummingFrameCompressor(new ChecksummingTransformer(ChecksummingTransformer.DEFAULT_BLOCK_SIZE,
+                                                                                                                                         new LZ4Compressor(),
+                                                                                                                                         checksumType));
+                connection.setCompressor(lz4ChecksummingFrameCompressor);
+            }
+            else
+            {
+                connection.setCompressor(LegacyLZ4FrameCompressor.instance);
+            }
         }
+        else if (version.supportsChecksums() && enableChecksumming)
+        {
+            ChecksumType checksumType = ChecksumType.CRC32;
+            options.put(StartupMessage.CHECKSUM, checksumType.toString());
+
+            ChecksummingFrameCompressor checksummingOnlyFrameCompressor = new ChecksummingFrameCompressor(new ChecksummingTransformer(ChecksummingTransformer.DEFAULT_BLOCK_SIZE,
+                                                                                                                                     new NoOpCompressor(),
+                                                                                                                                     checksumType));
+            connection.setCompressor(checksummingOnlyFrameCompressor);
+        }
+
         execute(new StartupMessage(options));
 
         return this;
