@@ -98,6 +98,10 @@ public final class AuthConfig
         if (conf.internode_authenticator != null)
             DatabaseDescriptor.setInternodeAuthenticator(FBUtilities.construct(conf.internode_authenticator, "internode_authenticator"));
 
+        // network authorizer
+        INetworkAuthorizer networkAuthorizer = FBUtilities.newNetworkAuthorizer(conf.network_authorizer);
+        DatabaseDescriptor.setNetworkAuthorizer(networkAuthorizer);
+
         // Validate at last to have authenticator, authorizer, role-manager and internode-auth setup
         // in case these rely on each other.
 
