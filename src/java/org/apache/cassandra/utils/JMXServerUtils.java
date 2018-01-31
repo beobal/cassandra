@@ -55,6 +55,7 @@ public class JMXServerUtils
      * Creates a server programmatically. This allows us to set parameters which normally are
      * inaccessable.
      */
+    @SuppressWarnings("resource")
     public static JMXConnectorServer createJMXServer(int port, boolean local)
     throws IOException
     {
