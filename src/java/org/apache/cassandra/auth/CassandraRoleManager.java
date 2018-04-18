@@ -17,7 +17,6 @@
  */
 package org.apache.cassandra.auth;
 
-import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
