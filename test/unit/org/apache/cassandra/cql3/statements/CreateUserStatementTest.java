@@ -48,13 +48,13 @@ public class CreateUserStatementTest
     @Test
     public void allDcsExplicit() throws Exception
     {
-        Assert.assertFalse(dcPerms("CREATE USER u1 WITH ALL DATACENTERS").restrictsAccess());
+        Assert.assertFalse(dcPerms("CREATE USER u1 WITH ACCESS TO ALL DATACENTERS").restrictsAccess());
     }
 
     @Test
     public void singleDc() throws Exception
     {
-        DCPermissions perms = dcPerms("CREATE USER u1 WITH DATACENTERS 'dc1'");
+        DCPermissions perms = dcPerms("CREATE USER u1 WITH ACCESS TO DATACENTERS {'dc1'}");
         Assert.assertTrue(perms.restrictsAccess());
         Assert.assertEquals(Sets.newHashSet("dc1"), perms.whitelistedDCs());
     }

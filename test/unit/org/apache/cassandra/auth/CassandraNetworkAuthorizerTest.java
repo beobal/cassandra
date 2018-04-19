@@ -36,7 +36,9 @@ import org.apache.cassandra.cql3.QueryProcessor;
 import org.apache.cassandra.cql3.UntypedResultSet;
 import org.apache.cassandra.cql3.statements.AlterRoleStatement;
 import org.apache.cassandra.cql3.statements.AuthenticationStatement;
+import org.apache.cassandra.cql3.statements.BatchStatement;
 import org.apache.cassandra.cql3.statements.CreateRoleStatement;
+import org.apache.cassandra.cql3.statements.DropRoleStatement;
 import org.apache.cassandra.cql3.statements.SelectStatement;
 import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.cassandra.db.Keyspace;
@@ -63,6 +65,12 @@ public class CassandraNetworkAuthorizerTest
         UntypedResultSet process(String query) throws RequestExecutionException
         {
             return QueryProcessor.executeInternal(query);
+        }
+
+        @Override
+        void processBatch(BatchStatement statement)
+        {
+            statement.executeInternal(QueryState.forInternalCalls(), QueryOptions.DEFAULT);
         }
     }
 
@@ -163,7 +171,9 @@ public class CassandraNetworkAuthorizerTest
     private static void auth(String query, Object... args)
     {
         CQLStatement statement = QueryProcessor.parseStatement(String.format(query, args)).prepare().statement;
-        assert statement instanceof CreateRoleStatement || statement instanceof AlterRoleStatement;
+        assert statement instanceof CreateRoleStatement
+               || statement instanceof AlterRoleStatement
+               || statement instanceof DropRoleStatement;
         AuthenticationStatement authStmt = (AuthenticationStatement) statement;
         authStmt.execute(getClientState());
     }
@@ -210,6 +220,20 @@ public class CassandraNetworkAuthorizerTest
         auth("ALTER ROLE %s WITH ALL DATACENTERS", username);
         Assert.assertEquals(DCPermissions.all(), dcPerms(username));
         assertDcPermRow(username);
+    }
+
+    @Test
+    public void drop()
+    {
+        String username = createName();
+
+        assertNoDcPermRow(username);
+        // user should implicitly have access to all datacenters
+        auth("CREATE ROLE %s WITH password = 'password' AND LOGIN = true AND ACCESS TO DATACENTERS {'dc1'}", username);
+        assertDcPermRow(username, "dc1");
+
+        auth("DROP ROLE %s", username);
+        assertNoDcPermRow(username);
     }
 
     @Test

@@ -48,7 +48,7 @@ public class AlterRoleStatementTest
     @Test
     public void dcsAllSpecified() throws Exception
     {
-        DCPermissions dcPerms = dcPerms("ALTER ROLE r1 WITH ALL DATACENTERS");
+        DCPermissions dcPerms = dcPerms("ALTER ROLE r1 WITH ACCESS TO ALL DATACENTERS");
         Assert.assertNotNull(dcPerms);
         Assert.assertFalse(dcPerms.restrictsAccess());
     }
@@ -56,7 +56,7 @@ public class AlterRoleStatementTest
     @Test
     public void singleDc() throws Exception
     {
-        DCPermissions dcPerms = dcPerms("ALTER ROLE r1 WITH DATACENTERS 'dc1'");
+        DCPermissions dcPerms = dcPerms("ALTER ROLE r1 WITH ACCESS TO DATACENTERS {'dc1'}");
         Assert.assertNotNull(dcPerms);
         Assert.assertTrue(dcPerms.restrictsAccess());
         Assert.assertEquals(Sets.newHashSet("dc1"), dcPerms.whitelistedDCs());
@@ -65,7 +65,7 @@ public class AlterRoleStatementTest
     @Test
     public void multiDcs() throws Exception
     {
-        DCPermissions dcPerms = dcPerms("ALTER ROLE r1 WITH DATACENTERS 'dc1' OR 'dc2'");
+        DCPermissions dcPerms = dcPerms("ALTER ROLE r1 WITH ACCESS TO DATACENTERS {'dc1', 'dc2'}");
         Assert.assertNotNull(dcPerms);
         Assert.assertTrue(dcPerms.restrictsAccess());
         Assert.assertEquals(Sets.newHashSet("dc1", "dc2"), dcPerms.whitelistedDCs());

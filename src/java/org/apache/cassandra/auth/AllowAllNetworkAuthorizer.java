@@ -18,6 +18,9 @@
 
 package org.apache.cassandra.auth;
 
+import org.apache.cassandra.exceptions.ConfigurationException;
+import org.apache.cassandra.exceptions.InvalidRequestException;
+
 public class AllowAllNetworkAuthorizer implements INetworkAuthorizer
 {
     public void setup() {}
@@ -27,5 +30,18 @@ public class AllowAllNetworkAuthorizer implements INetworkAuthorizer
         return DCPermissions.all();
     }
 
-    public void setRoleDatacenters(RoleResource role, DCPermissions permissions) {}
+    public void setRoleDatacenters(RoleResource role, DCPermissions permissions)
+    {
+        throw new InvalidRequestException("ACCESS TO DATACENTERS operations not supported by AllowAllNetworkAuthorizer");
+    }
+
+    public void drop(RoleResource role) {}
+
+    public void validateConfiguration() throws ConfigurationException {}
+
+    @Override
+    public boolean requireAuthorization()
+    {
+        return false;
+    }
 }

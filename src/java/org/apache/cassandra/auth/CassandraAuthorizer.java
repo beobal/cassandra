@@ -180,11 +180,7 @@ public class CassandraAuthorizer implements IAuthorizer
                                                   BatchStatement.Type.LOGGED,
                                                   Lists.newArrayList(Iterables.filter(statements, ModificationStatement.class)),
                                                   Attributes.none());
-        QueryProcessor.instance.processBatch(batch,
-                                             QueryState.forInternalCalls(),
-                                             BatchQueryOptions.withoutPerStatementVariables(QueryOptions.DEFAULT),
-                                             System.nanoTime());
-
+        processBatch(batch);
     }
 
     // Add every permission on the resource granted to the role
@@ -355,5 +351,13 @@ public class CassandraAuthorizer implements IAuthorizer
     UntypedResultSet process(String query) throws RequestExecutionException
     {
         return QueryProcessor.process(query, ConsistencyLevel.LOCAL_ONE);
+    }
+
+    void processBatch(BatchStatement statement)
+    {
+        QueryProcessor.instance.processBatch(statement,
+                                             QueryState.forInternalCalls(),
+                                             BatchQueryOptions.withoutPerStatementVariables(QueryOptions.DEFAULT),
+                                             System.nanoTime());
     }
 }

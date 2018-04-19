@@ -1146,7 +1146,7 @@ functionResource returns [FunctionResource res]
     ;
 
 /**
- * CREATE USER [IF NOT EXISTS] <username> [WITH PASSWORD <password>] [WITH ALL DATACENTERS | DATACENTERS <dc> [OR <dcn>]] [SUPERUSER|NOSUPERUSER]
+ * CREATE USER [IF NOT EXISTS] <username> [WITH PASSWORD <password>] [SUPERUSER|NOSUPERUSER]
  */
 createUserStatement returns [CreateRoleStatement stmt]
     @init {
@@ -1155,14 +1155,12 @@ createUserStatement returns [CreateRoleStatement stmt]
         boolean superuser = false;
         boolean ifNotExists = false;
         RoleName name = new RoleName();
-        DCPermissions.Builder dcperms = DCPermissions.builder();
     }
     : K_CREATE K_USER (K_IF K_NOT K_EXISTS { ifNotExists = true; })? u=username { name.setName($u.text, true); }
       ( K_WITH userPassword[opts] )?
-      ( K_WITH dcPermissions[dcperms] )?
       ( K_SUPERUSER { superuser = true; } | K_NOSUPERUSER { superuser = false; } )?
       { opts.setOption(IRoleManager.Option.SUPERUSER, superuser);
-        $stmt = new CreateRoleStatement(name, opts, dcperms.build(), ifNotExists); }
+        $stmt = new CreateRoleStatement(name, opts, DCPermissions.all(), ifNotExists); }
     ;
 
 /**
@@ -1172,14 +1170,12 @@ alterUserStatement returns [AlterRoleStatement stmt]
     @init {
         RoleOptions opts = new RoleOptions();
         RoleName name = new RoleName();
-        DCPermissions.Builder dcperms = DCPermissions.builder();
     }
     : K_ALTER K_USER u=username { name.setName($u.text, true); }
       ( K_WITH userPassword[opts] )?
-      ( K_WITH dcPermissions[dcperms] )?
       ( K_SUPERUSER { opts.setOption(IRoleManager.Option.SUPERUSER, true); }
         | K_NOSUPERUSER { opts.setOption(IRoleManager.Option.SUPERUSER, false); } ) ?
-      {  $stmt = new AlterRoleStatement(name, opts, dcperms.isModified() ? dcperms.build() : null); }
+      {  $stmt = new AlterRoleStatement(name, opts, null); }
     ;
 
 /**
@@ -1284,13 +1280,8 @@ roleOption[RoleOptions opts, DCPermissions.Builder dcperms]
     |  K_OPTIONS '=' m=fullMapLiteral { opts.setOption(IRoleManager.Option.OPTIONS, convertPropertyMap(m)); }
     |  K_SUPERUSER '=' b=BOOLEAN { opts.setOption(IRoleManager.Option.SUPERUSER, Boolean.valueOf($b.text)); }
     |  K_LOGIN '=' b=BOOLEAN { opts.setOption(IRoleManager.Option.LOGIN, Boolean.valueOf($b.text)); }
-    |  K_ALL K_DATACENTERS { dcperms.all(); }
-    |  K_DATACENTERS dcPermission[dcperms] (K_OR dcPermission[dcperms])*
-    ;
-
-dcPermissions[DCPermissions.Builder builder]
-    : K_ALL K_DATACENTERS { builder.all(); }
-    | K_DATACENTERS dcPermission[builder] (K_OR dcPermission[builder])*
+    |  K_ACCESS K_TO K_ALL K_DATACENTERS { dcperms.all(); }
+    |  K_ACCESS K_TO K_DATACENTERS '{' dcPermission[dcperms] (',' dcPermission[dcperms])* '}'
     ;
 
 dcPermission[DCPermissions.Builder builder]

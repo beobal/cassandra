@@ -18,8 +18,6 @@
 
 package org.apache.cassandra.cql3.statements;
 
-import java.util.Set;
-
 import com.google.common.collect.Sets;
 import org.junit.Assert;
 import org.junit.Test;
@@ -52,13 +50,13 @@ public class CreateRoleStatementTest extends CQLTester
     @Test
     public void allDcsExplicit() throws Exception
     {
-        Assert.assertFalse(dcPerms("CREATE ROLE role WITH ALL DATACENTERS").restrictsAccess());
+        Assert.assertFalse(dcPerms("CREATE ROLE role WITH ACCESS TO ALL DATACENTERS").restrictsAccess());
     }
 
     @Test
     public void singleDc() throws Exception
     {
-        DCPermissions perms = dcPerms("CREATE ROLE role WITH LOGIN = true AND DATACENTERS 'dc1'");
+        DCPermissions perms = dcPerms("CREATE ROLE role WITH ACCESS TO DATACENTERS {'dc1'}");
         Assert.assertTrue(perms.restrictsAccess());
         Assert.assertEquals(Sets.newHashSet("dc1"), perms.whitelistedDCs());
     }
@@ -66,7 +64,7 @@ public class CreateRoleStatementTest extends CQLTester
     @Test
     public void multiDcs() throws Exception
     {
-        DCPermissions perms = dcPerms("CREATE ROLE role WITH DATACENTERS 'dc1' OR 'dc2'");
+        DCPermissions perms = dcPerms("CREATE ROLE role WITH ACCESS TO DATACENTERS {'dc1', 'dc2'}");
         Assert.assertTrue(perms.restrictsAccess());
         Assert.assertEquals(Sets.newHashSet("dc1", "dc2"), perms.whitelistedDCs());
 

@@ -30,6 +30,7 @@ import org.apache.cassandra.cql3.UntypedResultSet;
 import org.apache.cassandra.cql3.statements.SelectStatement;
 import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.cassandra.db.marshal.UTF8Type;
+import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.schema.SchemaConstants;
 import org.apache.cassandra.service.ClientState;
 import org.apache.cassandra.service.QueryState;
@@ -137,5 +138,20 @@ public class CassandraNetworkAuthorizer implements INetworkAuthorizer
                                      role.getName());
 
         process(query);
+    }
+
+    public void drop(RoleResource role)
+    {
+        String query = String.format("DELETE FROM %s.%s WHERE role = '%s'",
+                                     SchemaConstants.AUTH_KEYSPACE_NAME,
+                                     AuthKeyspace.NETWORK_PERMISSIONS,
+                                     role.getName());
+
+        process(query);
+    }
+
+    public void validateConfiguration() throws ConfigurationException
+    {
+        // noop
     }
 }
