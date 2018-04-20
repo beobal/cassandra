@@ -18,7 +18,6 @@
 
 package org.apache.cassandra.cql3.statements;
 
-import com.google.common.collect.Sets;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -43,28 +42,5 @@ public class CreateUserStatementTest
     public void allDcsImplicit() throws Exception
     {
         Assert.assertFalse(dcPerms("CREATE USER u1").restrictsAccess());
-    }
-
-    @Test
-    public void allDcsExplicit() throws Exception
-    {
-        Assert.assertFalse(dcPerms("CREATE USER u1 WITH ACCESS TO ALL DATACENTERS").restrictsAccess());
-    }
-
-    @Test
-    public void singleDc() throws Exception
-    {
-        DCPermissions perms = dcPerms("CREATE USER u1 WITH ACCESS TO DATACENTERS {'dc1'}");
-        Assert.assertTrue(perms.restrictsAccess());
-        Assert.assertEquals(Sets.newHashSet("dc1"), perms.whitelistedDCs());
-    }
-
-    @Test
-    public void multiDcs() throws Exception
-    {
-        DCPermissions perms = dcPerms("CREATE USER u1 WITH DATACENTERS 'dc1' OR 'dc2'");
-        Assert.assertTrue(perms.restrictsAccess());
-        Assert.assertEquals(Sets.newHashSet("dc1", "dc2"), perms.whitelistedDCs());
-
     }
 }

@@ -191,7 +191,7 @@ public class CassandraNetworkAuthorizerTest
 
         // user should implicitly have access to all datacenters
         assertNoDcPermRow(username);
-        auth("CREATE ROLE %s WITH password = 'password' AND LOGIN = true WITH DATACENTERS 'dc1' OR 'dc2'", username);
+        auth("CREATE ROLE %s WITH password = 'password' AND LOGIN = true AND ACCESS TO DATACENTERS {'dc1', 'dc2'}", username);
         Assert.assertEquals(DCPermissions.subset("dc1", "dc2"), dcPerms(username));
         assertDcPermRow(username, "dc1", "dc2");
     }
@@ -209,15 +209,15 @@ public class CassandraNetworkAuthorizerTest
         assertNoDcPermRow(username);
 
         // unless explicitly restricted
-        auth("ALTER ROLE %s WITH DATACENTERS 'dc1' OR 'dc2'", username);
+        auth("ALTER ROLE %s WITH ACCESS TO DATACENTERS {'dc1', 'dc2'}", username);
         Assert.assertEquals(DCPermissions.subset("dc1", "dc2"), dcPerms(username));
         assertDcPermRow(username, "dc1", "dc2");
 
-        auth("ALTER ROLE %s WITH DATACENTERS 'dc1'", username);
+        auth("ALTER ROLE %s WITH ACCESS TO DATACENTERS {'dc1'}", username);
         Assert.assertEquals(DCPermissions.subset("dc1"), dcPerms(username));
         assertDcPermRow(username, "dc1");
 
-        auth("ALTER ROLE %s WITH ALL DATACENTERS", username);
+        auth("ALTER ROLE %s WITH ACCESS TO ALL DATACENTERS", username);
         Assert.assertEquals(DCPermissions.all(), dcPerms(username));
         assertDcPermRow(username);
     }
@@ -240,7 +240,7 @@ public class CassandraNetworkAuthorizerTest
     public void superUser() throws Exception
     {
         String username = createName();
-        auth("CREATE ROLE %s WITH password = 'password' AND LOGIN = true WITH DATACENTERS 'dc1'", username);
+        auth("CREATE ROLE %s WITH password = 'password' AND LOGIN = true AND ACCESS TO DATACENTERS {'dc1'}", username);
         Assert.assertEquals(DCPermissions.subset("dc1"), dcPerms(username));
         assertDcPermRow(username, "dc1");
 

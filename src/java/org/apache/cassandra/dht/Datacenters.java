@@ -18,7 +18,6 @@
 
 package org.apache.cassandra.dht;
 
-import java.net.InetAddress;
 import java.util.HashSet;
 import java.util.Set;
 
