@@ -128,7 +128,7 @@ public class ListRolesStatement extends AuthorizationStatement
             result.addColumnValue(BooleanType.instance.decompose(roleManager.isSuper(role)));
             result.addColumnValue(BooleanType.instance.decompose(roleManager.canLogin(role)));
             result.addColumnValue(optionsType.decompose(roleManager.getCustomOptions(role)));
-            result.addColumnValue(dcsType.decompose(networkAuthorizer.authorize(role).whitelistedDCs()));
+            result.addColumnValue(dcsType.decompose(networkAuthorizer.authorize(role).allowedDCs()));
         }
         return new ResultMessage.Rows(result);
     }

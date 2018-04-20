@@ -58,7 +58,7 @@ public class CreateRoleStatementTest extends CQLTester
     {
         DCPermissions perms = dcPerms("CREATE ROLE role WITH ACCESS TO DATACENTERS {'dc1'}");
         Assert.assertTrue(perms.restrictsAccess());
-        Assert.assertEquals(Sets.newHashSet("dc1"), perms.whitelistedDCs());
+        Assert.assertEquals(Sets.newHashSet("dc1"), perms.allowedDCs());
     }
 
     @Test
@@ -66,7 +66,7 @@ public class CreateRoleStatementTest extends CQLTester
     {
         DCPermissions perms = dcPerms("CREATE ROLE role WITH ACCESS TO DATACENTERS {'dc1', 'dc2'}");
         Assert.assertTrue(perms.restrictsAccess());
-        Assert.assertEquals(Sets.newHashSet("dc1", "dc2"), perms.whitelistedDCs());
+        Assert.assertEquals(Sets.newHashSet("dc1", "dc2"), perms.allowedDCs());
 
     }
 }

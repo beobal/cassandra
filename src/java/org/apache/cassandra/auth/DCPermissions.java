@@ -36,7 +36,7 @@ public abstract class DCPermissions
     public abstract boolean restrictsAccess();
     public abstract void validate();
 
-    public Set<String> whitelistedDCs()
+    public Set<String> allowedDCs()
     {
         return Collections.emptySet();
     }
@@ -61,7 +61,7 @@ public abstract class DCPermissions
             return true;
         }
 
-        public Set<String> whitelistedDCs()
+        public Set<String> allowedDCs()
         {
             return ImmutableSet.copyOf(subset);
         }

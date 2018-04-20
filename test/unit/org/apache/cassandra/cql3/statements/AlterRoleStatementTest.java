@@ -59,7 +59,7 @@ public class AlterRoleStatementTest
         DCPermissions dcPerms = dcPerms("ALTER ROLE r1 WITH ACCESS TO DATACENTERS {'dc1'}");
         Assert.assertNotNull(dcPerms);
         Assert.assertTrue(dcPerms.restrictsAccess());
-        Assert.assertEquals(Sets.newHashSet("dc1"), dcPerms.whitelistedDCs());
+        Assert.assertEquals(Sets.newHashSet("dc1"), dcPerms.allowedDCs());
     }
 
     @Test
@@ -68,6 +68,6 @@ public class AlterRoleStatementTest
         DCPermissions dcPerms = dcPerms("ALTER ROLE r1 WITH ACCESS TO DATACENTERS {'dc1', 'dc2'}");
         Assert.assertNotNull(dcPerms);
         Assert.assertTrue(dcPerms.restrictsAccess());
-        Assert.assertEquals(Sets.newHashSet("dc1", "dc2"), dcPerms.whitelistedDCs());
+        Assert.assertEquals(Sets.newHashSet("dc1", "dc2"), dcPerms.allowedDCs());
     }
 }

@@ -106,7 +106,7 @@ public class CassandraNetworkAuthorizer implements INetworkAuthorizer
             StringBuilder builder = new StringBuilder();
             builder.append('{');
             boolean first = true;
-            for (String dc: permissions.whitelistedDCs())
+            for (String dc: permissions.allowedDCs())
             {
                 if (first)
                 {

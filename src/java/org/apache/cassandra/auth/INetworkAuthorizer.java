@@ -27,7 +27,7 @@ public interface INetworkAuthorizer
 {
     /**
      * Whether or not the authorizer will attempt authorization.
-     * If false the authorizer will not be called for authorization of resources.
+     * If false the authorizer will not be called for authorization to access to a DC.
      */
     default boolean requireAuthorization()
     {
@@ -55,7 +55,7 @@ public interface INetworkAuthorizer
     void drop(RoleResource role);
 
     /**
-     * Validates configuration of IAuthorizer implementation (if configurable).
+     * Validates configuration of INetworkAuthorizer implementation (if configurable).
      *
      * @throws ConfigurationException when there is a configuration error.
      */
