@@ -726,6 +726,7 @@ class Shell(cmd.Cmd):
             table_meta.columns['role'] = ColumnMetadata(table_meta, 'role', cassandra.cqltypes.UTF8Type)
             table_meta.columns['is_superuser'] = ColumnMetadata(table_meta, 'is_superuser', cassandra.cqltypes.BooleanType)
             table_meta.columns['can_login'] = ColumnMetadata(table_meta, 'can_login', cassandra.cqltypes.BooleanType)
+            table_meta.columns['datacenters'] = ColumnMetadata(table_meta, 'datacenters', cassandra.cqltypes.UTF8Type)
         elif tablename == 'role_permissions':
             ks_meta = KeyspaceMetadata(ksname, True, None, None)
             table_meta = TableMetadata(ks_meta, 'role_permissions')
@@ -1127,12 +1128,30 @@ class Shell(cmd.Cmd):
 
         formatted_values = [map(self.myformat_value, [row[c] for c in column_names], cql_types) for row in result.current_rows]
 
+        # Make the display of DCs a role is permitted to connect to more human-friendly
+        if table_meta.keyspace_name == 'system_auth' and table_meta.name == 'roles' and 'datacenters' in column_names:
+            formatted_values = map(self.transform_list_roles_result, formatted_values)
+
         if self.expand_enabled:
             self.print_formatted_result_vertically(formatted_names, formatted_values)
         else:
             self.print_formatted_result(formatted_names, formatted_values)
 
+    def transform_list_roles_result(self, row):
+        transformed = row[:-1]
+        new_dcs = row[4].strval
+        if row[1].strval == 'True':      # super
+            new_dcs = 'ALL'
+        elif row[2].strval == 'False':   # login
+            new_dcs = 'n/a'
+        elif row[4].strval == "{}":      # datacenters
+            new_dcs = 'ALL'
+
+        transformed.append(self.myformat_value(new_dcs, CqlType('varchar')))
+        return transformed
+
     def print_formatted_result(self, formatted_names, formatted_values):
+
         # determine column widths
         widths = [n.displaywidth for n in formatted_names]
         if formatted_values is not None:

@@ -18,6 +18,7 @@
 
 package org.apache.cassandra.auth;
 
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.StringJoiner;
@@ -33,8 +34,12 @@ public abstract class DCPermissions
 {
     public abstract boolean canAccess(String dc);
     public abstract boolean restrictsAccess();
-    public abstract Set<String> whitelistedDCs();
     public abstract void validate();
+
+    public Set<String> whitelistedDCs()
+    {
+        return Collections.emptySet();
+    }
 
     private static class SubsetPermissions extends DCPermissions
     {
@@ -108,11 +113,6 @@ public abstract class DCPermissions
             return false;
         }
 
-        public Set<String> whitelistedDCs()
-        {
-            throw new UnsupportedOperationException();
-        }
-
         public String toString()
         {
             return "ALL";
@@ -134,11 +134,6 @@ public abstract class DCPermissions
         public boolean restrictsAccess()
         {
             return true;
-        }
-
-        public Set<String> whitelistedDCs()
-        {
-            throw new UnsupportedOperationException();
         }
 
         public String toString()
