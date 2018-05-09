@@ -22,7 +22,11 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -47,6 +51,7 @@ import org.apache.cassandra.db.rows.SerializationHelper;
 import org.apache.cassandra.db.rows.UnfilteredRowIterator;
 import org.apache.cassandra.db.rows.UnfilteredRowIterators;
 import org.apache.cassandra.exceptions.ConfigurationException;
+import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.util.DataInputBuffer;
 import org.apache.cassandra.io.util.DataOutputBuffer;
 import org.apache.cassandra.io.util.WrappedDataOutputStreamPlus;
@@ -54,11 +59,13 @@ import org.apache.cassandra.net.MessageOut;
 import org.apache.cassandra.net.MessagingService;
 import org.apache.cassandra.schema.KeyspaceParams;
 import org.apache.cassandra.schema.TableMetadata;
+import org.apache.cassandra.service.ActiveRepairService;
 import org.apache.cassandra.tracing.Tracing;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.FBUtilities;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 public class ReadCommandTest
 {
@@ -538,6 +545,128 @@ public class ReadCommandTest
         }
 
         assertEquals(1, cfs.metric.tombstoneScannedHistogram.cf.getSnapshot().getMax());
+    }
+
+    @Test
+    public void testSinglePartitionNamesRepairedDataTracking() throws Exception
+    {
+        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(CF2);
+        ReadCommand readCommand = Util.cmd(cfs, Util.dk("key")).includeRow("cc").includeRow("dd").build();
+        testRepairedDataTracking(cfs, readCommand);
+    }
+
+    @Test
+    public void testSinglePartitionSliceRepairedDataTracking() throws Exception
+    {
+        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(CF2);
+        ReadCommand readCommand = Util.cmd(cfs, Util.dk("key")).build();
+        testRepairedDataTracking(cfs, readCommand);
+    }
+
+    @Test
+    public void testPartitionRangeRepairedDataTracking() throws Exception
+    {
+        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(CF2);
+        ReadCommand readCommand = Util.cmd(cfs).build();
+        testRepairedDataTracking(cfs, readCommand);
+    }
+
+    private void testRepairedDataTracking(ColumnFamilyStore cfs, ReadCommand readCommand) throws IOException
+    {
+        cfs.truncateBlocking();
+        cfs.disableAutoCompaction();
+
+        new RowUpdateBuilder(cfs.metadata(), 0, ByteBufferUtil.bytes("key"))
+                .clustering("cc")
+                .add("a", ByteBufferUtil.bytes("abcd"))
+                .build()
+                .apply();
+
+        cfs.forceBlockingFlush();
+
+        new RowUpdateBuilder(cfs.metadata(), 0, ByteBufferUtil.bytes("key"))
+                .clustering("dd")
+                .add("a", ByteBufferUtil.bytes("abcd"))
+                .build()
+                .apply();
+
+        cfs.forceBlockingFlush();
+        List<SSTableReader> sstables = new ArrayList<>(cfs.getLiveSSTables());
+        assertEquals(2, sstables.size());
+        sstables.forEach(sstable -> assertFalse(sstable.isRepaired() || sstable.isPendingRepair()));
+        SSTableReader sstable1 = sstables.get(0);
+        SSTableReader sstable2 = sstables.get(1);
+
+        int numPartitions = 1;
+        int rowsPerPartition = 2;
+
+        // Capture all the digest versions as we mutate the table's repaired status. Each time
+        // we make a change, we expect a different digest.
+        Set<ByteBuffer> digests = new HashSet<>();
+        // first time round, nothing has been marked repaired so we expect digest to be an empty buffer
+        ByteBuffer digest = performReadAndVerifyRepairedInfo(readCommand, numPartitions, rowsPerPartition);
+        assertEquals(ByteBufferUtil.EMPTY_BYTE_BUFFER, digest);
+        digests.add(digest);
+
+        // add a pending repair session to table1, digest should remain the same
+        UUID session1 = UUID.randomUUID();
+        mutateRepaired(sstable1, ActiveRepairService.UNREPAIRED_SSTABLE, session1);
+        digests.add(performReadAndVerifyRepairedInfo(readCommand, numPartitions, rowsPerPartition, session1));
+        assertEquals(1, digests.size());
+
+        // add a different pending session to table2, digest should remain the same, but we expect to see both sessions now
+        UUID session2 = UUID.randomUUID();
+        mutateRepaired(sstable2, ActiveRepairService.UNREPAIRED_SSTABLE, session2);
+        digests.add(performReadAndVerifyRepairedInfo(readCommand, numPartitions, rowsPerPartition, session1, session2));
+        assertEquals(1, digests.size());
+
+        // mark one table repaired
+        mutateRepaired(sstable1, 111, null);
+        // this time, digest should not be empty, and we should only see session2
+        digests.add(performReadAndVerifyRepairedInfo(readCommand, numPartitions, rowsPerPartition, session2));
+        assertEquals(2, digests.size());
+
+        // mark the second table repaired
+        mutateRepaired(sstable2, 222, null);
+        // digest should be updated again and there should be no pending sessions reported
+        digests.add(performReadAndVerifyRepairedInfo(readCommand, numPartitions, rowsPerPartition));
+        assertEquals(3, digests.size());
+    }
+
+    private void mutateRepaired(SSTableReader sstable, long repairedAt, UUID pendingSession) throws IOException
+    {
+        sstable.descriptor.getMetadataSerializer().mutateRepairMetadata(sstable.descriptor, repairedAt, pendingSession, false);
+        sstable.reloadSSTableMetadata();
+    }
+
+    private ByteBuffer performReadAndVerifyRepairedInfo(ReadCommand command,
+                                                        int expectedPartitions,
+                                                        int expectedRowsPerPartition,
+                                                        UUID...expectedSessionIds)
+    {
+        // perform equivalent read command multiple times and assert that
+        // the repaired data info is always consistent. Return the digest
+        // so we can verify that it changes when the repaired status of
+        // the queried tables does.
+        Set<UUID> expectedSessions = new HashSet<>(Arrays.asList(expectedSessionIds));
+        Set<ByteBuffer> digests = new HashSet<>();
+        for (int i = 0; i < 10; i++)
+        {
+            ReadCommand withRepairedInfo = command.copy();
+            withRepairedInfo.trackRepairedStatus();
+
+            List<FilteredPartition> partitions = Util.getAll(withRepairedInfo);
+            assertEquals(expectedPartitions, partitions.size());
+            partitions.forEach(p -> assertEquals(expectedRowsPerPartition, p.rowCount()));
+
+            ReadCommand.RepairedDataInfo info = withRepairedInfo.getRepairedDataInfo();
+            ByteBuffer digest = info.getRepairedDataDigest();
+            digests.add(digest);
+            assertEquals(1, digests.size());
+
+            assertEquals(expectedSessions, info.getPendingRepairSessions());
+        }
+        return digests.iterator().next();
     }
 
 }

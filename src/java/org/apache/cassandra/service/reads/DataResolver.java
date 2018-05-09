@@ -24,7 +24,6 @@ import java.util.List;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.Collections2;
-import com.google.common.collect.Iterables;
 
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.DeletionTime;
@@ -43,13 +42,12 @@ import org.apache.cassandra.db.transform.Filter;
 import org.apache.cassandra.db.transform.FilteredPartitions;
 import org.apache.cassandra.db.transform.Transformation;
 import org.apache.cassandra.locator.Endpoints;
-import org.apache.cassandra.locator.Replica;
-import org.apache.cassandra.locator.ReplicaCollection;
 import org.apache.cassandra.locator.ReplicaLayout;
-import org.apache.cassandra.locator.Replicas;
 import org.apache.cassandra.net.MessageIn;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.reads.repair.ReadRepair;
+import org.apache.cassandra.service.reads.repair.RepairedDataTracker;
+import org.apache.cassandra.service.reads.repair.RepairedDataVerifier;
 
 import static com.google.common.collect.Iterables.*;
 
@@ -83,8 +81,19 @@ public class DataResolver<E extends Endpoints<E>, L extends ReplicaLayout<E, L>>
         assert !any(messages, msg -> msg.payload.isDigestResponse());
 
         E replicas = replicaLayout.all().keep(transform(messages, msg -> msg.from));
+        RepairedDataTracker repairedDataTracker = new RepairedDataTracker(getRepairedDataVerifier(command));
         List<UnfilteredPartitionIterator> iters = new ArrayList<>(
-                Collections2.transform(messages, msg -> msg.payload.makeIterator(command)));
+                Collections2.transform(messages, msg -> {
+                    // don't try and inspect repaired status from replicas which definitely didn't send it
+                    if (msg.payload.mayIncludeRepairedStatusTracking())
+                    {
+                        repairedDataTracker.recordDigest(msg.from, msg.payload.repairedDataDigest());
+                        if (msg.payload.hasPendingRepairSessions())
+                            repairedDataTracker.recordPendingSessions(msg.from);
+                    }
+                    return msg.payload.makeIterator(command);
+                }));
+
         assert replicas.size() == iters.size();
 
         /*
@@ -105,17 +114,25 @@ public class DataResolver<E extends Endpoints<E>, L extends ReplicaLayout<E, L>>
 
         UnfilteredPartitionIterator merged = mergeWithShortReadProtection(iters,
                                                                           replicaLayout.withSelected(replicas),
-                                                                          mergedResultCounter);
+                                                                          mergedResultCounter,
+                                                                          repairedDataTracker);
         FilteredPartitions filtered = FilteredPartitions.filter(merged, new Filter(command.nowInSec(), command.metadata().enforceStrictLiveness()));
         PartitionIterator counted = Transformation.apply(filtered, mergedResultCounter);
         return Transformation.apply(counted, new EmptyPartitionsDiscarder());
     }
 
+    protected RepairedDataVerifier getRepairedDataVerifier(ReadCommand command)
+    {
+        return RepairedDataVerifier.simple(command);
+    }
+
     private UnfilteredPartitionIterator mergeWithShortReadProtection(List<UnfilteredPartitionIterator> results,
                                                                      L sources,
-                                                                     DataLimits.Counter mergedResultCounter)
+                                                                     DataLimits.Counter mergedResultCounter,
+                                                                     RepairedDataTracker repairedDataTracker)
     {
-        // If we have only one results, there is no read repair to do and we can't get short reads
+        // If we have only one results, there is no read repair to do, we can't get short
+        // reads and we can't make a comparison between repaired data sets
         if (results.size() == 1)
             return results.get(0);
 
@@ -127,7 +144,7 @@ public class DataResolver<E extends Endpoints<E>, L extends ReplicaLayout<E, L>>
             for (int i = 0; i < results.size(); i++)
                 results.set(i, ShortReadProtection.extend(sources.selected().get(i), results.get(i), command, mergedResultCounter, queryStartNanoTime, enforceStrictLiveness));
 
-        return UnfilteredPartitionIterators.merge(results, wrapMergeListener(readRepair.getMergeListener(sources), sources));
+        return UnfilteredPartitionIterators.merge(results, wrapMergeListener(readRepair.getMergeListener(sources), sources, repairedDataTracker));
     }
 
     private String makeResponsesDebugString(DecoratedKey partitionKey)
@@ -135,7 +152,7 @@ public class DataResolver<E extends Endpoints<E>, L extends ReplicaLayout<E, L>>
         return Joiner.on(",\n").join(transform(getMessages().snapshot(), m -> m.from + " => " + m.payload.toDebugString(command, partitionKey)));
     }
 
-    private UnfilteredPartitionIterators.MergeListener wrapMergeListener(UnfilteredPartitionIterators.MergeListener partitionListener, L sources)
+    private UnfilteredPartitionIterators.MergeListener wrapMergeListener(UnfilteredPartitionIterators.MergeListener partitionListener, L sources, RepairedDataTracker repairedDataDigestTracker)
     {
         return new UnfilteredPartitionIterators.MergeListener()
         {
@@ -224,6 +241,7 @@ public class DataResolver<E extends Endpoints<E>, L extends ReplicaLayout<E, L>>
             public void close()
             {
                 partitionListener.close();
+                repairedDataDigestTracker.verify();
             }
         };
     }

@@ -783,6 +783,15 @@ public class LocalSessions
         return session != null && session.getState() != FINALIZED && session.getState() != FAILED;
     }
 
+    /**
+     * determines if a local session exists, and if it's in the finalized state
+     */
+    public boolean isSessionFinalized(UUID sessionID)
+    {
+        LocalSession session = getSession(sessionID);
+        return session != null && session.getState() == FINALIZED;
+    }
+
     @VisibleForTesting
     protected boolean sessionHasData(LocalSession session)
     {

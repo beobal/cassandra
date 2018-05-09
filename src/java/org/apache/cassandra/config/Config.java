@@ -395,6 +395,16 @@ public class Config
     public volatile boolean diagnostic_events_enabled = false;
 
     /**
+     * flags for enabling tracking repaired state of data during reads
+     * separate flags for range & single partition reads as single partition reads are only tracked
+     * when CL > 1 and a digest mismatch occurs. Currently, range queries don't use digests so if
+     * enabled for range reads, all such reads will include repaired data tracking. As this adds
+     * some slight overhead, operators may wish to disable it whilst still enabling it for partition reads
+     */
+    public volatile boolean repaired_data_tracking_for_range_reads_enabled = false;
+    public volatile boolean repaired_data_tracking_for_partition_reads_enabled = false;
+
+    /**
      * @deprecated migrate to {@link DatabaseDescriptor#isClientInitialized()}
      */
     @Deprecated

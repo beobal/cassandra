@@ -93,4 +93,12 @@ public interface StorageProxyMBean
      * Stop logging queries but leave any generated files on disk.
      */
     public void stopFullQueryLogger();
+
+    void enableRepairedDataTrackingForRangeReads();
+    void disableRepairedDataTrackingForRangeReads();
+    boolean getRepairedDataTrackingEnabledForRangeReads();
+
+    void enableRepairedDataTrackingForPartitionReads();
+    void disableRepairedDataTrackingForPartitionReads();
+    boolean getRepairedDataTrackingEnabledForPartitionReads();
 }

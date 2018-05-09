@@ -24,6 +24,7 @@ import java.util.function.Consumer;
 import com.google.common.base.Preconditions;
 
 import com.codahale.metrics.Meter;
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.cassandra.db.Keyspace;
@@ -93,6 +94,10 @@ public abstract class AbstractReadRepair<E extends Endpoints<E>, L extends Repli
                                                              command, replicaLayout, queryStartNanoTime);
 
         digestRepair = new DigestRepair(resolver, readCallback, resultConsumer);
+
+        // if enabled, request additional info about repaired data from the replicas
+        if (DatabaseDescriptor.getRepairedDataTrackingForPartitionReadsEnabled())
+            command.trackRepairedStatus();
 
         for (Replica replica : replicaLayout.selected())
         {

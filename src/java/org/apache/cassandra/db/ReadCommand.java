@@ -18,10 +18,15 @@
 package org.apache.cassandra.db;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.*;
 import java.util.function.LongPredicate;
+import java.util.function.Supplier;
 
 import javax.annotation.Nullable;
 
+import com.google.common.hash.Hasher;
+import com.google.common.hash.Hashing;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,6 +44,7 @@ import org.apache.cassandra.index.Index;
 import org.apache.cassandra.index.IndexNotAvailableException;
 import org.apache.cassandra.index.IndexRegistry;
 import org.apache.cassandra.io.IVersionedSerializer;
+import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.cassandra.io.util.DataOutputPlus;
 import org.apache.cassandra.metrics.TableMetrics;
@@ -48,9 +54,13 @@ import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.SchemaConstants;
 import org.apache.cassandra.schema.TableId;
 import org.apache.cassandra.schema.TableMetadata;
+import org.apache.cassandra.service.ActiveRepairService;
 import org.apache.cassandra.service.ClientWarn;
 import org.apache.cassandra.tracing.Tracing;
+import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.FBUtilities;
+import org.apache.cassandra.utils.HashingUtils;
+import org.apache.cassandra.utils.IteratorWithLowerBound;
 
 /**
  * General interface for storage-engine read commands (common to both range and
@@ -70,6 +80,11 @@ public abstract class ReadCommand extends AbstractReadQuery
     private final boolean acceptsTransient;
     // if a digest query, the version for which the digest is expected. Ignored if not a digest.
     private int digestVersion;
+
+    // for data queries, coordinators may request information on the repaired data used in constructing the response
+    private boolean trackRepairedStatus = false;
+    private static final RepairedDataInfo NO_OP_REPAIRED_DATA_INFO = new RepairedDataInfo(){};
+    private RepairedDataInfo repairedDataInfo = NO_OP_REPAIRED_DATA_INFO;
 
     @Nullable
     private final IndexMetadata index;
@@ -184,6 +199,48 @@ public abstract class ReadCommand extends AbstractReadQuery
     public boolean acceptsTransient()
     {
         return acceptsTransient;
+    }
+
+    /**
+     * Activates repaired data tracking for this command.
+     *
+     * When active, a digest will be created from data read from repaired SSTables. The digests
+     * from each replica can then be compared on the coordinator to detect any divergence in their
+     * repaired datasets. In this context, an sstable is considered repaired if it is marked
+     * repaired or has a pending repair session which has been committed.
+     * In addition to the digest, a set of ids for any pending but as yet uncommitted repair sessions
+     * is recorded and returned to the coordinator. This is to help reduce false positives caused
+     * by compaction lagging which can leave sstables from committed sessions in the pending state
+     * for a time.
+     */
+    public void trackRepairedStatus()
+    {
+        trackRepairedStatus = true;
+    }
+
+    /**
+     * Whether or not repaired status of any data read is being tracked or not
+     *
+     * @return Whether repaired status tracking is active for this command
+     */
+    public boolean isTrackingRepairedStatus()
+    {
+        return trackRepairedStatus;
+    }
+
+    /**
+     * Returns the status of the repaired data read in the execution of this command.
+     *
+     * If either repaired status tracking is not active or the command has not yet been
+     * executed, then this info object will be empty. Otherwise, it will contain a digest
+     * of the repaired data read, or empty buffer if no repaired data was read. Also, it
+     * will contain a possibly empty set of session ids if any of the sstables read
+     * have pending but uncommitted repair sessions.
+     * @return RepairedDataInfo status of the repaired data read in the execution of the command
+     */
+    public RepairedDataInfo getRepairedDataInfo()
+    {
+        return repairedDataInfo;
     }
 
     /**
@@ -304,6 +361,9 @@ public abstract class ReadCommand extends AbstractReadQuery
             searcher = index.searcherFor(this);
             Tracing.trace("Executing read on {}.{} using index {}", cfs.metadata.keyspace, cfs.metadata.name, index.getIndexMetadata().name);
         }
+
+        if (isTrackingRepairedStatus())
+            repairedDataInfo = newRepairedDataInfo();
 
         UnfilteredPartitionIterator iterator = (null == searcher) ? queryStorage(cfs, executionController) : searcher.search(executionController);
 
@@ -567,6 +627,224 @@ public abstract class ReadCommand extends AbstractReadQuery
     public String name()
     {
         return toCQLString();
+    }
+
+
+    protected UnfilteredPartitionIterator withRepairedDataInfo(final SSTableReader sstable,
+                                                               final UnfilteredPartitionIterator iterator)
+    {
+        if (!isTrackingRepairedStatus())
+            return iterator;
+
+        // If the sstable is considered repaired (marked repaired or with a pending session
+        // that has been committed) include it in the repaired data digest
+        class WithRepairedDataTracking extends Transformation<UnfilteredRowIterator>
+        {
+            protected UnfilteredRowIterator applyToPartition(UnfilteredRowIterator partition)
+            {
+                return withRepairedDataDigest(repairedDataInfo, partition);
+            }
+        }
+
+        if (considerSStableRepaired(sstable))
+            return Transformation.apply(iterator, new WithRepairedDataTracking());
+
+        // If table has a pending repair session which has not yet been committed, record that
+        // session id so the coordinator can try and detect potential false positive digest
+        // mimatches due to a replicas moving tables from pending to repaired at different
+        // rates.
+        UUID sessionId = sstable.getPendingRepair();
+        if (sessionId != null)
+            repairedDataInfo.trackPendingRepairSession(sessionId);
+
+        return iterator;
+    }
+
+    protected UnfilteredRowIterator withRepairedDataInfo(SSTableReader sstable, UnfilteredRowIterator iterator)
+    {
+        if (!isTrackingRepairedStatus())
+            return iterator;
+
+        // If the sstable is considered repaired (marked repaired or with a pending session
+        // that has been committed) include it in the repaired data digest
+        if (considerSStableRepaired(sstable))
+            return withRepairedDataDigest(repairedDataInfo, iterator);
+
+        // If table has a pending repair session which has not yet been committed, record that
+        // session id so the coordinator can try and detect potential false positive digest
+        // mimatches due to a replicas moving tables from pending to repaired at different
+        // rates.
+        UUID sessionId = sstable.getPendingRepair();
+        if (sessionId != null)
+            repairedDataInfo.trackPendingRepairSession(sessionId);
+
+        return iterator;
+    }
+
+    // For tracking purposes we consider data repaired if the sstable is either:
+    // * marked repaired
+    // * marked pending, but the local session is has been committed. This reduces the window
+    //   whereby the tracking is affected by compaction backlog causing repaired sstables to
+    //   remain in the pending state
+    private boolean considerSStableRepaired(SSTableReader sstable)
+    {
+        return (sstable.isRepaired()
+                || (sstable.isPendingRepair()
+                    && ActiveRepairService.instance.consistent.local.isSessionFinalized(sstable.getPendingRepair())));
+    }
+
+    private UnfilteredRowIterator withRepairedDataDigest(final RepairedDataInfo tracker, UnfilteredRowIterator iterator)
+    {
+        class WithDigest extends Transformation
+        {
+            protected DecoratedKey applyToPartitionKey(DecoratedKey key)
+            {
+                tracker.trackPartitionKey(key);
+                return key;
+            }
+
+            protected DeletionTime applyToDeletion(DeletionTime deletionTime)
+            {
+                tracker.trackDeletion(deletionTime);
+                return deletionTime;
+            }
+
+            protected RangeTombstoneMarker applyToMarker(RangeTombstoneMarker marker)
+            {
+                tracker.trackRangeTombstoneMarker(marker);
+                return marker;
+            }
+
+            protected Row applyToStatic(Row row)
+            {
+                tracker.trackRow(row);
+                return row;
+            }
+
+            protected Row applyToRow(Row row)
+            {
+                tracker.trackRow(row);
+                return row;
+            }
+        }
+
+        final UnfilteredRowIterator withDigest = Transformation.apply(iterator, new WithDigest());
+
+        // Possibly wrap the digest-calculating iterator so we can still employ the optimization from CASSANDRA-8180
+        class WithDigestAndLowerBound extends WrappingUnfilteredRowIterator implements IteratorWithLowerBound<Unfiltered>
+        {
+            private final Supplier<Unfiltered> lowerBoundFn;
+            private WithDigestAndLowerBound(UnfilteredRowIterator wrapped, Supplier<Unfiltered> lowerBoundFn)
+            {
+                super(wrapped);
+                this.lowerBoundFn = lowerBoundFn;
+            }
+
+            @Override
+            public Unfiltered lowerBound()
+            {
+                return lowerBoundFn.get();
+            }
+        }
+
+        if (iterator instanceof IteratorWithLowerBound)
+            return new WithDigestAndLowerBound(withDigest, ((IteratorWithLowerBound<Unfiltered>) iterator)::lowerBound);
+        else
+            return withDigest;
+    }
+
+    interface RepairedDataInfo
+    {
+        default ByteBuffer getRepairedDataDigest()
+        {
+            return ByteBufferUtil.EMPTY_BYTE_BUFFER;
+        }
+
+        default Set<UUID> getPendingRepairSessions()
+        {
+            return Collections.emptySet();
+        }
+
+        default void trackPendingRepairSession(UUID sessionId)
+        {
+        }
+
+        default void trackPartitionKey(DecoratedKey key)
+        {
+        }
+
+        default void trackDeletion(DeletionTime deletion)
+        {
+        }
+
+        default void trackRangeTombstoneMarker(RangeTombstoneMarker marker)
+        {
+        }
+
+        default void trackRow(Row row)
+        {
+        }
+    }
+
+    protected RepairedDataInfo newRepairedDataInfo()
+    {
+        return new DefaultRepairedDataInfo();
+    }
+
+    private static class DefaultRepairedDataInfo implements RepairedDataInfo
+    {
+        private Set<UUID> pendingRepairSessions;
+        private Hasher hasher;
+
+        public ByteBuffer getRepairedDataDigest()
+        {
+            return hasher == null
+                   ? ByteBufferUtil.EMPTY_BYTE_BUFFER
+                   : ByteBuffer.wrap(getHasher().hash().asBytes());
+        }
+
+        public Set<UUID> getPendingRepairSessions()
+        {
+            return pendingRepairSessions == null
+                   ? Collections.emptySet()
+                   : pendingRepairSessions;
+        }
+
+        public void trackPendingRepairSession(UUID sessionId)
+        {
+            if (pendingRepairSessions == null)
+                pendingRepairSessions = new HashSet<>();
+
+            pendingRepairSessions.add(sessionId);
+        }
+
+        public void trackPartitionKey(DecoratedKey key)
+        {
+            HashingUtils.updateBytes(getHasher(), key.getKey().duplicate());
+        }
+
+        public void trackDeletion(DeletionTime deletion)
+        {
+            deletion.digest(getHasher());
+        }
+
+        public void trackRangeTombstoneMarker(RangeTombstoneMarker marker)
+        {
+            marker.digest(getHasher());
+        }
+
+        public void trackRow(Row row)
+        {
+            row.digest(getHasher());
+        }
+
+        private Hasher getHasher()
+        {
+            if (hasher == null)
+                hasher = Hashing.crc32c().newHasher();
+
+            return hasher;
+        }
     }
 
     private static class Serializer implements IVersionedSerializer<ReadCommand>

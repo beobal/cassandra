@@ -24,6 +24,7 @@ import java.util.List;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Iterables;
 
+import org.apache.cassandra.net.ParameterType;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.filter.*;
@@ -274,7 +275,7 @@ public class PartitionRangeReadCommand extends ReadCommand implements PartitionR
             {
                 @SuppressWarnings("resource") // We close on exception and on closing the result returned by this method
                 UnfilteredPartitionIterator iter = sstable.getScanner(columnFilter(), dataRange(), readCountUpdater);
-                iterators.add(iter);
+                iterators.add(withRepairedDataInfo(sstable, iter));
                 if (!sstable.isRepaired())
                     oldestUnrepairedTombstone = Math.min(oldestUnrepairedTombstone, sstable.getMinLocalDeletionTime());
             }
@@ -354,7 +355,10 @@ public class PartitionRangeReadCommand extends ReadCommand implements PartitionR
 
     public MessageOut<ReadCommand> createMessage()
     {
-        return new MessageOut<>(MessagingService.Verb.RANGE_SLICE, this, serializer);
+        MessageOut<ReadCommand> message = new MessageOut<>(MessagingService.Verb.RANGE_SLICE, this, serializer);
+        return isTrackingRepairedStatus()
+               ? message.withParameter(ParameterType.TRACK_REPAIRED_DATA, MessagingService.ONE_BYTE)
+               : message;
     }
 
     protected void appendCQLWhereClause(StringBuilder sb)

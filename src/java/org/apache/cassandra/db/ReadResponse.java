@@ -51,10 +51,18 @@ public abstract class ReadResponse
     }
 
     @VisibleForTesting
-    public static ReadResponse createRemoteDataResponse(UnfilteredPartitionIterator data, ReadCommand command)
+    public static ReadResponse createRemoteDataResponse(UnfilteredPartitionIterator data,
+                                                        ByteBuffer repairedDataDigest,
+                                                        boolean pendingRepairSessions,
+                                                        ReadCommand command,
+                                                        int version)
     {
-        return new RemoteDataResponse(LocalDataResponse.build(data, command.columnFilter()), MessagingService.current_version);
+        return new RemoteDataResponse(LocalDataResponse.build(data, command.columnFilter()),
+                                      repairedDataDigest,
+                                      pendingRepairSessions,
+                                      version);
     }
+
 
     public static ReadResponse createDigestResponse(UnfilteredPartitionIterator data, ReadCommand command)
     {
@@ -63,6 +71,9 @@ public abstract class ReadResponse
 
     public abstract UnfilteredPartitionIterator makeIterator(ReadCommand command);
     public abstract ByteBuffer digest(ReadCommand command);
+    public abstract ByteBuffer repairedDataDigest();
+    public abstract boolean hasPendingRepairSessions();
+    public abstract boolean mayIncludeRepairedStatusTracking();
 
     public abstract boolean isDigestResponse();
 
@@ -85,18 +96,22 @@ public abstract class ReadResponse
                 }
             }
         }
-        return "<key " + key + " not found>";
+        return String.format("<key %s not found (repaired_digest=%s pending_repairs=%s)>",
+                             key, ByteBufferUtil.bytesToHex(repairedDataDigest()), hasPendingRepairSessions());
     }
 
     private String toDebugString(UnfilteredRowIterator partition, TableMetadata metadata)
     {
         StringBuilder sb = new StringBuilder();
 
-        sb.append(String.format("[%s] key=%s partition_deletion=%s columns=%s",
+        sb.append(String.format("[%s] key=%s partition_deletion=%s columns=%s repaired_digest=%s pending_repairs=%s",
                                 metadata,
                                 metadata.partitionKeyType.getString(partition.partitionKey().getKey()),
                                 partition.partitionLevelDeletion(),
-                                partition.columns()));
+                                partition.columns(),
+                                ByteBufferUtil.bytesToHex(repairedDataDigest()),
+                                hasPendingRepairSessions()
+                                ));
 
         if (partition.staticRow() != Rows.EMPTY_STATIC_ROW)
             sb.append("\n    ").append(partition.staticRow().toString(metadata, true));
@@ -130,6 +145,21 @@ public abstract class ReadResponse
             throw new UnsupportedOperationException();
         }
 
+        public boolean mayIncludeRepairedStatusTracking()
+        {
+            return false;
+        }
+
+        public ByteBuffer repairedDataDigest()
+        {
+            throw new UnsupportedOperationException();
+        }
+
+        public boolean hasPendingRepairSessions()
+        {
+            throw new UnsupportedOperationException();
+        }
+
         public ByteBuffer digest(ReadCommand command)
         {
             // We assume that the digest is in the proper version, which bug excluded should be true since this is called with
@@ -150,7 +180,11 @@ public abstract class ReadResponse
     {
         private LocalDataResponse(UnfilteredPartitionIterator iter, ReadCommand command)
         {
-            super(build(iter, command.columnFilter()), MessagingService.current_version, SerializationHelper.Flag.LOCAL);
+            super(build(iter, command.columnFilter()),
+                  command.getRepairedDataInfo().getRepairedDataDigest(),
+                  !command.getRepairedDataInfo().getPendingRepairSessions().isEmpty(),
+                  MessagingService.current_version,
+                  SerializationHelper.Flag.LOCAL);
         }
 
         private static ByteBuffer build(UnfilteredPartitionIterator iter, ColumnFilter selection)
@@ -171,9 +205,12 @@ public abstract class ReadResponse
     // built on the coordinator node receiving a response
     private static class RemoteDataResponse extends DataResponse
     {
-        protected RemoteDataResponse(ByteBuffer data, int version)
+        protected RemoteDataResponse(ByteBuffer data,
+                                     ByteBuffer repairedDataDigest,
+                                     boolean pendingRepairSessions,
+                                     int version)
         {
-            super(data, version, SerializationHelper.Flag.FROM_REMOTE);
+            super(data, repairedDataDigest, pendingRepairSessions, version, SerializationHelper.Flag.FROM_REMOTE);
         }
     }
 
@@ -182,13 +219,21 @@ public abstract class ReadResponse
         // TODO: can the digest be calculated over the raw bytes now?
         // The response, serialized in the current messaging version
         private final ByteBuffer data;
+        private final ByteBuffer repairedDataDigest;
+        private final boolean pendingRepairSessions;
         private final int dataSerializationVersion;
         private final SerializationHelper.Flag flag;
 
-        protected DataResponse(ByteBuffer data, int dataSerializationVersion, SerializationHelper.Flag flag)
+        protected DataResponse(ByteBuffer data,
+                               ByteBuffer repairedDataDigest,
+                               boolean pendingRepairSessions,
+                               int dataSerializationVersion,
+                               SerializationHelper.Flag flag)
         {
             super();
             this.data = data;
+            this.repairedDataDigest = repairedDataDigest;
+            this.pendingRepairSessions = pendingRepairSessions;
             this.dataSerializationVersion = dataSerializationVersion;
             this.flag = flag;
         }
@@ -213,6 +258,21 @@ public abstract class ReadResponse
             }
         }
 
+        public boolean mayIncludeRepairedStatusTracking()
+        {
+            return dataSerializationVersion >= MessagingService.VERSION_40;
+        }
+
+        public ByteBuffer repairedDataDigest()
+        {
+            return repairedDataDigest;
+        }
+
+        public boolean hasPendingRepairSessions()
+        {
+            return pendingRepairSessions;
+        }
+
         public ByteBuffer digest(ReadCommand command)
         {
             try (UnfilteredPartitionIterator iterator = makeIterator(command))
@@ -233,10 +293,21 @@ public abstract class ReadResponse
         {
             boolean isDigest = response instanceof DigestResponse;
             ByteBuffer digest = isDigest ? ((DigestResponse)response).digest : ByteBufferUtil.EMPTY_BYTE_BUFFER;
-
             ByteBufferUtil.writeWithVIntLength(digest, out);
             if (!isDigest)
             {
+                // From 4.0, a coordinator may request additional info about the repaired data that
+                // makes up the response, namely a digest generated from the repaired data and a
+                // flag indicating that some of the sstables read during this read are involved in pending
+                // but not yet committed repair sessions.
+                // If the coordinator did not request this info, the response contains an empty digest
+                // and a negative flag. If the messaging version is < 4.0, these are omitted altogether.
+                if (version >= MessagingService.VERSION_40)
+                {
+                    ByteBufferUtil.writeWithVIntLength(response.repairedDataDigest(), out);
+                    out.writeBoolean(response.hasPendingRepairSessions());
+                }
+
                 ByteBuffer data = ((DataResponse)response).data;
                 ByteBufferUtil.writeWithVIntLength(data, out);
             }
@@ -248,18 +319,41 @@ public abstract class ReadResponse
             if (digest.hasRemaining())
                 return new DigestResponse(digest);
 
+            // A data response may also contain a digest of the portion of its payload
+            // that comes from the replica's repaired set, along with a flag indicating
+            // that pending repair sessions are also involved.
+            boolean pendingRepairs;
+            if (version >= MessagingService.VERSION_40)
+            {
+                digest = ByteBufferUtil.readWithVIntLength(in);
+                pendingRepairs = in.readBoolean();
+            }
+            else
+            {
+                digest = ByteBufferUtil.EMPTY_BYTE_BUFFER;
+                pendingRepairs = false;
+            }
+
             ByteBuffer data = ByteBufferUtil.readWithVIntLength(in);
-            return new RemoteDataResponse(data, version);
+            return new RemoteDataResponse(data, digest, pendingRepairs, version);
         }
 
         public long serializedSize(ReadResponse response, int version)
         {
             boolean isDigest = response instanceof DigestResponse;
             ByteBuffer digest = isDigest ? ((DigestResponse)response).digest : ByteBufferUtil.EMPTY_BYTE_BUFFER;
-
             long size = ByteBufferUtil.serializedSizeWithVIntLength(digest);
+
             if (!isDigest)
             {
+                // From 4.0, a coordinator may request an additional info about the repaired data
+                // that makes up the response.
+                if (version >= MessagingService.VERSION_40)
+                {
+                    size += ByteBufferUtil.serializedSizeWithVIntLength(response.repairedDataDigest());
+                    size += 1;
+                }
+
                 // In theory, we should deserialize/re-serialize if the version asked is different from the current
                 // version as the content could have a different serialization format. So far though, we haven't made
                 // change to partition iterators serialization since 3.0 so we skip this.

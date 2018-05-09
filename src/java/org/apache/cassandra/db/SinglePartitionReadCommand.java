@@ -44,6 +44,7 @@ import org.apache.cassandra.io.util.DataOutputPlus;
 import org.apache.cassandra.metrics.TableMetrics;
 import org.apache.cassandra.net.MessageOut;
 import org.apache.cassandra.net.MessagingService;
+import org.apache.cassandra.net.ParameterType;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.schema.TableMetadata;
@@ -591,7 +592,6 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
         List<UnfilteredRowIterator> iterators = new ArrayList<>(Iterables.size(view.memtables) + view.sstables.size());
         ClusteringIndexFilter filter = clusteringIndexFilter();
         long minTimestamp = Long.MAX_VALUE;
-
         try
         {
             for (Memtable memtable : view.memtables)
@@ -654,7 +654,7 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
                 if (!sstable.isRepaired())
                     oldestUnrepairedTombstone = Math.min(oldestUnrepairedTombstone, sstable.getMinLocalDeletionTime());
 
-                iterators.add(iter);
+                iterators.add(withRepairedDataInfo(sstable, iter));
                 mostRecentPartitionTombstone = Math.max(mostRecentPartitionTombstone,
                                                         iter.partitionLevelDeletion().markedForDeleteAt());
             }
@@ -674,7 +674,7 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
                     if (!sstable.isRepaired())
                         oldestUnrepairedTombstone = Math.min(oldestUnrepairedTombstone, sstable.getMinLocalDeletionTime());
 
-                    iterators.add(iter);
+                    iterators.add(withRepairedDataInfo(sstable, iter));
                     includedDueToTombstones++;
                 }
             }
@@ -804,8 +804,8 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
         boolean onlyUnrepaired = true;
         // read sorted sstables
         SSTableReadMetricsCollector metricsCollector = new SSTableReadMetricsCollector();
-        for (SSTableReader sstable : view.sstables)
-        {
+            for (SSTableReader sstable : view.sstables)
+            {
             // if we've already seen a partition tombstone with a timestamp greater
             // than the most recent update to this sstable, we're done, since the rest of the sstables
             // will also be older
@@ -836,9 +836,18 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
                                                                                        metricsCollector))
                 {
                     if (!iter.partitionLevelDeletion().isLive())
-                        result = add(UnfilteredRowIterators.noRowsIterator(iter.metadata(), iter.partitionKey(), Rows.EMPTY_STATIC_ROW, iter.partitionLevelDeletion(), filter.isReversed()), result, filter, sstable.isRepaired());
+                    {
+                        result = add(UnfilteredRowIterators.noRowsIterator(iter.metadata(),
+                                                                           iter.partitionKey(),
+                                                                           Rows.EMPTY_STATIC_ROW,
+                                                                           iter.partitionLevelDeletion(),
+                                                                           filter.isReversed()),
+                                     result, filter, sstable.isRepaired());
+                    }
                     else
-                        result = add(iter, result, filter, sstable.isRepaired());
+                    {
+                        result = add(withRepairedDataInfo(sstable, iter), result, filter, sstable.isRepaired());
+                    }
                 }
                 continue;
             }
@@ -856,7 +865,8 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
 
                 if (sstable.isRepaired())
                     onlyUnrepaired = false;
-                result = add(iter, result, filter, sstable.isRepaired());
+
+                result = add(withRepairedDataInfo(sstable, iter), result, filter, sstable.isRepaired());
             }
         }
 
@@ -892,7 +902,10 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
         return result.unfilteredIterator(columnFilter(), Slices.ALL, clusteringIndexFilter().isReversed());
     }
 
-    private ImmutableBTreePartition add(UnfilteredRowIterator iter, ImmutableBTreePartition result, ClusteringIndexNamesFilter filter, boolean isRepaired)
+    private ImmutableBTreePartition add(UnfilteredRowIterator iter,
+                                        ImmutableBTreePartition result,
+                                        ClusteringIndexNamesFilter filter,
+                                        boolean isRepaired)
     {
         if (!isRepaired)
             oldestUnrepairedTombstone = Math.min(oldestUnrepairedTombstone, iter.stats().minLocalDeletionTime);
@@ -997,7 +1010,10 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
 
     public MessageOut<ReadCommand> createMessage()
     {
-        return new MessageOut<>(MessagingService.Verb.READ, this, serializer);
+        MessageOut<ReadCommand> message = new MessageOut<>(MessagingService.Verb.READ, this, serializer);
+        return isTrackingRepairedStatus()
+               ? message.withParameter(ParameterType.TRACK_REPAIRED_DATA, MessagingService.ONE_BYTE)
+               : message;
     }
 
     protected void appendCQLWhereClause(StringBuilder sb)
