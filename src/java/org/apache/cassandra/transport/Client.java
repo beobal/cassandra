@@ -33,6 +33,9 @@ import org.apache.cassandra.cql3.QueryOptions;
 import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.db.marshal.UTF8Type;
+import org.apache.cassandra.transport.compress.LZ4FrameCompressor;
+import org.apache.cassandra.transport.compress.LZ4RawCompressor;
+import org.apache.cassandra.transport.compress.SnappyRawCompressor;
 import org.apache.cassandra.transport.messages.*;
 import org.apache.cassandra.utils.Hex;
 import org.apache.cassandra.utils.JVMStabilityInspector;
@@ -44,7 +47,7 @@ public class Client extends SimpleClient
 
     public Client(String host, int port, ProtocolVersion version, EncryptionOptions encryptionOptions)
     {
-        super(host, port, version, encryptionOptions);
+        super(host, port, version, version.isBeta(), encryptionOptions);
         setEventHandler(eventHandler);
     }
 
@@ -107,11 +110,29 @@ public class Client extends SimpleClient
             options.put(StartupMessage.CQL_VERSION, "3.0.0");
             while (iter.hasNext())
             {
-               String next = iter.next();
-               if (next.toLowerCase().equals("snappy"))
+               String next = iter.next().toLowerCase();
+               if (next.equals("snappy"))
                {
+                   if (options.containsKey(StartupMessage.COMPRESSION))
+                       throw new RuntimeException("Multiple compression options supplied");
                    options.put(StartupMessage.COMPRESSION, "snappy");
-                   connection.setCompressor(FrameCompressor.SnappyCompressor.instance);
+                   connection.setCompressor(SnappyRawCompressor.instance);
+               }
+               else if (next.equals("lz4"))
+               {
+                   if (options.containsKey(StartupMessage.COMPRESSION))
+                       throw new RuntimeException("Multiple compression options supplied");
+                   options.put(StartupMessage.COMPRESSION, "lz4");
+                   connection.setCompressor(LZ4RawCompressor.instance);
+
+               }
+               else if (next.equals("lz4_frame"))
+               {
+                   if (options.containsKey(StartupMessage.COMPRESSION))
+                       throw new RuntimeException("Multiple compression options supplied");
+                   options.put(StartupMessage.COMPRESSION, "lz4_frame");
+                   connection.setCompressor(LZ4FrameCompressor.INSTANCE);
+
                }
             }
             return new StartupMessage(options);

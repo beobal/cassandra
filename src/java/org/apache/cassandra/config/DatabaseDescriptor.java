@@ -1857,6 +1857,11 @@ public class DatabaseDescriptor
         conf.native_transport_max_concurrent_connections_per_ip = native_transport_max_concurrent_connections_per_ip;
     }
 
+    public static boolean isNativeTransportLZ4ChecksummingEnabled()
+    {
+        return conf.native_transport_lz4_checksums_enabled;
+    }
+
     public static double getCommitLogSyncGroupWindow()
     {
         return conf.commitlog_sync_group_window_in_ms;

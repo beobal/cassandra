@@ -32,6 +32,7 @@ import io.netty.handler.codec.MessageToMessageEncoder;
 import io.netty.util.Attribute;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.exceptions.InvalidRequestException;
+import org.apache.cassandra.transport.compress.FrameCompressor;
 import org.apache.cassandra.transport.messages.ErrorMessage;
 
 public class Frame

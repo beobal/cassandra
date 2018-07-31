@@ -45,6 +45,8 @@ import org.apache.cassandra.config.EncryptionOptions;
 import org.apache.cassandra.cql3.QueryOptions;
 import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.cassandra.security.SSLFactory;
+import org.apache.cassandra.transport.compress.LZ4FrameCompressor;
+import org.apache.cassandra.transport.compress.LZ4RawCompressor;
 import org.apache.cassandra.transport.messages.ErrorMessage;
 import org.apache.cassandra.transport.messages.EventMessage;
 import org.apache.cassandra.transport.messages.ExecuteMessage;
@@ -125,8 +127,11 @@ public class SimpleClient implements Closeable
         options.put(StartupMessage.CQL_VERSION, "3.0.0");
         if (useCompression)
         {
-            options.put(StartupMessage.COMPRESSION, "snappy");
-            connection.setCompressor(FrameCompressor.SnappyCompressor.instance);
+            options.put(StartupMessage.COMPRESSION, "lz4");
+            if (connection.getVersion().isGreaterOrEqualTo(ProtocolVersion.V5))
+                connection.setCompressor(LZ4FrameCompressor.INSTANCE);
+            else
+                connection.setCompressor(LZ4RawCompressor.instance);
         }
         execute(new StartupMessage(options));
 

@@ -154,6 +154,16 @@ public class Config
     public volatile long native_transport_max_concurrent_connections_per_ip = -1L;
 
     /**
+     * LZ4 Framed (lz4_frame) compression of native transport frame bodies uses the LZ4 Frame format.
+     * The LZ4 Frame format, which is an option for native protocol compression, supports xxHash checksums
+     * of both the compressed blocks and the uncompressed content. This option enables both to be disabled.
+     * It is highly recommended to leave it enabled, if the overhead is too great, revert to LZ4 block
+     * compression (lz4).
+     * https://github.com/lz4/lz4/wiki/lz4_Frame_format.md
+     */
+    public boolean native_transport_lz4_checksums_enabled = true;
+
+    /**
      * Max size of values in SSTables, in MegaBytes.
      * Default is the same as the native protocol frame limit: 256Mb.
      * See AbstractType for how it is used.

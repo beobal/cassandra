@@ -26,6 +26,9 @@ import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.service.ClientState;
 import org.apache.cassandra.service.QueryState;
 import org.apache.cassandra.transport.*;
+import org.apache.cassandra.transport.compress.LZ4FrameCompressor;
+import org.apache.cassandra.transport.compress.LZ4RawCompressor;
+import org.apache.cassandra.transport.compress.SnappyRawCompressor;
 import org.apache.cassandra.utils.CassandraVersion;
 
 /**
@@ -87,13 +90,17 @@ public class StartupMessage extends Message.Request
             String compression = options.get(COMPRESSION).toLowerCase();
             if (compression.equals("snappy"))
             {
-                if (FrameCompressor.SnappyCompressor.instance == null)
+                if (SnappyRawCompressor.instance == null)
                     throw new ProtocolException("This instance does not support Snappy compression");
-                connection.setCompressor(FrameCompressor.SnappyCompressor.instance);
+                connection.setCompressor(SnappyRawCompressor.instance);
             }
             else if (compression.equals("lz4"))
             {
-                connection.setCompressor(FrameCompressor.LZ4Compressor.instance);
+                connection.setCompressor(LZ4RawCompressor.instance);
+            }
+            else if (compression.equals("lz4_frame"))
+            {
+                connection.setCompressor(LZ4FrameCompressor.INSTANCE);
             }
             else
             {

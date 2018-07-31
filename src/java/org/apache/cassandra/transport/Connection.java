@@ -19,6 +19,7 @@ package org.apache.cassandra.transport;
 
 import io.netty.channel.Channel;
 import io.netty.util.AttributeKey;
+import org.apache.cassandra.transport.compress.FrameCompressor;
 
 public class Connection
 {
