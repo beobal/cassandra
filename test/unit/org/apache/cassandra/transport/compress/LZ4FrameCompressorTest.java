@@ -166,7 +166,15 @@ public class LZ4FrameCompressorTest
 
                 flipConsecutiveBits(compressed, i);
                 // should decompress without detecting corruption
-                decompressed = decompressor.decompress(compressed);
+                // if we happen to flip bytes containing the block size,
+                // we will fail hard during decompression
+                try
+                {
+                    decompressed = decompressor.decompress(compressed);
+                } catch (IOException e)
+                {
+                    // may be expected
+                }
                 // frame should not have round tripped successfully though
                 assertNotEquals(0, FastByteOperations.compareUnsigned(rawBytes, 0, rawBytes.length,
                                                                       decompressed.body.array(),
