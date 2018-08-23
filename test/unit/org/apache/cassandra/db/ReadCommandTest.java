@@ -57,6 +57,7 @@ import org.apache.cassandra.io.util.DataOutputBuffer;
 import org.apache.cassandra.io.util.WrappedDataOutputStreamPlus;
 import org.apache.cassandra.net.MessageOut;
 import org.apache.cassandra.net.MessagingService;
+import org.apache.cassandra.schema.CachingParams;
 import org.apache.cassandra.schema.KeyspaceParams;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.ActiveRepairService;
@@ -66,6 +67,7 @@ import org.apache.cassandra.utils.FBUtilities;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class ReadCommandTest
 {
@@ -75,6 +77,7 @@ public class ReadCommandTest
     private static final String CF3 = "Standard3";
     private static final String CF4 = "Standard4";
     private static final String CF5 = "Standard5";
+    private static final String CF6 = "Standard6";
 
     @BeforeClass
     public static void defineSchema() throws ConfigurationException
@@ -123,6 +126,14 @@ public class ReadCommandTest
                      .addRegularColumn("e", AsciiType.instance)
                      .addRegularColumn("f", AsciiType.instance);
 
+        TableMetadata.Builder metadata6 =
+        TableMetadata.builder(KEYSPACE, CF6)
+                     .addPartitionKeyColumn("key", BytesType.instance)
+                     .addClusteringColumn("col", AsciiType.instance)
+                     .addRegularColumn("a", AsciiType.instance)
+                     .addRegularColumn("b", AsciiType.instance)
+                     .caching(CachingParams.CACHE_EVERYTHING);
+
         SchemaLoader.prepareServer();
         SchemaLoader.createKeyspace(KEYSPACE,
                                     KeyspaceParams.simple(1),
@@ -130,7 +141,8 @@ public class ReadCommandTest
                                     metadata2,
                                     metadata3,
                                     metadata4,
-                                    metadata5);
+                                    metadata5,
+                                    metadata6);
     }
 
     @Test
@@ -561,6 +573,38 @@ public class ReadCommandTest
         ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(CF2);
         ReadCommand readCommand = Util.cmd(cfs, Util.dk("key")).build();
         testRepairedDataTracking(cfs, readCommand);
+    }
+
+    @Test
+    public void skipRowCacheIfTrackingRepairedData() throws Exception
+    {
+        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(CF6);
+
+        cfs.truncateBlocking();
+        cfs.disableAutoCompaction();
+
+        new RowUpdateBuilder(cfs.metadata(), 0, ByteBufferUtil.bytes("key"))
+                .clustering("cc")
+                .add("a", ByteBufferUtil.bytes("abcd"))
+                .build()
+                .apply();
+
+        cfs.forceBlockingFlush();
+
+        ReadCommand readCommand = Util.cmd(cfs, Util.dk("key")).build();
+        assertTrue(cfs.isRowCacheEnabled());
+        // warm the cache
+        assertFalse(Util.getAll(readCommand).isEmpty());
+        long cacheHits = cfs.metric.rowCacheHit.getCount();
+
+        Util.getAll(readCommand);
+        assertTrue(cfs.metric.rowCacheHit.getCount() > cacheHits);
+        cacheHits = cfs.metric.rowCacheHit.getCount();
+
+        ReadCommand withRepairedInfo = readCommand.copy();
+        withRepairedInfo.trackRepairedStatus();
+        Util.getAll(withRepairedInfo);
+        assertEquals(cacheHits, cfs.metric.rowCacheHit.getCount());
     }
 
     @Test

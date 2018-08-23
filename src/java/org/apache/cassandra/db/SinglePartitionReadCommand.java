@@ -394,7 +394,9 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
     @SuppressWarnings("resource") // we close the created iterator through closing the result of this method (and SingletonUnfilteredPartitionIterator ctor cannot fail)
     protected UnfilteredPartitionIterator queryStorage(final ColumnFamilyStore cfs, ReadExecutionController executionController)
     {
-        UnfilteredRowIterator partition = cfs.isRowCacheEnabled()
+        // skip the row cache and go directly to sstables/memtable if repaired status of
+        // data is being tracked. This is only requested after an initial digest mismatch
+        UnfilteredRowIterator partition = cfs.isRowCacheEnabled() && ! isTrackingRepairedStatus()
                                         ? getThroughCache(cfs, executionController)
                                         : queryMemtableAndDisk(cfs, executionController);
         return new SingletonUnfilteredPartitionIterator(partition);
