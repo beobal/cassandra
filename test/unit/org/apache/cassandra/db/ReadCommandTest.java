@@ -41,10 +41,7 @@ import org.apache.cassandra.db.filter.DataLimits;
 import org.apache.cassandra.db.filter.RowFilter;
 import org.apache.cassandra.db.marshal.AsciiType;
 import org.apache.cassandra.db.marshal.BytesType;
-import org.apache.cassandra.db.partitions.FilteredPartition;
-import org.apache.cassandra.db.partitions.PartitionIterator;
-import org.apache.cassandra.db.partitions.UnfilteredPartitionIterator;
-import org.apache.cassandra.db.partitions.UnfilteredPartitionIterators;
+import org.apache.cassandra.db.partitions.*;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.db.rows.RowIterator;
 import org.apache.cassandra.db.rows.SerializationHelper;
@@ -67,6 +64,7 @@ import org.apache.cassandra.utils.FBUtilities;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 public class ReadCommandTest
@@ -675,6 +673,23 @@ public class ReadCommandTest
         // digest should be updated again and there should be no pending sessions reported
         digests.add(performReadAndVerifyRepairedInfo(readCommand, numPartitions, rowsPerPartition));
         assertEquals(3, digests.size());
+
+        // insert a partition tombstone into the memtable, then re-check the repaired info
+        // this is to ensure that optimisations which skip reading from tables where a newer
+        // partition tombstone is read are disabled when tracking repaired data. To not do so
+        // risks false positives caused by as-yet unrepaired partition deletes
+        new Mutation(PartitionUpdate.simpleBuilder(cfs.metadata(), ByteBufferUtil.bytes("key"))
+                                    .delete()
+                                    .build()).apply();
+        digest = performReadAndVerifyRepairedInfo(readCommand, 0, rowsPerPartition);
+        assertNotEquals(ByteBufferUtil.EMPTY_BYTE_BUFFER, digest);
+        assertTrue(digests.contains(digest));
+
+        // now flush so we have an unrepaired table with the deletion and repeat the check
+        cfs.forceBlockingFlush();
+        digest = performReadAndVerifyRepairedInfo(readCommand, 0, rowsPerPartition);
+        assertNotEquals(ByteBufferUtil.EMPTY_BYTE_BUFFER, digest);
+        assertTrue(digests.contains(digest));
     }
 
     private void mutateRepaired(SSTableReader sstable, long repairedAt, UUID pendingSession) throws IOException

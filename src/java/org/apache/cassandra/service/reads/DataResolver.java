@@ -81,11 +81,14 @@ public class DataResolver<E extends Endpoints<E>, L extends ReplicaLayout<E, L>>
         assert !any(messages, msg -> msg.payload.isDigestResponse());
 
         E replicas = replicaLayout.all().keep(transform(messages, msg -> msg.from));
-        RepairedDataTracker repairedDataTracker = new RepairedDataTracker(getRepairedDataVerifier(command));
+        RepairedDataTracker repairedDataTracker = command.isTrackingRepairedStatus()
+                                                  ? new RepairedDataTracker(getRepairedDataVerifier(command))
+                                                  : null;
+
         List<UnfilteredPartitionIterator> iters = new ArrayList<>(
                 Collections2.transform(messages, msg -> {
                     // don't try and inspect repaired status from replicas which definitely didn't send it
-                    if (msg.payload.mayIncludeRepairedStatusTracking())
+                    if (command.isTrackingRepairedStatus() && msg.payload.mayIncludeRepairedStatusTracking())
                     {
                         repairedDataTracker.recordDigest(msg.from, msg.payload.repairedDataDigest());
                         if (msg.payload.hasPendingRepairSessions())
@@ -241,7 +244,8 @@ public class DataResolver<E extends Endpoints<E>, L extends ReplicaLayout<E, L>>
             public void close()
             {
                 partitionListener.close();
-                repairedDataDigestTracker.verify();
+                if (repairedDataDigestTracker != null)
+                    repairedDataDigestTracker.verify();
             }
         };
     }

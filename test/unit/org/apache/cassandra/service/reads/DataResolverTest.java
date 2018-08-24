@@ -85,6 +85,7 @@ public class DataResolverTest extends AbstractReadResponseTest
     public void setup()
     {
         command = Util.cmd(cfs, dk).withNowInSeconds(nowInSec).build();
+        command.trackRepairedStatus();
         readRepair = new TestableReadRepair(command, ConsistencyLevel.QUORUM);
     }
 

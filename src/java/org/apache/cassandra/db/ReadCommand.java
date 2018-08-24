@@ -86,6 +86,8 @@ public abstract class ReadCommand extends AbstractReadQuery
     private static final RepairedDataInfo NO_OP_REPAIRED_DATA_INFO = new RepairedDataInfo(){};
     private RepairedDataInfo repairedDataInfo = NO_OP_REPAIRED_DATA_INFO;
 
+    protected int oldestUnrepairedTombstone = Integer.MAX_VALUE;
+
     @Nullable
     private final IndexMetadata index;
 
@@ -282,7 +284,10 @@ public abstract class ReadCommand extends AbstractReadQuery
 
     protected abstract UnfilteredPartitionIterator queryStorage(ColumnFamilyStore cfs, ReadExecutionController executionController);
 
-    protected abstract int oldestUnrepairedTombstone();
+    protected int oldestUnrepairedTombstone()
+    {
+        return oldestUnrepairedTombstone;
+    };
 
     @SuppressWarnings("resource")
     public ReadResponse createResponse(UnfilteredPartitionIterator iterator)
@@ -629,15 +634,40 @@ public abstract class ReadCommand extends AbstractReadQuery
         return toCQLString();
     }
 
+    // For tracking purposes we consider data repaired if the sstable is either:
+    // * marked repaired
+    // * marked pending, but the local session is has been committed. This reduces the window
+    //   whereby the tracking is affected by compaction backlog causing repaired sstables to
+    //   remain in the pending state
+    protected boolean considerRepairedForTracking(SSTableReader sstable)
+    {
+        if (sstable.isRepaired())
+            return true;
 
-    protected UnfilteredPartitionIterator withRepairedDataInfo(final SSTableReader sstable,
-                                                               final UnfilteredPartitionIterator iterator)
+        // sstable is not strictly repaired, so possibly update the timestamp oldest unrepaired tombstone
+        // this is used for purging, not for tracking but it's convenient to check it here
+        oldestUnrepairedTombstone = Math.min(oldestUnrepairedTombstone, sstable.getMinLocalDeletionTime());
+
+        if (!isTrackingRepairedStatus())
+            return false;
+
+        if (sstable.isPendingRepair())
+        {
+            if (ActiveRepairService.instance.consistent.local.isSessionFinalized(sstable.getPendingRepair()))
+                return true;
+            else
+                getRepairedDataInfo().trackPendingRepairSession(sstable.getPendingRepair());
+        }
+
+        return false;
+    }
+
+
+    protected UnfilteredPartitionIterator withRepairedDataInfo(final UnfilteredPartitionIterator iterator)
     {
         if (!isTrackingRepairedStatus())
             return iterator;
 
-        // If the sstable is considered repaired (marked repaired or with a pending session
-        // that has been committed) include it in the repaired data digest
         class WithRepairedDataTracking extends Transformation<UnfilteredRowIterator>
         {
             protected UnfilteredRowIterator applyToPartition(UnfilteredRowIterator partition)
@@ -646,51 +676,15 @@ public abstract class ReadCommand extends AbstractReadQuery
             }
         }
 
-        if (considerSStableRepaired(sstable))
-            return Transformation.apply(iterator, new WithRepairedDataTracking());
-
-        // If table has a pending repair session which has not yet been committed, record that
-        // session id so the coordinator can try and detect potential false positive digest
-        // mimatches due to a replicas moving tables from pending to repaired at different
-        // rates.
-        UUID sessionId = sstable.getPendingRepair();
-        if (sessionId != null)
-            repairedDataInfo.trackPendingRepairSession(sessionId);
-
-        return iterator;
+        return Transformation.apply(iterator, new WithRepairedDataTracking());
     }
 
-    protected UnfilteredRowIterator withRepairedDataInfo(SSTableReader sstable, UnfilteredRowIterator iterator)
+    protected UnfilteredRowIterator withRepairedDataInfo(UnfilteredRowIterator iterator)
     {
         if (!isTrackingRepairedStatus())
             return iterator;
 
-        // If the sstable is considered repaired (marked repaired or with a pending session
-        // that has been committed) include it in the repaired data digest
-        if (considerSStableRepaired(sstable))
-            return withRepairedDataDigest(repairedDataInfo, iterator);
-
-        // If table has a pending repair session which has not yet been committed, record that
-        // session id so the coordinator can try and detect potential false positive digest
-        // mimatches due to a replicas moving tables from pending to repaired at different
-        // rates.
-        UUID sessionId = sstable.getPendingRepair();
-        if (sessionId != null)
-            repairedDataInfo.trackPendingRepairSession(sessionId);
-
-        return iterator;
-    }
-
-    // For tracking purposes we consider data repaired if the sstable is either:
-    // * marked repaired
-    // * marked pending, but the local session is has been committed. This reduces the window
-    //   whereby the tracking is affected by compaction backlog causing repaired sstables to
-    //   remain in the pending state
-    private boolean considerSStableRepaired(SSTableReader sstable)
-    {
-        return (sstable.isRepaired()
-                || (sstable.isPendingRepair()
-                    && ActiveRepairService.instance.consistent.local.isSessionFinalized(sstable.getPendingRepair())));
+        return withRepairedDataDigest(repairedDataInfo, iterator);
     }
 
     private UnfilteredRowIterator withRepairedDataDigest(final RepairedDataInfo tracker, UnfilteredRowIterator iterator)
@@ -786,7 +780,7 @@ public abstract class ReadCommand extends AbstractReadQuery
         }
     }
 
-    protected RepairedDataInfo newRepairedDataInfo()
+    private RepairedDataInfo newRepairedDataInfo()
     {
         return new DefaultRepairedDataInfo();
     }
@@ -812,10 +806,13 @@ public abstract class ReadCommand extends AbstractReadQuery
 
         public void trackPendingRepairSession(UUID sessionId)
         {
-            if (pendingRepairSessions == null)
-                pendingRepairSessions = new HashSet<>();
+            if (sessionId != null)
+            {
+                if (pendingRepairSessions == null)
+                    pendingRepairSessions = new HashSet<>();
 
-            pendingRepairSessions.add(sessionId);
+                pendingRepairSessions.add(sessionId);
+            }
         }
 
         public void trackPartitionKey(DecoratedKey key)
