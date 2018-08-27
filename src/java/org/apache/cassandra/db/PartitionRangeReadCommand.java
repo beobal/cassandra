@@ -258,7 +258,7 @@ public class PartitionRangeReadCommand extends ReadCommand implements PartitionR
 
         // fetch data from current memtable, historical memtables, and SSTables in the correct order.
         final List<UnfilteredPartitionIterator> unrepairedIterators = new ArrayList<>(Iterables.size(view.memtables) + view.sstables.size());
-        final List<UnfilteredPartitionIterator> repairedIterators = new ArrayList<>(view.sstables.size());
+        List<UnfilteredPartitionIterator> repairedIterators = null;
 
         try
         {
@@ -277,17 +277,21 @@ public class PartitionRangeReadCommand extends ReadCommand implements PartitionR
                 @SuppressWarnings("resource") // We close on exception and on closing the result returned by this method
                 UnfilteredPartitionIterator iter = sstable.getScanner(columnFilter(), dataRange(), readCountUpdater);
                 if (considerRepairedForTracking(sstable))
+                {
+                    if (repairedIterators == null)
+                        repairedIterators = new ArrayList<>(view.sstables.size());
                     repairedIterators.add(iter);
+                }
                 else
                     unrepairedIterators.add(iter);
             }
             // iterators can be empty for offline tools
-            if (unrepairedIterators.isEmpty() && repairedIterators.isEmpty())
+            if (unrepairedIterators.isEmpty() && repairedIterators == null)
                 return EmptyIterators.unfilteredPartition(metadata());
 
             // Merge repaired data before returning, wrapping in a digest generator
             // if tracking is not enabled, all iterators will be considered unrepaired
-            if (!repairedIterators.isEmpty())
+            if (repairedIterators != null)
             {
                 unrepairedIterators.add(withRepairedDataInfo(UnfilteredPartitionIterators.merge(repairedIterators,
                                                                                                 UnfilteredPartitionIterators.MergeListener.NOOP)));
@@ -300,7 +304,8 @@ public class PartitionRangeReadCommand extends ReadCommand implements PartitionR
             try
             {
                 FBUtilities.closeAll(unrepairedIterators);
-                FBUtilities.closeAll(repairedIterators);
+                if (repairedIterators != null)
+                    FBUtilities.closeAll(repairedIterators);
             }
             catch (Exception suppressed)
             {

@@ -582,7 +582,7 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
         Tracing.trace("Acquiring sstable references");
         ColumnFamilyStore.ViewFragment view = cfs.select(View.select(SSTableSet.LIVE, partitionKey()));
         List<UnfilteredRowIterator> unrepairedIterators = new ArrayList<>(Iterables.size(view.memtables) + view.sstables.size());
-        List<UnfilteredRowIterator> repairedIterators = new ArrayList<>(view.sstables.size());
+        List<UnfilteredRowIterator> repairedIterators = null;
         ClusteringIndexFilter filter = clusteringIndexFilter();
         long minTimestamp = Long.MAX_VALUE;
         try
@@ -650,7 +650,11 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
                 UnfilteredRowIteratorWithLowerBound iter = makeIterator(cfs, sstable, metricsCollector);
 
                 if (considerRepairedForTracking(sstable))
+                {
+                    if (repairedIterators == null)
+                        repairedIterators = new ArrayList<>(view.sstables.size());
                     repairedIterators.add(iter);
+                }
                 else
                     unrepairedIterators.add(iter);
 
@@ -671,7 +675,11 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
                                                   // or through the closing of the final merged iterator
                     UnfilteredRowIteratorWithLowerBound iter = makeIterator(cfs, sstable, metricsCollector);
                     if (considerRepairedForTracking(sstable))
+                    {
+                        if (repairedIterators == null)
+                            repairedIterators = new ArrayList<>(skippedSSTablesWithTombstones.size());
                         repairedIterators.add(iter);
+                    }
                     else
                         unrepairedIterators.add(iter);
 
@@ -682,14 +690,14 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
                 Tracing.trace("Skipped {}/{} non-slice-intersecting sstables, included {} due to tombstones",
                                nonIntersectingSSTables, view.sstables.size(), includedDueToTombstones);
 
-            if (unrepairedIterators.isEmpty() && repairedIterators.isEmpty())
+            if (unrepairedIterators.isEmpty() && repairedIterators == null)
                 return EmptyIterators.unfilteredRow(cfs.metadata(), partitionKey(), filter.isReversed());
 
             StorageHook.instance.reportRead(cfs.metadata().id, partitionKey());
 
             // merge the repaired data before returning, wrapping in a digest generator
             // if tracking is not enabled, all iterators will be considered unrepaired
-            if (!repairedIterators.isEmpty())
+            if (repairedIterators != null)
                 unrepairedIterators.add(withRepairedDataInfo(UnfilteredRowIterators.merge(repairedIterators)));
 
             return withSSTablesIterated(unrepairedIterators, cfs.metric, metricsCollector);
@@ -699,7 +707,8 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
             try
             {
                 FBUtilities.closeAll(unrepairedIterators);
-                FBUtilities.closeAll(repairedIterators);
+                if (repairedIterators != null)
+                    FBUtilities.closeAll(repairedIterators);
             }
             catch (Exception suppressed)
             {
@@ -811,7 +820,7 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
         boolean onlyUnrepaired = true;
 
         List<UnfilteredRowIterator> unrepairedIterators = new ArrayList<>(view.sstables.size());
-        List<UnfilteredRowIterator> repairedIterators = new ArrayList<>(view.sstables.size());
+        List<UnfilteredRowIterator> repairedIterators = null;
 
         SSTableReadMetricsCollector metricsCollector = new SSTableReadMetricsCollector();
         // read sorted sstables
@@ -835,9 +844,17 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
                 // which collection of iterators does one we obtain from this sstable belong in?
                 // note: this check also takes care of tracking the oldest unrepaired tombstone
                 // for purging purposes
-                List<UnfilteredRowIterator> iterList = considerRepairedForTracking(sstable)
-                                                       ? repairedIterators
-                                                       : unrepairedIterators;
+                List<UnfilteredRowIterator> iterList;
+                if (considerRepairedForTracking(sstable))
+                {
+                    if (repairedIterators == null)
+                        repairedIterators = new ArrayList<>(view.sstables.size());
+                    iterList = repairedIterators;
+                }
+                else
+                {
+                    iterList = unrepairedIterators;
+                }
                 if (!shouldInclude(sstable))
                 {
                     // This mean that nothing queried by the filter can be in the sstable. One exception is the top-level partition deletion
@@ -894,7 +911,7 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
                 result = add(iter, result, filter);
 
             // merge any unrepaired iterators, wrapping with a digest generator
-            if (!repairedIterators.isEmpty())
+            if (repairedIterators != null)
                 result = add(withRepairedDataInfo(UnfilteredRowIterators.merge(repairedIterators)), result, filter);
         }
         finally
@@ -902,7 +919,8 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
             try
             {
                 FBUtilities.closeAll(unrepairedIterators);
-                FBUtilities.closeAll(repairedIterators);
+                if (repairedIterators != null)
+                    FBUtilities.closeAll(repairedIterators);
             }
             catch (Exception e)
             {
