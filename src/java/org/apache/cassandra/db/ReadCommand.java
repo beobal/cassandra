@@ -641,25 +641,24 @@ public abstract class ReadCommand extends AbstractReadQuery
     //   remain in the pending state
     protected boolean considerRepairedForTracking(SSTableReader sstable)
     {
-        if (sstable.isRepaired())
-            return true;
-
         // sstable is not strictly repaired, so possibly update the timestamp oldest unrepaired tombstone
         // this is used for purging, not for tracking but it's convenient to check it here
-        oldestUnrepairedTombstone = Math.min(oldestUnrepairedTombstone, sstable.getMinLocalDeletionTime());
+        if (!sstable.isRepaired())
+            oldestUnrepairedTombstone = Math.min(oldestUnrepairedTombstone, sstable.getMinLocalDeletionTime());
 
         if (!isTrackingRepairedStatus())
             return false;
 
-        if (sstable.isPendingRepair())
+        UUID pendingRepair = sstable.getPendingRepair();
+        if (pendingRepair != ActiveRepairService.NO_PENDING_REPAIR)
         {
-            if (ActiveRepairService.instance.consistent.local.isSessionFinalized(sstable.getPendingRepair()))
+            if (ActiveRepairService.instance.consistent.local.isSessionFinalized(pendingRepair))
                 return true;
             else
-                getRepairedDataInfo().trackPendingRepairSession(sstable.getPendingRepair());
+                getRepairedDataInfo().trackPendingRepairSession(pendingRepair);
         }
 
-        return false;
+        return sstable.isRepaired();
     }
 
 

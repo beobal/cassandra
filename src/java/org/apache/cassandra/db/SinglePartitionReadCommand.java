@@ -392,7 +392,7 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
     {
         // skip the row cache and go directly to sstables/memtable if repaired status of
         // data is being tracked. This is only requested after an initial digest mismatch
-        UnfilteredRowIterator partition = cfs.isRowCacheEnabled() && ! isTrackingRepairedStatus()
+        UnfilteredRowIterator partition = cfs.isRowCacheEnabled() && !isTrackingRepairedStatus()
                                         ? getThroughCache(cfs, executionController)
                                         : queryMemtableAndDisk(cfs, executionController);
         return new SingletonUnfilteredPartitionIterator(partition);
@@ -627,8 +627,13 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
                 // than the most recent update to this sstable, we can skip it
                 // if we're tracking repaired status though, we have to disable this
                 // optimization as we must read from all tables containing the partition
-                if (!isTrackingRepairedStatus() && sstable.getMaxTimestamp() < mostRecentPartitionTombstone )
-                    break;
+                if (sstable.getMaxTimestamp() < mostRecentPartitionTombstone)
+                {
+                    if (!isTrackingRepairedStatus())
+                        break;
+                    else if (!considerRepairedForTracking(sstable))
+                        continue;
+                }
 
                 if (!shouldInclude(sstable))
                 {
@@ -833,8 +838,13 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
                 // will also be older
                 // if we're tracking repaired status though, we have to disable this
                 // optimization as we must read from all tables containing the partition
-                if (result != null && !isTrackingRepairedStatus() && sstable.getMaxTimestamp() < result.partitionLevelDeletion().markedForDeleteAt())
-                    break;
+                if (result != null && sstable.getMaxTimestamp() < result.partitionLevelDeletion().markedForDeleteAt())
+                {
+                    if (!isTrackingRepairedStatus())
+                        break;
+                    else if (!considerRepairedForTracking(sstable))
+                        continue;
+                }
 
                 long currentMaxTs = sstable.getMaxTimestamp();
                 filter = reduceFilter(filter, result, currentMaxTs);
@@ -855,6 +865,7 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
                 {
                     iterList = unrepairedIterators;
                 }
+
                 if (!shouldInclude(sstable))
                 {
                     // This mean that nothing queried by the filter can be in the sstable. One exception is the top-level partition deletion
