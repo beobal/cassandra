@@ -61,7 +61,7 @@ public interface RepairedDataVerifier
                 // if there weren't any pending repair sessions which had not yet been committed
                 // mark the inconsistency as confirmed, otherwise it may be due to the sessions
                 // being committed at different times on different replicas so mark it unconfirmed
-                if (tracker.withPendingSessions.isEmpty())
+                if (tracker.inconclusiveDigests.isEmpty())
                     metrics.confirmedRepairedInconsistencies.mark();
                 else
                     metrics.unconfirmedRepairedInconsistencies.mark();

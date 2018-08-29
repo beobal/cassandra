@@ -259,14 +259,12 @@ public class PartitionRangeReadCommand extends ReadCommand implements PartitionR
         // fetch data from current memtable, historical memtables, and SSTables in the correct order.
         final List<UnfilteredPartitionIterator> unrepairedIterators = new ArrayList<>(Iterables.size(view.memtables) + view.sstables.size());
         List<UnfilteredPartitionIterator> repairedIterators = null;
-
         try
         {
             for (Memtable memtable : view.memtables)
             {
                 @SuppressWarnings("resource") // We close on exception and on closing the result returned by this method
                 Memtable.MemtableUnfilteredPartitionIterator iter = memtable.makePartitionIterator(columnFilter(), dataRange());
-                // memtable is always considered unrepaired
                 oldestUnrepairedTombstone = Math.min(oldestUnrepairedTombstone, iter.getMinLocalDeletionTime());
                 unrepairedIterators.add(iter);
             }
@@ -283,7 +281,12 @@ public class PartitionRangeReadCommand extends ReadCommand implements PartitionR
                     repairedIterators.add(iter);
                 }
                 else
+                {
                     unrepairedIterators.add(iter);
+                }
+
+                if (!sstable.isRepaired())
+                    oldestUnrepairedTombstone = Math.min(oldestUnrepairedTombstone, sstable.getMinLocalDeletionTime());
             }
             // iterators can be empty for offline tools
             if (unrepairedIterators.isEmpty() && repairedIterators == null)

@@ -69,7 +69,7 @@ public class RepairedDataVerifierTest
     }
 
     @Test
-    public void repairedDataMismatchWithSinglePendingSession()
+    public void repairedDataMismatchWithSomeConclusive()
     {
         long confirmedCount =  confirmedCount();
         long unconfirmedCount =  unconfirmedCount();
@@ -77,9 +77,8 @@ public class RepairedDataVerifierTest
         InetAddressAndPort peer2 = peer();
         RepairedDataVerifier.SimpleVerifier verifier = new RepairedDataVerifier.SimpleVerifier(command(key()));
         RepairedDataTracker tracker = new RepairedDataTracker(verifier);
-        tracker.recordDigest(peer1, ByteBufferUtil.bytes("digest1"));
-        tracker.recordDigest(peer2, ByteBufferUtil.bytes("digest2"));
-        tracker.recordPendingSessions(peer1);
+        tracker.recordDigest(peer1, ByteBufferUtil.bytes("digest1"), false);
+        tracker.recordDigest(peer2, ByteBufferUtil.bytes("digest2"), true);
 
         tracker.verify();
         assertEquals(confirmedCount, confirmedCount());
@@ -87,7 +86,7 @@ public class RepairedDataVerifierTest
     }
 
     @Test
-    public void repairedDataMismatchWithMulitplePendingSessions()
+    public void repairedDataMismatchWithNoneConclusive()
     {
         long confirmedCount =  confirmedCount();
         long unconfirmedCount =  unconfirmedCount();
@@ -95,10 +94,8 @@ public class RepairedDataVerifierTest
         InetAddressAndPort peer2 = peer();
         RepairedDataVerifier.SimpleVerifier verifier = new RepairedDataVerifier.SimpleVerifier(command(key()));
         RepairedDataTracker tracker = new RepairedDataTracker(verifier);
-        tracker.recordDigest(peer1, ByteBufferUtil.bytes("digest1"));
-        tracker.recordDigest(peer2, ByteBufferUtil.bytes("digest2"));
-        tracker.recordPendingSessions(peer1);
-        tracker.recordPendingSessions(peer2);
+        tracker.recordDigest(peer1, ByteBufferUtil.bytes("digest1"), false);
+        tracker.recordDigest(peer2, ByteBufferUtil.bytes("digest2"), false);
 
         tracker.verify();
         assertEquals(confirmedCount, confirmedCount());
@@ -106,7 +103,7 @@ public class RepairedDataVerifierTest
     }
 
     @Test
-    public void repairedDataMismatchWithNoPendingSessions()
+    public void repairedDataMismatchWithAllConclusive()
     {
         long confirmedCount =  confirmedCount();
         long unconfirmedCount =  unconfirmedCount();
@@ -114,8 +111,8 @@ public class RepairedDataVerifierTest
         InetAddressAndPort peer2 = peer();
         RepairedDataVerifier.SimpleVerifier verifier = new RepairedDataVerifier.SimpleVerifier(command(key()));
         RepairedDataTracker tracker = new RepairedDataTracker(verifier);
-        tracker.recordDigest(peer1, ByteBufferUtil.bytes("digest1"));
-        tracker.recordDigest(peer2, ByteBufferUtil.bytes("digest2"));
+        tracker.recordDigest(peer1, ByteBufferUtil.bytes("digest1"), true);
+        tracker.recordDigest(peer2, ByteBufferUtil.bytes("digest2"), true);
 
         tracker.verify();
         assertEquals(confirmedCount + 1, confirmedCount());
@@ -123,7 +120,7 @@ public class RepairedDataVerifierTest
     }
 
     @Test
-    public void repairedDataMatchesAndNoPendingSessions()
+    public void repairedDataMatchesWithAllConclusive()
     {
         long confirmedCount =  confirmedCount();
         long unconfirmedCount =  unconfirmedCount();
@@ -131,8 +128,8 @@ public class RepairedDataVerifierTest
         InetAddressAndPort peer2 = peer();
         RepairedDataVerifier.SimpleVerifier verifier = new RepairedDataVerifier.SimpleVerifier(command(key()));
         RepairedDataTracker tracker = new RepairedDataTracker(verifier);
-        tracker.recordDigest(peer1, ByteBufferUtil.bytes("digest1"));
-        tracker.recordDigest(peer2, ByteBufferUtil.bytes("digest1"));
+        tracker.recordDigest(peer1, ByteBufferUtil.bytes("digest1"), true);
+        tracker.recordDigest(peer2, ByteBufferUtil.bytes("digest1"), true);
 
         tracker.verify();
         assertEquals(confirmedCount, confirmedCount());
@@ -140,7 +137,7 @@ public class RepairedDataVerifierTest
     }
 
     @Test
-    public void repairedDataMatchesWithPendingSessions()
+    public void repairedDataMatchesWithSomeConclusive()
     {
         long confirmedCount =  confirmedCount();
         long unconfirmedCount =  unconfirmedCount();
@@ -148,10 +145,8 @@ public class RepairedDataVerifierTest
         InetAddressAndPort peer2 = peer();
         RepairedDataVerifier.SimpleVerifier verifier = new RepairedDataVerifier.SimpleVerifier(command(key()));
         RepairedDataTracker tracker = new RepairedDataTracker(verifier);
-        tracker.recordDigest(peer1, ByteBufferUtil.bytes("digest1"));
-        tracker.recordDigest(peer2, ByteBufferUtil.bytes("digest1"));
-        tracker.recordPendingSessions(peer1);
-        tracker.recordPendingSessions(peer2);
+        tracker.recordDigest(peer1, ByteBufferUtil.bytes("digest1"), true);
+        tracker.recordDigest(peer2, ByteBufferUtil.bytes("digest1"), false);
 
         tracker.verify();
         assertEquals(confirmedCount, confirmedCount());
@@ -159,7 +154,24 @@ public class RepairedDataVerifierTest
     }
 
     @Test
-    public void allEmptyDigestAndNoPendingSessions()
+    public void repairedDataMatchesWithNoneConclusive()
+    {
+        long confirmedCount =  confirmedCount();
+        long unconfirmedCount =  unconfirmedCount();
+        InetAddressAndPort peer1 = peer();
+        InetAddressAndPort peer2 = peer();
+        RepairedDataVerifier.SimpleVerifier verifier = new RepairedDataVerifier.SimpleVerifier(command(key()));
+        RepairedDataTracker tracker = new RepairedDataTracker(verifier);
+        tracker.recordDigest(peer1, ByteBufferUtil.bytes("digest1"), false);
+        tracker.recordDigest(peer2, ByteBufferUtil.bytes("digest1"), false);
+
+        tracker.verify();
+        assertEquals(confirmedCount, confirmedCount());
+        assertEquals(unconfirmedCount, unconfirmedCount());
+    }
+
+    @Test
+    public void allEmptyDigestWithAllConclusive()
     {
         // if a read didn't touch any repaired sstables, digests will be empty
         long confirmedCount =  confirmedCount();
@@ -168,8 +180,8 @@ public class RepairedDataVerifierTest
         InetAddressAndPort peer2 = peer();
         RepairedDataVerifier.SimpleVerifier verifier = new RepairedDataVerifier.SimpleVerifier(command(key()));
         RepairedDataTracker tracker = new RepairedDataTracker(verifier);
-        tracker.recordDigest(peer1, ByteBufferUtil.EMPTY_BYTE_BUFFER);
-        tracker.recordDigest(peer2, ByteBufferUtil.EMPTY_BYTE_BUFFER);
+        tracker.recordDigest(peer1, ByteBufferUtil.EMPTY_BYTE_BUFFER, true);
+        tracker.recordDigest(peer2, ByteBufferUtil.EMPTY_BYTE_BUFFER, true);
 
         tracker.verify();
         assertEquals(confirmedCount, confirmedCount());
@@ -177,7 +189,7 @@ public class RepairedDataVerifierTest
     }
 
     @Test
-    public void allEmptyDigestsWithPendingSessions()
+    public void allEmptyDigestsWithSomeConclusive()
     {
         // if a read didn't touch any repaired sstables, digests will be empty
         long confirmedCount =  confirmedCount();
@@ -186,10 +198,26 @@ public class RepairedDataVerifierTest
         InetAddressAndPort peer2 = peer();
         RepairedDataVerifier.SimpleVerifier verifier = new RepairedDataVerifier.SimpleVerifier(command(key()));
         RepairedDataTracker tracker = new RepairedDataTracker(verifier);
-        tracker.recordDigest(peer1, ByteBufferUtil.EMPTY_BYTE_BUFFER);
-        tracker.recordDigest(peer2, ByteBufferUtil.EMPTY_BYTE_BUFFER);
-        tracker.recordPendingSessions(peer1);
-        tracker.recordPendingSessions(peer2);
+        tracker.recordDigest(peer1, ByteBufferUtil.EMPTY_BYTE_BUFFER, true);
+        tracker.recordDigest(peer2, ByteBufferUtil.EMPTY_BYTE_BUFFER, false);
+
+        tracker.verify();
+        assertEquals(confirmedCount, confirmedCount());
+        assertEquals(unconfirmedCount, unconfirmedCount());
+    }
+
+    @Test
+    public void allEmptyDigestsWithNoneConclusive()
+    {
+        // if a read didn't touch any repaired sstables, digests will be empty
+        long confirmedCount =  confirmedCount();
+        long unconfirmedCount =  unconfirmedCount();
+        InetAddressAndPort peer1 = peer();
+        InetAddressAndPort peer2 = peer();
+        RepairedDataVerifier.SimpleVerifier verifier = new RepairedDataVerifier.SimpleVerifier(command(key()));
+        RepairedDataTracker tracker = new RepairedDataTracker(verifier);
+        tracker.recordDigest(peer1, ByteBufferUtil.EMPTY_BYTE_BUFFER, false);
+        tracker.recordDigest(peer2, ByteBufferUtil.EMPTY_BYTE_BUFFER, false);
 
         tracker.verify();
         assertEquals(confirmedCount, confirmedCount());

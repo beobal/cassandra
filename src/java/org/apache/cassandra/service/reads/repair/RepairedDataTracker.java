@@ -38,21 +38,18 @@ public class RepairedDataTracker
     private final RepairedDataVerifier verifier;
 
     public final Multimap<ByteBuffer, InetAddressAndPort> digests = HashMultimap.create();
-    public final Set<InetAddressAndPort> withPendingSessions = new HashSet<>();
+    public final Set<InetAddressAndPort> inconclusiveDigests = new HashSet<>();
 
     public RepairedDataTracker(RepairedDataVerifier verifier)
     {
         this.verifier = verifier;
     }
 
-    public void recordDigest(InetAddressAndPort source, ByteBuffer digest)
+    public void recordDigest(InetAddressAndPort source, ByteBuffer digest, boolean isConclusive)
     {
         digests.put(digest, source);
-    }
-
-    public void recordPendingSessions(InetAddressAndPort source)
-    {
-        withPendingSessions.add(source);
+        if (!isConclusive)
+            inconclusiveDigests.add(source);
     }
 
     public void verify()
@@ -64,7 +61,7 @@ public class RepairedDataTracker
     {
         return MoreObjects.toStringHelper(this)
                           .add("digests", hexDigests())
-                          .add("withPendingSessions", withPendingSessions).toString();
+                          .add("inconclusive", inconclusiveDigests).toString();
     }
 
     private Map<String, Collection<InetAddressAndPort>> hexDigests()
@@ -80,11 +77,11 @@ public class RepairedDataTracker
         if (o == null || getClass() != o.getClass()) return false;
         RepairedDataTracker that = (RepairedDataTracker) o;
         return Objects.equals(digests, that.digests) &&
-               Objects.equals(withPendingSessions, that.withPendingSessions);
+               Objects.equals(inconclusiveDigests, that.inconclusiveDigests);
     }
 
     public int hashCode()
     {
-        return Objects.hash(digests, withPendingSessions);
+        return Objects.hash(digests, inconclusiveDigests);
     }
 }

@@ -20,11 +20,7 @@ package org.apache.cassandra.db;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Random;
-import java.util.Set;
-import java.util.UUID;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -64,60 +60,43 @@ public class ReadResponseTest
     }
 
     @Test
-    public void createDataResponseFromCommandWithRepairedDataDigest()
+    public void fromCommandWithConclusiveRepairedDigest()
     {
         ByteBuffer digest = digest();
-        ReadCommand command = command(key(), metadata, tracker(digest));
+        ReadCommand command = command(key(), metadata, tracker(digest, true));
         ReadResponse response = command.createResponse(EmptyIterators.unfilteredPartition(metadata));
-        assertFalse(response.hasPendingRepairSessions());
+        assertTrue(response.isRepairedDigestConclusive());
         assertEquals(digest, response.repairedDataDigest());
         verifySerDe(response);
     }
 
     @Test
-    public void  createDataResponseFromCommandWithPendingSession()
-    {
-        UUID session = UUID.randomUUID();
-        ReadCommand command = command(key(), metadata, tracker(null, session));
-        ReadResponse response = command.createResponse(EmptyIterators.unfilteredPartition(metadata));
-        assertTrue(response.hasPendingRepairSessions());
-        assertEquals(ByteBufferUtil.EMPTY_BYTE_BUFFER, response.repairedDataDigest());
-        verifySerDe(response);
-    }
-
-    @Test
-    public void createDataResponseFromCommandWithMultiplePendingSessions()
-    {
-        UUID session1 = UUID.randomUUID();
-        UUID session2 = UUID.randomUUID();
-        UUID session3 = UUID.randomUUID();
-        ReadCommand command = command(key(), metadata, tracker(null, session1, session2, session3));
-        ReadResponse response = command.createResponse(EmptyIterators.unfilteredPartition(metadata));
-        assertTrue(response.hasPendingRepairSessions());
-        assertEquals(ByteBufferUtil.EMPTY_BYTE_BUFFER, response.repairedDataDigest());
-        verifySerDe(response);
-    }
-
-    @Test
-    public void createDataResponseFromCommandWithDigestAndPendingSessions()
+    public void fromCommandWithInconclusiveRepairedDigest()
     {
         ByteBuffer digest = digest();
-        UUID session1 = UUID.randomUUID();
-        UUID session2 = UUID.randomUUID();
-        UUID session3 = UUID.randomUUID();
-        ReadCommand command = command(key(), metadata, tracker(digest, session1, session2, session3));
+        ReadCommand command = command(key(), metadata, tracker(digest, false));
         ReadResponse response = command.createResponse(EmptyIterators.unfilteredPartition(metadata));
-        assertTrue(response.hasPendingRepairSessions());
+        assertFalse(response.isRepairedDigestConclusive());
         assertEquals(digest, response.repairedDataDigest());
         verifySerDe(response);
     }
 
     @Test
-    public void createDataResponseFromCommandWithNeitherDigestNorPendingSessions()
+    public void fromCommandWithConclusiveEmptyRepairedDigest()
     {
-        ReadCommand command = command(key(), metadata, tracker(null));
+        ReadCommand command = command(key(), metadata, tracker(null, true));
         ReadResponse response = command.createResponse(EmptyIterators.unfilteredPartition(metadata));
-        assertFalse(response.hasPendingRepairSessions());
+        assertTrue(response.isRepairedDigestConclusive());
+        assertEquals(ByteBufferUtil.EMPTY_BYTE_BUFFER, response.repairedDataDigest());
+        verifySerDe(response);
+    }
+
+    @Test
+    public void fromCommandWithInconclusiveEmptyRepairedDigest()
+    {
+        ReadCommand command = command(key(), metadata, tracker(null, false));
+        ReadResponse response = command.createResponse(EmptyIterators.unfilteredPartition(metadata));
+        assertFalse(response.isRepairedDigestConclusive());
         assertEquals(ByteBufferUtil.EMPTY_BYTE_BUFFER, response.repairedDataDigest());
         verifySerDe(response);
     }
@@ -132,18 +111,18 @@ public class ReadResponseTest
         ReadCommand command = digestCommand(key(), metadata);
         ReadResponse response = command.createResponse(EmptyIterators.unfilteredPartition(metadata));
         assertTrue(response.isDigestResponse());
-        assertFalse(response.mayIncludeRepairedStatusTracking());
+        assertFalse(response.mayIncludeRepairedDigest());
         response.repairedDataDigest();
     }
 
     @Test (expected = UnsupportedOperationException.class)
-    public void digestResponseErrorsIfRepairSessionsRequested()
+    public void digestResponseErrorsIfIsConclusiveRequested()
     {
         ReadCommand command = digestCommand(key(), metadata);
         ReadResponse response = command.createResponse(EmptyIterators.unfilteredPartition(metadata));
         assertTrue(response.isDigestResponse());
-        assertFalse(response.mayIncludeRepairedStatusTracking());
-        response.hasPendingRepairSessions();
+        assertFalse(response.mayIncludeRepairedDigest());
+        response.isRepairedDigestConclusive();
     }
 
     @Test (expected = UnsupportedOperationException.class)
@@ -152,7 +131,7 @@ public class ReadResponseTest
         ReadCommand command = digestCommand(key(), metadata);
         ReadResponse response = command.createResponse(EmptyIterators.unfilteredPartition(metadata));
         assertTrue(response.isDigestResponse());
-        assertFalse(response.mayIncludeRepairedStatusTracking());
+        assertFalse(response.mayIncludeRepairedDigest());
         response.makeIterator(command);
     }
 
@@ -164,13 +143,11 @@ public class ReadResponseTest
         // requests, only following a digest mismatch. Having a test doesn't hurt though
         int key = key();
         ByteBuffer digest1 = digest();
-        UUID session1 = UUID.randomUUID();
-        ReadCommand command1 = command(key, metadata, tracker(digest1, session1));
+        ReadCommand command1 = command(key, metadata, tracker(digest1, true));
         ReadResponse response1 = command1.createResponse(EmptyIterators.unfilteredPartition(metadata));
 
         ByteBuffer digest2 = digest();
-        UUID session2 = UUID.randomUUID();
-        ReadCommand command2 = command(key, metadata, tracker(digest2, session2));
+        ReadCommand command2 = command(key, metadata, tracker(digest2, false));
         ReadResponse response2 = command1.createResponse(EmptyIterators.unfilteredPartition(metadata));
 
         assertEquals(response1.digest(command1), response2.digest(command2));
@@ -197,16 +174,16 @@ public class ReadResponseTest
             ReadResponse deser = ReadResponse.serializer.deserialize(in, version);
             if (version < MessagingService.VERSION_40)
             {
-                assertFalse(deser.mayIncludeRepairedStatusTracking());
+                assertFalse(deser.mayIncludeRepairedDigest());
                 // even though that means they should never be used, verify that the default values are present
                 assertEquals(ByteBufferUtil.EMPTY_BYTE_BUFFER, deser.repairedDataDigest());
-                assertFalse(deser.hasPendingRepairSessions());
+                assertTrue(deser.isRepairedDigestConclusive());
             }
             else
             {
-                assertTrue(deser.mayIncludeRepairedStatusTracking());
+                assertTrue(deser.mayIncludeRepairedDigest());
                 assertEquals(response.repairedDataDigest(), deser.repairedDataDigest());
-                assertEquals(response.hasPendingRepairSessions(), deser.hasPendingRepairSessions());
+                assertEquals(response.isRepairedDigestConclusive(), deser.isRepairedDigestConclusive());
             }
         }
         catch (IOException e)
@@ -228,7 +205,7 @@ public class ReadResponseTest
         return ByteBuffer.wrap(bytes);
     }
 
-    private ReadCommand.RepairedDataInfo tracker(ByteBuffer digest, UUID... pendingSessions)
+    private ReadCommand.RepairedDataInfo tracker(final ByteBuffer digest, final boolean conclusive)
     {
         return new ReadCommand.RepairedDataInfo()
         {
@@ -238,9 +215,10 @@ public class ReadResponseTest
                 return digest == null ? ByteBufferUtil.EMPTY_BYTE_BUFFER : digest;
             }
 
-            public Set<UUID> getPendingRepairSessions()
+            @Override
+            public boolean isConclusive()
             {
-                return new HashSet<>(Arrays.asList(pendingSessions));
+                return conclusive;
             }
         };
     }
