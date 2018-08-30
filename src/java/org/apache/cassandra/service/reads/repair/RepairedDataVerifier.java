@@ -23,6 +23,7 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.PartitionRangeReadCommand;
 import org.apache.cassandra.db.ReadCommand;
@@ -57,18 +58,26 @@ public interface RepairedDataVerifier
             // some mismatch occurred between the repaired datasets on the replicas
             if (tracker.digests.keySet().size() > 1)
             {
-                TableMetrics metrics = ColumnFamilyStore.metricsFor(command.metadata().id);
-                // if there weren't any pending repair sessions which had not yet been committed
-                // mark the inconsistency as confirmed, otherwise it may be due to the sessions
-                // being committed at different times on different replicas so mark it unconfirmed
+                // if any of the digests should be considered inconclusive, because there were
+                // pending repair sessions which had not yet been committed or unrepaired partition
+                // deletes which meant some sstables were skipped during reads, mark the inconsistency
+                // as confirmed
                 if (tracker.inconclusiveDigests.isEmpty())
+                {
+                    TableMetrics metrics = ColumnFamilyStore.metricsFor(command.metadata().id);
                     metrics.confirmedRepairedInconsistencies.mark();
-                else
+                    NoSpamLogger.log(logger, NoSpamLogger.Level.WARN, 1, TimeUnit.MINUTES,
+                                     INCONSISTENCY_WARNING, command.metadata().keyspace,
+                                     command.metadata().name, getCommandString(), tracker);
+                }
+                else if (!DatabaseDescriptor.reportOnlyConfirmedRepairedDataMismatches())
+                {
+                    TableMetrics metrics = ColumnFamilyStore.metricsFor(command.metadata().id);
                     metrics.unconfirmedRepairedInconsistencies.mark();
-
-                NoSpamLogger.log(logger, NoSpamLogger.Level.WARN, 1, TimeUnit.MINUTES,
-                                 INCONSISTENCY_WARNING, command.metadata().keyspace,
-                                 command.metadata().name, getCommandString(), tracker);
+                    NoSpamLogger.log(logger, NoSpamLogger.Level.WARN, 1, TimeUnit.MINUTES,
+                                     INCONSISTENCY_WARNING, command.metadata().keyspace,
+                                     command.metadata().name, getCommandString(), tracker);
+                }
             }
         }
 

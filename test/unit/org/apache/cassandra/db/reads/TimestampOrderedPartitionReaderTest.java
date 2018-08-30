@@ -167,7 +167,7 @@ public class TimestampOrderedPartitionReaderTest
         long repairedAt = 1;  // !ActiveRepairService.UNREPAIRED_SSTABLE
         try
         {
-            sstable.descriptor.getMetadataSerializer().mutateRepaired(sstable.descriptor, repairedAt, null);
+            sstable.descriptor.getMetadataSerializer().mutateRepairMetadata(sstable.descriptor, repairedAt, null, false);
             sstable.reloadSSTableMetadata();
         }
         catch (IOException e)

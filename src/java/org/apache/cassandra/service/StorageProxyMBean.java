@@ -94,6 +94,9 @@ public interface StorageProxyMBean
      */
     public void stopFullQueryLogger();
 
+    /**
+     * Tracking and reporting of variances in the repaired data set across replicas at read time
+     */
     void enableRepairedDataTrackingForRangeReads();
     void disableRepairedDataTrackingForRangeReads();
     boolean getRepairedDataTrackingEnabledForRangeReads();
@@ -101,4 +104,7 @@ public interface StorageProxyMBean
     void enableRepairedDataTrackingForPartitionReads();
     void disableRepairedDataTrackingForPartitionReads();
     boolean getRepairedDataTrackingEnabledForPartitionReads();
+
+    boolean getReportOnlyConfirmedRepairedDataMismatches();
+    void setReportOnlyConfirmedRepairedDataMismatches(boolean onlyConfirmed);
 }

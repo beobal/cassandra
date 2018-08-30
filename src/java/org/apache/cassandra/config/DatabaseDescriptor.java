@@ -2691,4 +2691,14 @@ public class DatabaseDescriptor
     {
         conf.repaired_data_tracking_for_partition_reads_enabled = enabled;
     }
+
+    public static boolean reportOnlyConfirmedRepairedDataMismatches()
+    {
+        return conf.report_only_confirmed_repaired_data_mismatches;
+    }
+
+    public static void reportOnlyConfirmedRepairedDataMismatches(boolean onlyConfirmed)
+    {
+        conf.report_only_confirmed_repaired_data_mismatches = onlyConfirmed;
+    }
 }

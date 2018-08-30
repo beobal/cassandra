@@ -403,6 +403,14 @@ public class Config
      */
     public volatile boolean repaired_data_tracking_for_range_reads_enabled = false;
     public volatile boolean repaired_data_tracking_for_partition_reads_enabled = false;
+    // If true, unconfirmed mismatches (those which cannot be considered conclusive proof of out of
+    // sync repaired data due to the presence of pending repair sessions, or unrepaired partition
+    // deletes) will not increment a metric. This is purely to allow operators to avoid potential
+    // signal:noise issues as these types of mismatches are considerably less actionable than
+    // their confirmed counterparts. Setting this to true only disables the incrementing of the
+    // counters when an unconfirmed mismatch is found and has no other effect on the collection or
+    // processing of the repaired data.
+    public volatile boolean report_only_confirmed_repaired_data_mismatches = false;
 
     /**
      * @deprecated migrate to {@link DatabaseDescriptor#isClientInitialized()}
