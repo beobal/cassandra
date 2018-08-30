@@ -42,6 +42,7 @@ import org.apache.cassandra.db.filter.RowFilter;
 import org.apache.cassandra.db.marshal.AsciiType;
 import org.apache.cassandra.db.marshal.BytesType;
 import org.apache.cassandra.db.partitions.*;
+import org.apache.cassandra.db.reads.RepairedDataInfo;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.db.rows.RowIterator;
 import org.apache.cassandra.db.rows.SerializationHelper;
@@ -722,7 +723,7 @@ public class ReadCommandTest
             assertEquals(expectedPartitions, partitions.size());
             partitions.forEach(p -> assertEquals(expectedRowsPerPartition, p.rowCount()));
 
-            ReadCommand.RepairedDataInfo info = withRepairedInfo.getRepairedDataInfo();
+            RepairedDataInfo info = withRepairedInfo.getRepairedDataInfo();
             ByteBuffer digest = info.getRepairedDataDigest();
             digests.add(digest);
             assertEquals(1, digests.size());

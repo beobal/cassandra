@@ -34,6 +34,7 @@ import org.apache.cassandra.config.*;
 import org.apache.cassandra.db.filter.*;
 import org.apache.cassandra.db.monitoring.ApproximateTime;
 import org.apache.cassandra.db.partitions.*;
+import org.apache.cassandra.db.reads.RepairedDataInfo;
 import org.apache.cassandra.db.rows.*;
 import org.apache.cassandra.db.transform.RTBoundCloser;
 import org.apache.cassandra.db.transform.RTBoundValidator;
@@ -659,7 +660,6 @@ public abstract class ReadCommand extends AbstractReadQuery
         return sstable.isRepaired();
     }
 
-
     protected UnfilteredPartitionIterator withRepairedDataInfo(final UnfilteredPartitionIterator iterator)
     {
         if (!isTrackingRepairedStatus())
@@ -669,7 +669,7 @@ public abstract class ReadCommand extends AbstractReadQuery
         {
             protected UnfilteredRowIterator applyToPartition(UnfilteredRowIterator partition)
             {
-                return withRepairedDataDigest(repairedDataInfo, partition);
+                return UnfilteredRowIterators.withRepairedDataTracking(repairedDataInfo, partition);
             }
         }
 
@@ -681,100 +681,7 @@ public abstract class ReadCommand extends AbstractReadQuery
         if (!isTrackingRepairedStatus())
             return iterator;
 
-        return withRepairedDataDigest(repairedDataInfo, iterator);
-    }
-
-    private UnfilteredRowIterator withRepairedDataDigest(final RepairedDataInfo tracker, UnfilteredRowIterator iterator)
-    {
-        class WithDigest extends Transformation
-        {
-            protected DecoratedKey applyToPartitionKey(DecoratedKey key)
-            {
-                tracker.trackPartitionKey(key);
-                return key;
-            }
-
-            protected DeletionTime applyToDeletion(DeletionTime deletionTime)
-            {
-                tracker.trackDeletion(deletionTime);
-                return deletionTime;
-            }
-
-            protected RangeTombstoneMarker applyToMarker(RangeTombstoneMarker marker)
-            {
-                tracker.trackRangeTombstoneMarker(marker);
-                return marker;
-            }
-
-            protected Row applyToStatic(Row row)
-            {
-                tracker.trackRow(row);
-                return row;
-            }
-
-            protected Row applyToRow(Row row)
-            {
-                tracker.trackRow(row);
-                return row;
-            }
-        }
-
-        final UnfilteredRowIterator withDigest = Transformation.apply(iterator, new WithDigest());
-
-        // Possibly wrap the digest-calculating iterator so we can still employ the optimization from CASSANDRA-8180
-        class WithDigestAndLowerBound extends WrappingUnfilteredRowIterator implements IteratorWithLowerBound<Unfiltered>
-        {
-            private final Supplier<Unfiltered> lowerBoundFn;
-            private WithDigestAndLowerBound(UnfilteredRowIterator wrapped, Supplier<Unfiltered> lowerBoundFn)
-            {
-                super(wrapped);
-                this.lowerBoundFn = lowerBoundFn;
-            }
-
-            @Override
-            public Unfiltered lowerBound()
-            {
-                return lowerBoundFn.get();
-            }
-        }
-
-        if (iterator instanceof IteratorWithLowerBound)
-            return new WithDigestAndLowerBound(withDigest, ((IteratorWithLowerBound<Unfiltered>) iterator)::lowerBound);
-        else
-            return withDigest;
-    }
-
-    interface RepairedDataInfo
-    {
-        default ByteBuffer getRepairedDataDigest()
-        {
-            return ByteBufferUtil.EMPTY_BYTE_BUFFER;
-        }
-
-        default boolean isConclusive()
-        {
-            return true;
-        }
-
-        default void markInconclusive()
-        {
-        }
-
-        default void trackPartitionKey(DecoratedKey key)
-        {
-        }
-
-        default void trackDeletion(DeletionTime deletion)
-        {
-        }
-
-        default void trackRangeTombstoneMarker(RangeTombstoneMarker marker)
-        {
-        }
-
-        default void trackRow(Row row)
-        {
-        }
+        return UnfilteredRowIterators.withRepairedDataTracking(repairedDataInfo, iterator);
     }
 
     private RepairedDataInfo newRepairedDataInfo()

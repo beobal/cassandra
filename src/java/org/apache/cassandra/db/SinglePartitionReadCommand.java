@@ -23,7 +23,6 @@ import java.util.*;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Sets;
 
 import org.apache.cassandra.cache.IRowCacheEntry;
 import org.apache.cassandra.cache.RowCacheKey;
@@ -34,6 +33,7 @@ import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.filter.*;
 import org.apache.cassandra.db.lifecycle.*;
 import org.apache.cassandra.db.partitions.*;
+import org.apache.cassandra.db.reads.TimestampOrderedPartitionReader;
 import org.apache.cassandra.db.rows.*;
 import org.apache.cassandra.db.transform.Transformation;
 import org.apache.cassandra.exceptions.RequestExecutionException;
@@ -51,8 +51,6 @@ import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.*;
 import org.apache.cassandra.tracing.Tracing;
 import org.apache.cassandra.utils.FBUtilities;
-import org.apache.cassandra.utils.SearchIterator;
-import org.apache.cassandra.utils.btree.BTreeSet;
 
 /**
  * A read command that selects a (part of a) single partition.
@@ -808,151 +806,17 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
      */
     private UnfilteredRowIterator queryMemtableAndSSTablesInTimestampOrder(ColumnFamilyStore cfs, ClusteringIndexNamesFilter filter)
     {
-        Tracing.trace("Acquiring sstable references");
-        ColumnFamilyStore.ViewFragment view = cfs.select(View.select(SSTableSet.LIVE, partitionKey()));
-
-        ImmutableBTreePartition result = null;
-
-        Tracing.trace("Merging memtable contents");
-        long mostRecentPartitionDelete = Long.MIN_VALUE;
-        for (Memtable memtable : view.memtables)
-        {
-            Partition partition = memtable.getPartition(partitionKey());
-            if (partition == null)
-                continue;
-
-            try (UnfilteredRowIterator iter = filter.getUnfilteredRowIterator(columnFilter(), partition))
-            {
-                if (iter.isEmpty())
-                    continue;
-
-                result = add(iter, result, filter);
-                mostRecentPartitionDelete = Math.max(mostRecentPartitionDelete,
-                                                     result.partitionLevelDeletion().markedForDeleteAt());
-            }
-        }
-
-        /* add the SSTables on disk */
-        Collections.sort(view.sstables, SSTableReader.maxTimestampComparator);
-        boolean onlyUnrepaired = true;
-
-        List<UnfilteredRowIterator> unrepairedIterators = new ArrayList<>(view.sstables.size());
-        List<UnfilteredRowIterator> repairedIterators = null;
-
         SSTableReadMetricsCollector metricsCollector = new SSTableReadMetricsCollector();
-        // read sorted sstables
-        try
-        {
-            for (SSTableReader sstable : view.sstables)
-            {
-                // if we've already seen a partition tombstone with a timestamp greater
-                // than the most recent update to this sstable, we're done, since the rest of the sstables
-                // will also be older
-                // if we're tracking repaired status, we mark the repaired digest inconclusive
-                // as other replicas may not have seen this partition delete and so could include
-                // data from this sstable in their digests
-                if (sstable.getMaxTimestamp() < mostRecentPartitionDelete)
-                {
-                    if (considerRepairedForTracking(sstable))
-                        getRepairedDataInfo().markInconclusive();
+        TimestampOrderedPartitionReader.Builder builder =
+            new TimestampOrderedPartitionReader.Builder(cfs, partitionKey, filter, columnFilter(), metricsCollector);
+        if (isTrackingRepairedStatus())
+            builder = builder.withRepairedDataTracking(getRepairedDataInfo());
+        TimestampOrderedPartitionReader partitionReader = builder.build();
 
-                    break;
-                }
-
-                long currentMaxTs = sstable.getMaxTimestamp();
-                filter = reduceFilter(filter, result, currentMaxTs);
-                if (filter == null)
-                    break;
-
-                // which collection of iterators does one we obtain from this sstable belong in?
-                List<UnfilteredRowIterator> iterList;
-                if (considerRepairedForTracking(sstable))
-                {
-                    if (repairedIterators == null)
-                        repairedIterators = new ArrayList<>(view.sstables.size());
-                    iterList = repairedIterators;
-                }
-                else
-                {
-                    iterList = unrepairedIterators;
-                }
-
-                if (!shouldInclude(sstable))
-                {
-                    // This mean that nothing queried by the filter can be in the sstable. One exception is the top-level partition deletion
-                    // however: if it is set, it impacts everything and must be included. Getting that top-level partition deletion costs us
-                    // some seek in general however (unless the partition is indexed and is in the key cache), so we first check if the sstable
-                    // has any tombstone at all as a shortcut.
-                    if (!sstable.mayHaveTombstones())
-                        continue; // no tombstone at all, we can skip that sstable
-
-                    // We need to get the partition deletion and include it if it's live. In any case though, we're done with that sstable.
-                    UnfilteredRowIterator iter = StorageHook.instance.makeRowIterator(cfs,
-                                                                                      sstable,
-                                                                                      partitionKey(),
-                                                                                      filter.getSlices(metadata()),
-                                                                                      columnFilter(),
-                                                                                      filter.isReversed(),
-                                                                                      metricsCollector);
-                    if (!iter.partitionLevelDeletion().isLive())
-                    {
-                        iterList.add(UnfilteredRowIterators.noRowsIterator(iter.metadata(),
-                                                                           iter.partitionKey(),
-                                                                           Rows.EMPTY_STATIC_ROW,
-                                                                           iter.partitionLevelDeletion(),
-                                                                           filter.isReversed()));
-                    }
-                    else
-                    {
-                        iterList.add(iter);
-                    }
-
-                    mostRecentPartitionDelete = Math.max(mostRecentPartitionDelete,
-                                                         iter.partitionLevelDeletion().markedForDeleteAt());
-                    continue;
-                }
-
-                @SuppressWarnings("resource") // both lists of iterators are closed in the finally
-                UnfilteredRowIterator iter = StorageHook.instance.makeRowIterator(cfs,
-                                                                                  sstable,
-                                                                                  partitionKey(),
-                                                                                  filter.getSlices(metadata()),
-                                                                                  columnFilter(),
-                                                                                  filter.isReversed(),
-                                                                                  metricsCollector);
-                if (iter.isEmpty())
-                    continue;
-
-                if (sstable.isRepaired())
-                    onlyUnrepaired = false;
-
-                mostRecentPartitionDelete = Math.max(mostRecentPartitionDelete,
-                                                     iter.partitionLevelDeletion().markedForDeleteAt());
-                iterList.add(iter);
-            }
-
-            cfs.metric.updateSSTableIterated(metricsCollector.getMergedSSTables());
-
-            for (UnfilteredRowIterator iter : unrepairedIterators)
-                result = add(iter, result, filter);
-
-            // merge any unrepaired iterators, wrapping with a digest generator
-            if (repairedIterators != null)
-                result = add(withRepairedDataInfo(UnfilteredRowIterators.merge(repairedIterators)), result, filter);
-        }
-        finally
-        {
-            try
-            {
-                FBUtilities.closeAll(unrepairedIterators);
-                if (repairedIterators != null)
-                    FBUtilities.closeAll(repairedIterators);
-            }
-            catch (Exception e)
-            {
-                throw new RuntimeException(e);
-            }
-        }
+        ImmutableBTreePartition result = partitionReader.readPartition();
+        boolean onlyUnrepaired = partitionReader.onlyUnrepaired();
+        oldestUnrepairedTombstone = partitionReader.oldestUnrepairedTombstone();
+        cfs.metric.updateSSTableIterated(metricsCollector.getMergedSSTables());
 
         if (result == null || result.isEmpty())
             return EmptyIterators.unfilteredRow(metadata(), partitionKey(), false);
@@ -982,89 +846,6 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
         }
 
         return result.unfilteredIterator(columnFilter(), Slices.ALL, clusteringIndexFilter().isReversed());
-    }
-
-    private ImmutableBTreePartition add(UnfilteredRowIterator iter,
-                                        ImmutableBTreePartition result,
-                                        ClusteringIndexNamesFilter filter)
-    {
-
-        int maxRows = Math.max(filter.requestedRows().size(), 1);
-        if (result == null)
-            return ImmutableBTreePartition.create(iter, maxRows);
-
-        try (UnfilteredRowIterator merged = UnfilteredRowIterators.merge(Arrays.asList(iter, result.unfilteredIterator(columnFilter(), Slices.ALL, filter.isReversed()))))
-        {
-            return ImmutableBTreePartition.create(merged, maxRows);
-        }
-    }
-
-    private ClusteringIndexNamesFilter reduceFilter(ClusteringIndexNamesFilter filter, Partition result, long sstableTimestamp)
-    {
-        if (result == null)
-            return filter;
-
-        SearchIterator<Clustering, Row> searchIter = result.searchIterator(columnFilter(), false);
-
-        RegularAndStaticColumns columns = columnFilter().fetchedColumns();
-        NavigableSet<Clustering> clusterings = filter.requestedRows();
-
-        // We want to remove rows for which we have values for all requested columns. We have to deal with both static and regular rows.
-        // TODO: we could also remove a selected column if we've found values for every requested row but we'll leave
-        // that for later.
-
-        boolean removeStatic = false;
-        if (!columns.statics.isEmpty())
-        {
-            Row staticRow = searchIter.next(Clustering.STATIC_CLUSTERING);
-            removeStatic = staticRow != null && canRemoveRow(staticRow, columns.statics, sstableTimestamp);
-        }
-
-        NavigableSet<Clustering> toRemove = null;
-        for (Clustering clustering : clusterings)
-        {
-            Row row = searchIter.next(clustering);
-            if (row == null || !canRemoveRow(row, columns.regulars, sstableTimestamp))
-                continue;
-
-            if (toRemove == null)
-                toRemove = new TreeSet<>(result.metadata().comparator);
-            toRemove.add(clustering);
-        }
-
-        if (!removeStatic && toRemove == null)
-            return filter;
-
-        // Check if we have everything we need
-        boolean hasNoMoreStatic = columns.statics.isEmpty() || removeStatic;
-        boolean hasNoMoreClusterings = clusterings.isEmpty() || (toRemove != null && toRemove.size() == clusterings.size());
-        if (hasNoMoreStatic && hasNoMoreClusterings)
-            return null;
-
-        if (toRemove != null)
-        {
-            BTreeSet.Builder<Clustering> newClusterings = BTreeSet.builder(result.metadata().comparator);
-            newClusterings.addAll(Sets.difference(clusterings, toRemove));
-            clusterings = newClusterings.build();
-        }
-        return new ClusteringIndexNamesFilter(clusterings, filter.isReversed());
-    }
-
-    private boolean canRemoveRow(Row row, Columns requestedColumns, long sstableTimestamp)
-    {
-        // We can remove a row if it has data that is more recent that the next sstable to consider for the data that the query
-        // cares about. And the data we care about is 1) the row timestamp (since every query cares if the row exists or not)
-        // and 2) the requested columns.
-        if (row.primaryKeyLivenessInfo().isEmpty() || row.primaryKeyLivenessInfo().timestamp() <= sstableTimestamp)
-            return false;
-
-        for (ColumnMetadata column : requestedColumns)
-        {
-            Cell cell = row.getCell(column);
-            if (cell == null || cell.timestamp() <= sstableTimestamp)
-                return false;
-        }
-        return true;
     }
 
     @Override

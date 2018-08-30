@@ -30,6 +30,7 @@ import org.apache.cassandra.db.filter.DataLimits;
 import org.apache.cassandra.db.filter.RowFilter;
 import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.db.partitions.UnfilteredPartitionIterator;
+import org.apache.cassandra.db.reads.RepairedDataInfo;
 import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.io.util.DataInputBuffer;
 import org.apache.cassandra.io.util.DataOutputBuffer;
@@ -205,9 +206,9 @@ public class ReadResponseTest
         return ByteBuffer.wrap(bytes);
     }
 
-    private ReadCommand.RepairedDataInfo tracker(final ByteBuffer digest, final boolean conclusive)
+    private RepairedDataInfo tracker(final ByteBuffer digest, final boolean conclusive)
     {
-        return new ReadCommand.RepairedDataInfo()
+        return new RepairedDataInfo()
         {
             @Override
             public ByteBuffer getRepairedDataDigest()
@@ -226,10 +227,10 @@ public class ReadResponseTest
     private ReadCommand digestCommand(int key, TableMetadata metadata)
     {
         // use a tracker identical to ReadCommand.NO_OP_REPAIRED_DATA_TRACKER
-        return new StubReadCommand(key, metadata, true, new ReadCommand.RepairedDataInfo(){});
+        return new StubReadCommand(key, metadata, true, new RepairedDataInfo(){});
     }
 
-    private ReadCommand command(int key, TableMetadata metadata, ReadCommand.RepairedDataInfo tracker)
+    private ReadCommand command(int key, TableMetadata metadata, RepairedDataInfo tracker)
     {
         return new StubReadCommand(key, metadata, false, tracker);
     }
