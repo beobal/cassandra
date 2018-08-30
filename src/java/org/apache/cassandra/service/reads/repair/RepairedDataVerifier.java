@@ -29,6 +29,7 @@ import org.apache.cassandra.db.PartitionRangeReadCommand;
 import org.apache.cassandra.db.ReadCommand;
 import org.apache.cassandra.db.SinglePartitionReadCommand;
 import org.apache.cassandra.metrics.TableMetrics;
+import org.apache.cassandra.tracing.Tracing;
 import org.apache.cassandra.utils.NoSpamLogger;
 
 public interface RepairedDataVerifier
@@ -55,6 +56,8 @@ public interface RepairedDataVerifier
         @Override
         public void verify(RepairedDataTracker tracker)
         {
+            Tracing.trace("Verifying repaired data tracker {}", tracker);
+
             // some mismatch occurred between the repaired datasets on the replicas
             if (tracker.digests.keySet().size() > 1)
             {

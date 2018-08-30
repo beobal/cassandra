@@ -622,6 +622,9 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
             List<SSTableReader> skippedSSTablesWithTombstones = null;
             SSTableReadMetricsCollector metricsCollector = new SSTableReadMetricsCollector();
 
+            if (isTrackingRepairedStatus())
+                Tracing.trace("Collecting data from sstables and tracking repaired status");
+
             for (SSTableReader sstable : view.sstables)
             {
                 // if we've already seen a partition tombstone with a timestamp greater

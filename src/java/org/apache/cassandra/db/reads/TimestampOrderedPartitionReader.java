@@ -187,6 +187,7 @@ public abstract class TimestampOrderedPartitionReader
 
         ImmutableBTreePartition readSSTables(ImmutableBTreePartition result, List<SSTableReader> sstables)
         {
+            Tracing.trace("Merging SSTable contents and not tracking repaired data");
             // original logic from SinglePartitionReadCommand::queryMemtableAndSSTablesInTimestampOrder
             // with short circuits and no repaired data tracking
             for (SSTableReader sstable : sstables)
@@ -334,6 +335,7 @@ public abstract class TimestampOrderedPartitionReader
 
         ImmutableBTreePartition readSSTables(ImmutableBTreePartition result, List<SSTableReader> sstables)
         {
+            Tracing.trace("Merging SSTable contents and tracking repaired data");
             List<UnfilteredRowIterator> unrepairedIterators = new ArrayList<>(sstables.size());
             List<UnfilteredRowIterator> repairedIterators = null;
             long mostRecentPartitionDelete = result == null
@@ -424,6 +426,9 @@ public abstract class TimestampOrderedPartitionReader
                     iterList.add(iter);
                 }
 
+                Tracing.trace("Including data from {} unrepaired and {} repaired sstables",
+                              unrepairedIterators.size(),
+                              repairedIterators == null ? 0 : repairedIterators.size());
 
                 for (UnfilteredRowIterator iter : unrepairedIterators)
                     result = add(iter, result, filter, false);
