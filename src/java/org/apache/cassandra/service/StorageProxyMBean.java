@@ -105,6 +105,7 @@ public interface StorageProxyMBean
     void disableRepairedDataTrackingForPartitionReads();
     boolean getRepairedDataTrackingEnabledForPartitionReads();
 
-    boolean getReportOnlyConfirmedRepairedDataMismatches();
-    void setReportOnlyConfirmedRepairedDataMismatches(boolean onlyConfirmed);
+    void enableReportingUnconfirmedRepairedDataMismatches();
+    void disableReportingUnconfirmedRepairedDataMismatches();
+    boolean getReportingUnconfirmedRepairedDataMismatchesEnabled();
 }

@@ -2839,15 +2839,22 @@ public class StorageProxy implements StorageProxyMBean
         return DatabaseDescriptor.getRepairedDataTrackingForPartitionReadsEnabled();
     }
 
-    public boolean getReportOnlyConfirmedRepairedDataMismatches()
+    @Override
+    public void enableReportingUnconfirmedRepairedDataMismatches()
     {
-        return DatabaseDescriptor.reportOnlyConfirmedRepairedDataMismatches();
-
+        DatabaseDescriptor.reportUnconfirmedRepairedDataMismatches(true);
     }
 
-    public void setReportOnlyConfirmedRepairedDataMismatches(boolean onlyConfirmed)
+    @Override
+    public void disableReportingUnconfirmedRepairedDataMismatches()
     {
-        DatabaseDescriptor.reportOnlyConfirmedRepairedDataMismatches(onlyConfirmed);
+       DatabaseDescriptor.reportUnconfirmedRepairedDataMismatches(false);
+    }
+
+    @Override
+    public boolean getReportingUnconfirmedRepairedDataMismatchesEnabled()
+    {
+        return DatabaseDescriptor.reportUnconfirmedRepairedDataMismatches();
     }
 
     static class PaxosBallotAndContention

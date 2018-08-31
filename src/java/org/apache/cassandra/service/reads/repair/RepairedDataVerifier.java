@@ -73,7 +73,7 @@ public interface RepairedDataVerifier
                                      INCONSISTENCY_WARNING, command.metadata().keyspace,
                                      command.metadata().name, getCommandString(), tracker);
                 }
-                else if (!DatabaseDescriptor.reportOnlyConfirmedRepairedDataMismatches())
+                else if (DatabaseDescriptor.reportUnconfirmedRepairedDataMismatches())
                 {
                     TableMetrics metrics = ColumnFamilyStore.metricsFor(command.metadata().id);
                     metrics.unconfirmedRepairedInconsistencies.mark();

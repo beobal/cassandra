@@ -2692,13 +2692,13 @@ public class DatabaseDescriptor
         conf.repaired_data_tracking_for_partition_reads_enabled = enabled;
     }
 
-    public static boolean reportOnlyConfirmedRepairedDataMismatches()
+    public static boolean reportUnconfirmedRepairedDataMismatches()
     {
-        return conf.report_only_confirmed_repaired_data_mismatches;
+        return conf.report_unconfirmed_repaired_data_mismatches;
     }
 
-    public static void reportOnlyConfirmedRepairedDataMismatches(boolean onlyConfirmed)
+    public static void reportUnconfirmedRepairedDataMismatches(boolean enabled)
     {
-        conf.report_only_confirmed_repaired_data_mismatches = onlyConfirmed;
+        conf.report_unconfirmed_repaired_data_mismatches = enabled;
     }
 }
