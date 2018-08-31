@@ -21,12 +21,7 @@ package org.apache.cassandra.db;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -559,14 +554,6 @@ public class ReadCommandTest
     }
 
     @Test
-    public void testSinglePartitionNamesRepairedDataTracking() throws Exception
-    {
-        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(CF2);
-        ReadCommand readCommand = Util.cmd(cfs, Util.dk("key")).includeRow("cc").includeRow("dd").build();
-        testRepairedDataTracking(cfs, readCommand);
-    }
-
-    @Test
     public void testSinglePartitionSliceRepairedDataTracking() throws Exception
     {
         ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(CF2);
@@ -575,7 +562,73 @@ public class ReadCommandTest
     }
 
     @Test
-    public void skipRowCacheIfTrackingRepairedData() throws Exception
+    public void testPartitionRangeRepairedDataTracking() throws Exception
+    {
+        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(CF2);
+        ReadCommand readCommand = Util.cmd(cfs).build();
+        testRepairedDataTracking(cfs, readCommand);
+    }
+
+    @Test
+    public void testSinglePartitionNamesRepairedDataTracking() throws Exception
+    {
+        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(CF2);
+        ReadCommand readCommand = Util.cmd(cfs, Util.dk("key")).includeRow("cc").includeRow("dd").build();
+        testRepairedDataTracking(cfs, readCommand);
+    }
+
+    @Test
+    public void testSinglePartitionNamesSkipsOptimisationsIfTrackingRepairedData()
+    {
+        // when tracking, the optimizations of querying sstables in timestamp order and
+        // returning once all requested columns are not available so just assert that
+        // all sstables are read when performing such queries
+        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(CF2);
+        cfs.truncateBlocking();
+        cfs.disableAutoCompaction();
+
+        new RowUpdateBuilder(cfs.metadata(), 0, ByteBufferUtil.bytes("key"))
+            .clustering("dd")
+            .add("a", ByteBufferUtil.bytes("abcd"))
+            .build()
+            .apply();
+
+        cfs.forceBlockingFlush();
+
+        new RowUpdateBuilder(cfs.metadata(), 1, ByteBufferUtil.bytes("key"))
+            .clustering("dd")
+            .add("a", ByteBufferUtil.bytes("wxyz"))
+            .build()
+            .apply();
+
+        cfs.forceBlockingFlush();
+        List<SSTableReader> sstables = new ArrayList<>(cfs.getLiveSSTables());
+        assertEquals(2, sstables.size());
+        Collections.sort(sstables, SSTableReader.maxTimestampComparator);
+
+        ReadCommand readCommand = Util.cmd(cfs, Util.dk("key")).includeRow("dd").columns("a").build();
+
+        assertEquals(0, readCount(sstables.get(0)));
+        assertEquals(0, readCount(sstables.get(1)));
+        ReadCommand withTracking = readCommand.copy();
+        withTracking.trackRepairedStatus();
+        Util.getAll(withTracking);
+        assertEquals(1, readCount(sstables.get(0)));
+        assertEquals(1, readCount(sstables.get(1)));
+
+        // same command without tracking touches only the table with the higher timestamp
+        Util.getAll(readCommand.copy());
+        assertEquals(2, readCount(sstables.get(0)));
+        assertEquals(1, readCount(sstables.get(1)));
+    }
+
+    private long readCount(SSTableReader sstable)
+    {
+        return sstable.getReadMeter().count();
+    }
+
+    @Test
+    public void skipRowCacheIfTrackingRepairedData()
     {
         ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(CF6);
 
@@ -605,16 +658,6 @@ public class ReadCommandTest
         Util.getAll(withRepairedInfo);
         assertEquals(cacheHits, cfs.metric.rowCacheHit.getCount());
     }
-
-    @Test
-    public void testPartitionRangeRepairedDataTracking() throws Exception
-    {
-        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(CF2);
-        ReadCommand readCommand = Util.cmd(cfs).build();
-        testRepairedDataTracking(cfs, readCommand);
-    }
-
-    // unrepaired data shrinks filter marks inconclusive - names
 
     private void testRepairedDataTracking(ColumnFamilyStore cfs, ReadCommand readCommand) throws IOException
     {

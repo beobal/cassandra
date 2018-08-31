@@ -23,6 +23,7 @@ import java.util.*;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Sets;
 
 import org.apache.cassandra.cache.IRowCacheEntry;
 import org.apache.cassandra.cache.RowCacheKey;
@@ -33,7 +34,6 @@ import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.filter.*;
 import org.apache.cassandra.db.lifecycle.*;
 import org.apache.cassandra.db.partitions.*;
-import org.apache.cassandra.db.reads.TimestampOrderedPartitionReader;
 import org.apache.cassandra.db.rows.*;
 import org.apache.cassandra.db.transform.Transformation;
 import org.apache.cassandra.exceptions.RequestExecutionException;
@@ -51,6 +51,8 @@ import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.*;
 import org.apache.cassandra.tracing.Tracing;
 import org.apache.cassandra.utils.FBUtilities;
+import org.apache.cassandra.utils.SearchIterator;
+import org.apache.cassandra.utils.btree.BTreeSet;
 
 /**
  * A read command that selects a (part of a) single partition.
@@ -573,8 +575,9 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
          *      and if we have neither non-frozen collections/UDTs nor counters (indeed, for a non-frozen collection or UDT,
          *      we can't guarantee an older sstable won't have some elements that weren't in the most recent sstables,
          *      and counters are intrinsically a collection of shards and so have the same problem).
+         *      Also, if tracking repaired data then we skip this optimization as
          */
-        if (clusteringIndexFilter() instanceof ClusteringIndexNamesFilter && !queriesMulticellType())
+        if (clusteringIndexFilter() instanceof ClusteringIndexNamesFilter && !queriesMulticellType() && !isTrackingRepairedStatus())
             return queryMemtableAndSSTablesInTimestampOrder(cfs, (ClusteringIndexNamesFilter)clusteringIndexFilter());
 
         Tracing.trace("Acquiring sstable references");
@@ -809,16 +812,88 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
      */
     private UnfilteredRowIterator queryMemtableAndSSTablesInTimestampOrder(ColumnFamilyStore cfs, ClusteringIndexNamesFilter filter)
     {
-        SSTableReadMetricsCollector metricsCollector = new SSTableReadMetricsCollector();
-        TimestampOrderedPartitionReader.Builder builder =
-            new TimestampOrderedPartitionReader.Builder(cfs, partitionKey, filter, columnFilter(), metricsCollector);
-        if (isTrackingRepairedStatus())
-            builder = builder.withRepairedDataTracking(getRepairedDataInfo());
-        TimestampOrderedPartitionReader partitionReader = builder.build();
+        Tracing.trace("Acquiring sstable references");
+        ColumnFamilyStore.ViewFragment view = cfs.select(View.select(SSTableSet.LIVE, partitionKey()));
 
-        ImmutableBTreePartition result = partitionReader.readPartition();
-        boolean onlyUnrepaired = partitionReader.onlyUnrepaired();
-        oldestUnrepairedTombstone = partitionReader.oldestUnrepairedTombstone();
+        ImmutableBTreePartition result = null;
+
+        Tracing.trace("Merging memtable contents");
+        for (Memtable memtable : view.memtables)
+        {
+            Partition partition = memtable.getPartition(partitionKey());
+            if (partition == null)
+                continue;
+
+            try (UnfilteredRowIterator iter = filter.getUnfilteredRowIterator(columnFilter(), partition))
+            {
+                if (iter.isEmpty())
+                    continue;
+
+                result = add(iter, result, filter, false);
+            }
+        }
+
+        /* add the SSTables on disk */
+        Collections.sort(view.sstables, SSTableReader.maxTimestampComparator);
+        boolean onlyUnrepaired = true;
+        // read sorted sstables
+        SSTableReadMetricsCollector metricsCollector = new SSTableReadMetricsCollector();
+        for (SSTableReader sstable : view.sstables)
+        {
+            // if we've already seen a partition tombstone with a timestamp greater
+            // than the most recent update to this sstable, we're done, since the rest of the sstables
+            // will also be older
+            if (result != null && sstable.getMaxTimestamp() < result.partitionLevelDeletion().markedForDeleteAt())
+                break;
+
+            long currentMaxTs = sstable.getMaxTimestamp();
+            filter = reduceFilter(filter, result, currentMaxTs);
+            if (filter == null)
+                break;
+
+            if (!shouldInclude(sstable))
+            {
+                // This mean that nothing queried by the filter can be in the sstable. One exception is the top-level partition deletion
+                // however: if it is set, it impacts everything and must be included. Getting that top-level partition deletion costs us
+                // some seek in general however (unless the partition is indexed and is in the key cache), so we first check if the sstable
+                // has any tombstone at all as a shortcut.
+                if (!sstable.mayHaveTombstones())
+                    continue; // no tombstone at all, we can skip that sstable
+
+                // We need to get the partition deletion and include it if it's live. In any case though, we're done with that sstable.
+                try (UnfilteredRowIterator iter = StorageHook.instance.makeRowIterator(cfs,
+                                                                                       sstable,
+                                                                                       partitionKey(),
+                                                                                       filter.getSlices(metadata()),
+                                                                                       columnFilter(),
+                                                                                       filter.isReversed(),
+                                                                                       metricsCollector))
+                {
+                    if (!iter.partitionLevelDeletion().isLive())
+                        result = add(UnfilteredRowIterators.noRowsIterator(iter.metadata(), iter.partitionKey(), Rows.EMPTY_STATIC_ROW, iter.partitionLevelDeletion(), filter.isReversed()), result, filter, sstable.isRepaired());
+                    else
+                        result = add(iter, result, filter, sstable.isRepaired());
+                }
+                continue;
+            }
+
+            try (UnfilteredRowIterator iter = StorageHook.instance.makeRowIterator(cfs,
+                                                                                   sstable,
+                                                                                   partitionKey(),
+                                                                                   filter.getSlices(metadata()),
+                                                                                   columnFilter(),
+                                                                                   filter.isReversed(),
+                                                                                   metricsCollector))
+            {
+                if (iter.isEmpty())
+                    continue;
+
+                if (sstable.isRepaired())
+                    onlyUnrepaired = false;
+                result = add(iter, result, filter, sstable.isRepaired());
+            }
+        }
+
         cfs.metric.updateSSTableIterated(metricsCollector.getMergedSSTables());
 
         if (result == null || result.isEmpty())
@@ -849,6 +924,89 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
         }
 
         return result.unfilteredIterator(columnFilter(), Slices.ALL, clusteringIndexFilter().isReversed());
+    }
+
+    private ImmutableBTreePartition add(UnfilteredRowIterator iter, ImmutableBTreePartition result, ClusteringIndexNamesFilter filter, boolean isRepaired)
+    {
+        if (!isRepaired)
+            oldestUnrepairedTombstone = Math.min(oldestUnrepairedTombstone, iter.stats().minLocalDeletionTime);
+
+        int maxRows = Math.max(filter.requestedRows().size(), 1);
+        if (result == null)
+            return ImmutableBTreePartition.create(iter, maxRows);
+
+        try (UnfilteredRowIterator merged = UnfilteredRowIterators.merge(Arrays.asList(iter, result.unfilteredIterator(columnFilter(), Slices.ALL, filter.isReversed()))))
+        {
+            return ImmutableBTreePartition.create(merged, maxRows);
+        }
+    }
+
+    private ClusteringIndexNamesFilter reduceFilter(ClusteringIndexNamesFilter filter, Partition result, long sstableTimestamp)
+    {
+        if (result == null)
+            return filter;
+
+        SearchIterator<Clustering, Row> searchIter = result.searchIterator(columnFilter(), false);
+
+        RegularAndStaticColumns columns = columnFilter().fetchedColumns();
+        NavigableSet<Clustering> clusterings = filter.requestedRows();
+
+        // We want to remove rows for which we have values for all requested columns. We have to deal with both static and regular rows.
+        // TODO: we could also remove a selected column if we've found values for every requested row but we'll leave
+        // that for later.
+
+        boolean removeStatic = false;
+        if (!columns.statics.isEmpty())
+        {
+            Row staticRow = searchIter.next(Clustering.STATIC_CLUSTERING);
+            removeStatic = staticRow != null && canRemoveRow(staticRow, columns.statics, sstableTimestamp);
+        }
+
+        NavigableSet<Clustering> toRemove = null;
+        for (Clustering clustering : clusterings)
+        {
+            Row row = searchIter.next(clustering);
+            if (row == null || !canRemoveRow(row, columns.regulars, sstableTimestamp))
+                continue;
+
+            if (toRemove == null)
+                toRemove = new TreeSet<>(result.metadata().comparator);
+            toRemove.add(clustering);
+        }
+
+        if (!removeStatic && toRemove == null)
+            return filter;
+
+        // Check if we have everything we need
+        boolean hasNoMoreStatic = columns.statics.isEmpty() || removeStatic;
+        boolean hasNoMoreClusterings = clusterings.isEmpty() || (toRemove != null && toRemove.size() == clusterings.size());
+        if (hasNoMoreStatic && hasNoMoreClusterings)
+            return null;
+
+        if (toRemove != null)
+        {
+            BTreeSet.Builder<Clustering> newClusterings = BTreeSet.builder(result.metadata().comparator);
+            newClusterings.addAll(Sets.difference(clusterings, toRemove));
+            clusterings = newClusterings.build();
+        }
+        return new ClusteringIndexNamesFilter(clusterings, filter.isReversed());
+    }
+
+    private boolean canRemoveRow(Row row, Columns requestedColumns, long sstableTimestamp)
+    {
+        // We can remove a row if it has data that is more recent that the next sstable to consider for the data that the query
+        // cares about. And the data we care about is 1) the row timestamp (since every query cares if the row exists or not)
+        // and 2) the requested columns.
+        if (row.primaryKeyLivenessInfo().isEmpty() || row.primaryKeyLivenessInfo().timestamp() <= sstableTimestamp)
+            return false;
+
+        for (ColumnMetadata column : requestedColumns)
+        {
+            Cell cell = row.getCell(column);
+            if (cell == null || cell.timestamp() <= sstableTimestamp)
+                return false;
+        }
+        return true;
     }
 
     @Override
