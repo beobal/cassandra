@@ -792,6 +792,14 @@ public class LocalSessions
         return session != null && session.getState() == FINALIZED;
     }
 
+    /**
+     * determines if a local session exists
+     */
+    public boolean sessionExists(UUID sessionID)
+    {
+        return getSession(sessionID) != null;
+    }
+
     @VisibleForTesting
     protected boolean sessionHasData(LocalSession session)
     {

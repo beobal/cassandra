@@ -20,9 +20,12 @@ package org.apache.cassandra.db;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.*;
 
+import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -42,24 +45,29 @@ import org.apache.cassandra.db.rows.RowIterator;
 import org.apache.cassandra.db.rows.SerializationHelper;
 import org.apache.cassandra.db.rows.UnfilteredRowIterator;
 import org.apache.cassandra.db.rows.UnfilteredRowIterators;
+import org.apache.cassandra.dht.Range;
+import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.util.DataInputBuffer;
 import org.apache.cassandra.io.util.DataOutputBuffer;
 import org.apache.cassandra.io.util.WrappedDataOutputStreamPlus;
+import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.net.MessageOut;
 import org.apache.cassandra.net.MessagingService;
+import org.apache.cassandra.repair.consistent.LocalSessionAccessor;
 import org.apache.cassandra.schema.CachingParams;
 import org.apache.cassandra.schema.KeyspaceParams;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.ActiveRepairService;
+import org.apache.cassandra.streaming.PreviewKind;
 import org.apache.cassandra.tracing.Tracing;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.FBUtilities;
+import org.apache.cassandra.utils.UUIDGen;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 public class ReadCommandTest
@@ -71,6 +79,19 @@ public class ReadCommandTest
     private static final String CF4 = "Standard4";
     private static final String CF5 = "Standard5";
     private static final String CF6 = "Standard6";
+
+    private static final InetAddressAndPort REPAIR_COORDINATOR;
+    static {
+        try
+        {
+            REPAIR_COORDINATOR = InetAddressAndPort.getByName("10.0.0.1");
+        }
+        catch (UnknownHostException e)
+        {
+
+            throw new AssertionError(e);
+        }
+    }
 
     @BeforeClass
     public static void defineSchema() throws ConfigurationException
@@ -136,6 +157,8 @@ public class ReadCommandTest
                                     metadata4,
                                     metadata5,
                                     metadata6);
+
+        LocalSessionAccessor.startup();
     }
 
     @Test
@@ -696,25 +719,25 @@ public class ReadCommandTest
         digests.add(digest);
 
         // add a pending repair session to table1, digest should remain the same but now we expect it to be marked inconclusive
-        UUID session1 = UUID.randomUUID();
-        mutateRepaired(sstable1, ActiveRepairService.UNREPAIRED_SSTABLE, session1);
+        UUID session1 = UUIDGen.getTimeUUID();
+        mutateRepaired(cfs, sstable1, ActiveRepairService.UNREPAIRED_SSTABLE, session1);
         digests.add(performReadAndVerifyRepairedInfo(readCommand, numPartitions, rowsPerPartition, false));
         assertEquals(1, digests.size());
 
         // add a different pending session to table2, digest should remain the same and still consider it inconclusive
-        UUID session2 = UUID.randomUUID();
-        mutateRepaired(sstable2, ActiveRepairService.UNREPAIRED_SSTABLE, session2);
+        UUID session2 = UUIDGen.getTimeUUID();
+        mutateRepaired(cfs, sstable2, ActiveRepairService.UNREPAIRED_SSTABLE, session2);
         digests.add(performReadAndVerifyRepairedInfo(readCommand, numPartitions, rowsPerPartition, false));
         assertEquals(1, digests.size());
 
         // mark one table repaired
-        mutateRepaired(sstable1, 111, null);
+        mutateRepaired(cfs, sstable1, 111, null);
         // this time, digest should not be empty, session2 still means that the result is inconclusive
         digests.add(performReadAndVerifyRepairedInfo(readCommand, numPartitions, rowsPerPartition, false));
         assertEquals(2, digests.size());
 
         // mark the second table repaired
-        mutateRepaired(sstable2, 222, null);
+        mutateRepaired(cfs, sstable2, 222, null);
         // digest should be updated again and as there are no longer any pending sessions, it should be considered conclusive
         digests.add(performReadAndVerifyRepairedInfo(readCommand, numPartitions, rowsPerPartition, true));
         assertEquals(3, digests.size());
@@ -740,10 +763,27 @@ public class ReadCommandTest
         }
     }
 
-    private void mutateRepaired(SSTableReader sstable, long repairedAt, UUID pendingSession) throws IOException
+    private void mutateRepaired(ColumnFamilyStore cfs, SSTableReader sstable, long repairedAt, UUID pendingSession) throws IOException
     {
         sstable.descriptor.getMetadataSerializer().mutateRepairMetadata(sstable.descriptor, repairedAt, pendingSession, false);
         sstable.reloadSSTableMetadata();
+        if (pendingSession != null)
+        {
+            // setup a minimal repair session. This is necessary because we
+            // check for sessions which have exceeded timeout and been purged
+            Range<Token> range = new Range<>(cfs.metadata().partitioner.getMinimumToken(),
+                                             cfs.metadata().partitioner.getRandomToken());
+            ActiveRepairService.instance.registerParentRepairSession(pendingSession,
+                                                                     REPAIR_COORDINATOR,
+                                                                     Lists.newArrayList(cfs),
+                                                                     Sets.newHashSet(range),
+                                                                     true,
+                                                                     repairedAt,
+                                                                     true,
+                                                                     PreviewKind.NONE);
+
+            LocalSessionAccessor.prepareUnsafe(pendingSession, null, Sets.newHashSet(REPAIR_COORDINATOR));
+        }
     }
 
     private ByteBuffer performReadAndVerifyRepairedInfo(ReadCommand command,
@@ -765,10 +805,10 @@ public class ReadCommandTest
             assertEquals(expectedPartitions, partitions.size());
             partitions.forEach(p -> assertEquals(expectedRowsPerPartition, p.rowCount()));
 
-            ByteBuffer digest = command.getRepairedDataDigest();
+            ByteBuffer digest = withRepairedInfo.getRepairedDataDigest();
             digests.add(digest);
             assertEquals(1, digests.size());
-            assertEquals(expectConclusive, command.isRepairedDataDigestConclusive());
+            assertEquals(expectConclusive, withRepairedInfo.isRepairedDataDigestConclusive());
         }
         return digests.iterator().next();
     }

@@ -679,8 +679,14 @@ public abstract class ReadCommand extends AbstractReadQuery
         {
             if (ActiveRepairService.instance.consistent.local.isSessionFinalized(pendingRepair))
                 return true;
-            else
-                repairedDataInfo.markInconclusive();
+
+            // In the edge case where compaction is backed up long enough for the session to
+            // timeout and be purged by LocalSessions::cleanup, consider the sstable unrepaired
+            // as it will be marked unrepaired when compaction catches up
+            if (!ActiveRepairService.instance.consistent.local.sessionExists(pendingRepair))
+                return false;
+
+            repairedDataInfo.markInconclusive();
         }
 
         return sstable.isRepaired();
