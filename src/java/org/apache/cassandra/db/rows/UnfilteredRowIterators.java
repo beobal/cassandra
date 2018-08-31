@@ -25,7 +25,6 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.db.*;
 import org.apache.cassandra.db.filter.ColumnFilter;
-import org.apache.cassandra.db.reads.RepairedDataInfo;
 import org.apache.cassandra.db.transform.FilteredRows;
 import org.apache.cassandra.db.transform.MoreRows;
 import org.apache.cassandra.db.transform.Transformation;
@@ -601,41 +600,4 @@ public abstract class UnfilteredRowIterators
         }
     }
 
-    public static UnfilteredRowIterator withRepairedDataTracking(final RepairedDataInfo tracker, UnfilteredRowIterator iterator)
-    {
-        class WithDigest extends Transformation
-        {
-            protected DecoratedKey applyToPartitionKey(DecoratedKey key)
-            {
-                tracker.trackPartitionKey(key);
-                return key;
-            }
-
-            protected DeletionTime applyToDeletion(DeletionTime deletionTime)
-            {
-                tracker.trackDeletion(deletionTime);
-                return deletionTime;
-            }
-
-            protected RangeTombstoneMarker applyToMarker(RangeTombstoneMarker marker)
-            {
-                tracker.trackRangeTombstoneMarker(marker);
-                return marker;
-            }
-
-            protected Row applyToStatic(Row row)
-            {
-                tracker.trackRow(row);
-                return row;
-            }
-
-            protected Row applyToRow(Row row)
-            {
-                tracker.trackRow(row);
-                return row;
-            }
-        }
-
-        return Transformation.apply(iterator, new WithDigest());
-    }
 }

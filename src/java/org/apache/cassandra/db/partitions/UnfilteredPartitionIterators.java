@@ -25,7 +25,6 @@ import com.google.common.hash.Hasher;
 
 import org.apache.cassandra.db.*;
 import org.apache.cassandra.db.filter.ColumnFilter;
-import org.apache.cassandra.db.reads.RepairedDataInfo;
 import org.apache.cassandra.db.rows.*;
 import org.apache.cassandra.db.transform.FilteredPartitions;
 import org.apache.cassandra.db.transform.MorePartitions;
@@ -394,19 +393,5 @@ public abstract class UnfilteredPartitionIterators
                 }
             };
         }
-    }
-
-    public static UnfilteredPartitionIterator withRepairedDataTracking(final RepairedDataInfo repairedDataInfo,
-                                                                       final UnfilteredPartitionIterator iterator)
-    {
-        class WithRepairedDataTracking extends Transformation<UnfilteredRowIterator>
-        {
-            protected UnfilteredRowIterator applyToPartition(UnfilteredRowIterator partition)
-            {
-                return UnfilteredRowIterators.withRepairedDataTracking(repairedDataInfo, partition);
-            }
-        }
-
-        return Transformation.apply(iterator, new WithRepairedDataTracking());
     }
 }

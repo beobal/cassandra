@@ -296,8 +296,9 @@ public class PartitionRangeReadCommand extends ReadCommand implements PartitionR
             // if tracking is not enabled, all iterators will be considered unrepaired
             if (repairedIterators != null)
             {
-                unrepairedIterators.add(withRepairedDataInfo(UnfilteredPartitionIterators.merge(repairedIterators,
-                                                                                                UnfilteredPartitionIterators.MergeListener.NOOP)));
+                unrepairedIterators.add(
+                    withRepairedDataInfo(
+                        UnfilteredPartitionIterators.merge(repairedIterators, UnfilteredPartitionIterators.MergeListener.NOOP)));
             }
 
             return checkCacheFilter(UnfilteredPartitionIterators.mergeLazily(unrepairedIterators), cfs);

@@ -21,7 +21,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.function.LongPredicate;
-import java.util.function.Supplier;
 
 import javax.annotation.Nullable;
 
@@ -34,7 +33,6 @@ import org.apache.cassandra.config.*;
 import org.apache.cassandra.db.filter.*;
 import org.apache.cassandra.db.monitoring.ApproximateTime;
 import org.apache.cassandra.db.partitions.*;
-import org.apache.cassandra.db.reads.RepairedDataInfo;
 import org.apache.cassandra.db.rows.*;
 import org.apache.cassandra.db.transform.RTBoundCloser;
 import org.apache.cassandra.db.transform.RTBoundValidator;
@@ -61,7 +59,6 @@ import org.apache.cassandra.tracing.Tracing;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.HashingUtils;
-import org.apache.cassandra.utils.IteratorWithLowerBound;
 
 /**
  * General interface for storage-engine read commands (common to both range and
@@ -84,10 +81,19 @@ public abstract class ReadCommand extends AbstractReadQuery
 
     // for data queries, coordinators may request information on the repaired data used in constructing the response
     private boolean trackRepairedStatus = false;
-    private static final RepairedDataInfo NO_OP_REPAIRED_DATA_INFO = new RepairedDataInfo(){};
-    private RepairedDataInfo repairedDataInfo = NO_OP_REPAIRED_DATA_INFO;
+    // tracker for repaired data, initialized to singelton null object
+    private static final RepairedDataInfo NULL_REPAIRED_DATA_INFO = new RepairedDataInfo()
+    {
+        void trackPartitionKey(DecoratedKey key){}
+        void trackDeletion(DeletionTime deletion){}
+        void trackRangeTombstoneMarker(RangeTombstoneMarker marker){}
+        void trackRow(Row row){}
+        boolean isConclusive(){ return true; }
+        ByteBuffer getDigest(){ return ByteBufferUtil.EMPTY_BYTE_BUFFER; }
+    };
+    RepairedDataInfo repairedDataInfo = NULL_REPAIRED_DATA_INFO;
 
-    protected int oldestUnrepairedTombstone = Integer.MAX_VALUE;
+    int oldestUnrepairedTombstone = Integer.MAX_VALUE;
 
     @Nullable
     private final IndexMetadata index;
@@ -232,18 +238,38 @@ public abstract class ReadCommand extends AbstractReadQuery
     }
 
     /**
-     * Returns the status of the repaired data read in the execution of this command.
+     * Returns a digest of the repaired data read in the execution of this command.
      *
      * If either repaired status tracking is not active or the command has not yet been
-     * executed, then this info object will be empty. Otherwise, it will contain a digest
-     * of the repaired data read, or empty buffer if no repaired data was read. Also, it
-     * will contain a possibly empty set of session ids if any of the sstables read
-     * have pending but uncommitted repair sessions.
-     * @return RepairedDataInfo status of the repaired data read in the execution of the command
+     * executed, then this digest will be an empty buffer.
+     * Otherwise, it will contain a digest* of the repaired data read, or empty buffer
+     * if no repaired data was read.
+     * @return digest of the repaired data read in the execution of the command
      */
-    public RepairedDataInfo getRepairedDataInfo()
+    public ByteBuffer getRepairedDataDigest()
     {
-        return repairedDataInfo;
+        return repairedDataInfo.getDigest();
+    }
+
+    /**
+     * Returns a boolean indicating whether any relevant sstables were skipped during the read
+     * that produced the repaired data digest.
+     *
+     * If true, then no pending repair sessions or partition deletes have influenced the extent
+     * of the repaired sstables that went into generating the digest.
+     * This indicates whether or not the digest can reliably be used to infer consistency
+     * issues between the repaired sets across replicas.
+     *
+     * If either repaired status tracking is not active or the command has not yet been
+     * executed, then this will always return true.
+     *
+     * @return boolean to indicate confidence in the dwhether or not the digest of the repaired data can be
+     * reliably be used to infer inconsistency issues between the repaired sets across
+     * replicas.
+     */
+    public boolean isRepairedDataDigestConclusive()
+    {
+        return repairedDataInfo.isConclusive();
     }
 
     /**
@@ -369,7 +395,7 @@ public abstract class ReadCommand extends AbstractReadQuery
         }
 
         if (isTrackingRepairedStatus())
-            repairedDataInfo = newRepairedDataInfo();
+            repairedDataInfo = new RepairedDataInfo();
 
         UnfilteredPartitionIterator iterator = (null == searcher) ? queryStorage(cfs, executionController) : searcher.search(executionController);
 
@@ -654,10 +680,15 @@ public abstract class ReadCommand extends AbstractReadQuery
             if (ActiveRepairService.instance.consistent.local.isSessionFinalized(pendingRepair))
                 return true;
             else
-                getRepairedDataInfo().markInconclusive();
+                repairedDataInfo.markInconclusive();
         }
 
         return sstable.isRepaired();
+    }
+
+    protected void markRepairedDigestInconclusive()
+    {
+        repairedDataInfo.markInconclusive();
     }
 
     protected UnfilteredPartitionIterator withRepairedDataInfo(final UnfilteredPartitionIterator iterator)
@@ -669,64 +700,92 @@ public abstract class ReadCommand extends AbstractReadQuery
         {
             protected UnfilteredRowIterator applyToPartition(UnfilteredRowIterator partition)
             {
-                return UnfilteredRowIterators.withRepairedDataTracking(repairedDataInfo, partition);
+                return withRepairedDataInfo(partition);
             }
         }
 
         return Transformation.apply(iterator, new WithRepairedDataTracking());
     }
 
-    protected UnfilteredRowIterator withRepairedDataInfo(UnfilteredRowIterator iterator)
+    protected UnfilteredRowIterator withRepairedDataInfo(final UnfilteredRowIterator iterator)
     {
         if (!isTrackingRepairedStatus())
             return iterator;
 
-        return UnfilteredRowIterators.withRepairedDataTracking(repairedDataInfo, iterator);
+        class WithTracking extends Transformation
+        {
+            protected DecoratedKey applyToPartitionKey(DecoratedKey key)
+            {
+                repairedDataInfo.trackPartitionKey(key);
+                return key;
+            }
+
+            protected DeletionTime applyToDeletion(DeletionTime deletionTime)
+            {
+                repairedDataInfo.trackDeletion(deletionTime);
+                return deletionTime;
+            }
+
+            protected RangeTombstoneMarker applyToMarker(RangeTombstoneMarker marker)
+            {
+                repairedDataInfo.trackRangeTombstoneMarker(marker);
+                return marker;
+            }
+
+            protected Row applyToStatic(Row row)
+            {
+                repairedDataInfo.trackRow(row);
+                return row;
+            }
+
+            protected Row applyToRow(Row row)
+            {
+                repairedDataInfo.trackRow(row);
+                return row;
+            }
+        }
+
+        return Transformation.apply(iterator, new WithTracking());
     }
 
-    private RepairedDataInfo newRepairedDataInfo()
-    {
-        return new DefaultRepairedDataInfo();
-    }
-
-    private static class DefaultRepairedDataInfo implements RepairedDataInfo
+    private static class RepairedDataInfo
     {
         private Hasher hasher;
         private boolean isConclusive = true;
 
-        public ByteBuffer getRepairedDataDigest()
+        ByteBuffer getDigest()
         {
             return hasher == null
                    ? ByteBufferUtil.EMPTY_BYTE_BUFFER
                    : ByteBuffer.wrap(getHasher().hash().asBytes());
         }
 
-        public boolean isConclusive()
+        boolean isConclusive()
         {
             return isConclusive;
         }
 
-        public void markInconclusive()
+        void markInconclusive()
         {
             isConclusive = false;
         }
 
-        public void trackPartitionKey(DecoratedKey key)
+        void trackPartitionKey(DecoratedKey key)
         {
             HashingUtils.updateBytes(getHasher(), key.getKey().duplicate());
         }
 
-        public void trackDeletion(DeletionTime deletion)
+        void trackDeletion(DeletionTime deletion)
         {
             deletion.digest(getHasher());
         }
 
-        public void trackRangeTombstoneMarker(RangeTombstoneMarker marker)
+        void trackRangeTombstoneMarker(RangeTombstoneMarker marker)
         {
             marker.digest(getHasher());
         }
 
-        public void trackRow(Row row)
+        void trackRow(Row row)
         {
             row.digest(getHasher());
         }

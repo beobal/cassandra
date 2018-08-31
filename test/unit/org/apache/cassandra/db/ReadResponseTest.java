@@ -30,7 +30,6 @@ import org.apache.cassandra.db.filter.DataLimits;
 import org.apache.cassandra.db.filter.RowFilter;
 import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.db.partitions.UnfilteredPartitionIterator;
-import org.apache.cassandra.db.reads.RepairedDataInfo;
 import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.io.util.DataInputBuffer;
 import org.apache.cassandra.io.util.DataOutputBuffer;
@@ -64,7 +63,7 @@ public class ReadResponseTest
     public void fromCommandWithConclusiveRepairedDigest()
     {
         ByteBuffer digest = digest();
-        ReadCommand command = command(key(), metadata, tracker(digest, true));
+        ReadCommand command = command(key(), metadata, digest, true);
         ReadResponse response = command.createResponse(EmptyIterators.unfilteredPartition(metadata));
         assertTrue(response.isRepairedDigestConclusive());
         assertEquals(digest, response.repairedDataDigest());
@@ -75,7 +74,7 @@ public class ReadResponseTest
     public void fromCommandWithInconclusiveRepairedDigest()
     {
         ByteBuffer digest = digest();
-        ReadCommand command = command(key(), metadata, tracker(digest, false));
+        ReadCommand command = command(key(), metadata, digest, false);
         ReadResponse response = command.createResponse(EmptyIterators.unfilteredPartition(metadata));
         assertFalse(response.isRepairedDigestConclusive());
         assertEquals(digest, response.repairedDataDigest());
@@ -85,7 +84,7 @@ public class ReadResponseTest
     @Test
     public void fromCommandWithConclusiveEmptyRepairedDigest()
     {
-        ReadCommand command = command(key(), metadata, tracker(null, true));
+        ReadCommand command = command(key(), metadata, null, true);
         ReadResponse response = command.createResponse(EmptyIterators.unfilteredPartition(metadata));
         assertTrue(response.isRepairedDigestConclusive());
         assertEquals(ByteBufferUtil.EMPTY_BYTE_BUFFER, response.repairedDataDigest());
@@ -95,7 +94,7 @@ public class ReadResponseTest
     @Test
     public void fromCommandWithInconclusiveEmptyRepairedDigest()
     {
-        ReadCommand command = command(key(), metadata, tracker(null, false));
+        ReadCommand command = command(key(), metadata, null, false);
         ReadResponse response = command.createResponse(EmptyIterators.unfilteredPartition(metadata));
         assertFalse(response.isRepairedDigestConclusive());
         assertEquals(ByteBufferUtil.EMPTY_BYTE_BUFFER, response.repairedDataDigest());
@@ -144,11 +143,11 @@ public class ReadResponseTest
         // requests, only following a digest mismatch. Having a test doesn't hurt though
         int key = key();
         ByteBuffer digest1 = digest();
-        ReadCommand command1 = command(key, metadata, tracker(digest1, true));
+        ReadCommand command1 = command(key, metadata, digest1, true);
         ReadResponse response1 = command1.createResponse(EmptyIterators.unfilteredPartition(metadata));
 
         ByteBuffer digest2 = digest();
-        ReadCommand command2 = command(key, metadata, tracker(digest2, false));
+        ReadCommand command2 = command(key, metadata, digest2, false);
         ReadResponse response2 = command1.createResponse(EmptyIterators.unfilteredPartition(metadata));
 
         assertEquals(response1.digest(command1), response2.digest(command2));
@@ -206,40 +205,26 @@ public class ReadResponseTest
         return ByteBuffer.wrap(bytes);
     }
 
-    private RepairedDataInfo tracker(final ByteBuffer digest, final boolean conclusive)
-    {
-        return new RepairedDataInfo()
-        {
-            @Override
-            public ByteBuffer getRepairedDataDigest()
-            {
-                return digest == null ? ByteBufferUtil.EMPTY_BYTE_BUFFER : digest;
-            }
-
-            @Override
-            public boolean isConclusive()
-            {
-                return conclusive;
-            }
-        };
-    }
-
     private ReadCommand digestCommand(int key, TableMetadata metadata)
     {
-        // use a tracker identical to ReadCommand.NO_OP_REPAIRED_DATA_TRACKER
-        return new StubReadCommand(key, metadata, true, new RepairedDataInfo(){});
+        return new StubReadCommand(key, metadata, true, ByteBufferUtil.EMPTY_BYTE_BUFFER, true);
     }
 
-    private ReadCommand command(int key, TableMetadata metadata, RepairedDataInfo tracker)
+    private ReadCommand command(int key, TableMetadata metadata, ByteBuffer repairedDigest, boolean conclusive)
     {
-        return new StubReadCommand(key, metadata, false, tracker);
+        return new StubReadCommand(key, metadata, false, repairedDigest, conclusive);
     }
 
     private static class StubReadCommand extends SinglePartitionReadCommand
     {
-        private final RepairedDataInfo tracker;
 
-        StubReadCommand(int key, TableMetadata metadata, boolean isDigest, RepairedDataInfo repairedTracker)
+        private final ByteBuffer repairedDigest;
+        private final boolean conclusive;
+
+        StubReadCommand(int key, TableMetadata metadata,
+                        boolean isDigest,
+                        final ByteBuffer repairedDigest,
+                        final boolean conclusive)
         {
             super(isDigest,
                   0,
@@ -252,12 +237,20 @@ public class ReadResponseTest
                   metadata.partitioner.decorateKey(ByteBufferUtil.bytes(key)),
                   null,
                   null);
-            this.tracker = repairedTracker;
+            this.repairedDigest = repairedDigest;
+            this.conclusive = conclusive;
         }
 
-        public RepairedDataInfo getRepairedDataInfo()
+        @Override
+        public ByteBuffer getRepairedDataDigest()
         {
-            return tracker;
+            return repairedDigest;
+        }
+
+        @Override
+        public boolean isRepairedDataDigestConclusive()
+        {
+            return conclusive;
         }
 
         public UnfilteredPartitionIterator executeLocally(ReadExecutionController controller)

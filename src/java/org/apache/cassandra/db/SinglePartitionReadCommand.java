@@ -637,9 +637,7 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
                 // data from this sstable (or others) in their digests
                 if (sstable.getMaxTimestamp() < mostRecentPartitionTombstone)
                 {
-                    if (isTrackingRepairedStatus())
-                        getRepairedDataInfo().markInconclusive();
-
+                    markRepairedDigestInconclusive();
                     break;
                 }
 

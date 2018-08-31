@@ -181,8 +181,8 @@ public abstract class ReadResponse
         private LocalDataResponse(UnfilteredPartitionIterator iter, ReadCommand command)
         {
             super(build(iter, command.columnFilter()),
-                  command.getRepairedDataInfo().getRepairedDataDigest(),
-                  command.getRepairedDataInfo().isConclusive(),
+                  command.getRepairedDataDigest(),
+                  command.isRepairedDataDigestConclusive(),
                   MessagingService.current_version,
                   SerializationHelper.Flag.LOCAL);
         }
