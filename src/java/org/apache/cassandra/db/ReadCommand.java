@@ -20,10 +20,13 @@ package org.apache.cassandra.db;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.*;
+import java.util.function.BiFunction;
 import java.util.function.LongPredicate;
 
 import javax.annotation.Nullable;
 
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Sets;
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
 import org.slf4j.Logger;
@@ -91,7 +94,8 @@ public abstract class ReadCommand extends AbstractReadQuery
         boolean isConclusive(){ return true; }
         ByteBuffer getDigest(){ return ByteBufferUtil.EMPTY_BYTE_BUFFER; }
     };
-    RepairedDataInfo repairedDataInfo = NULL_REPAIRED_DATA_INFO;
+
+    private RepairedDataInfo repairedDataInfo = NULL_REPAIRED_DATA_INFO;
 
     int oldestUnrepairedTombstone = Integer.MAX_VALUE;
 
@@ -315,6 +319,7 @@ public abstract class ReadCommand extends AbstractReadQuery
     {
         return oldestUnrepairedTombstone;
     }
+
 
     @SuppressWarnings("resource")
     public ReadResponse createResponse(UnfilteredPartitionIterator iterator)
@@ -661,63 +666,23 @@ public abstract class ReadCommand extends AbstractReadQuery
         return toCQLString();
     }
 
-    // For tracking purposes we consider data repaired if the sstable is either:
-    // * marked repaired
-    // * marked pending, but the local session has been committed. This reduces the window
-    //   whereby the tracking is affected by compaction backlog causing repaired sstables to
-    //   remain in the pending state
-    // If an sstable is involved in a pending repair which is not yet committed, we mark the
-    // repaired data info inconclusive, as the same data on other replicas may be in a
-    // slightly different state.
-    protected boolean considerRepairedForTracking(SSTableReader sstable)
+    private static UnfilteredPartitionIterator withRepairedDataInfo(final UnfilteredPartitionIterator iterator,
+                                                               final RepairedDataInfo repairedDataInfo)
     {
-        if (!isTrackingRepairedStatus())
-            return false;
-
-        UUID pendingRepair = sstable.getPendingRepair();
-        if (pendingRepair != ActiveRepairService.NO_PENDING_REPAIR)
-        {
-            if (ActiveRepairService.instance.consistent.local.isSessionFinalized(pendingRepair))
-                return true;
-
-            // In the edge case where compaction is backed up long enough for the session to
-            // timeout and be purged by LocalSessions::cleanup, consider the sstable unrepaired
-            // as it will be marked unrepaired when compaction catches up
-            if (!ActiveRepairService.instance.consistent.local.sessionExists(pendingRepair))
-                return false;
-
-            repairedDataInfo.markInconclusive();
-        }
-
-        return sstable.isRepaired();
-    }
-
-    protected void markRepairedDigestInconclusive()
-    {
-        repairedDataInfo.markInconclusive();
-    }
-
-    protected UnfilteredPartitionIterator withRepairedDataInfo(final UnfilteredPartitionIterator iterator)
-    {
-        if (!isTrackingRepairedStatus())
-            return iterator;
-
         class WithRepairedDataTracking extends Transformation<UnfilteredRowIterator>
         {
             protected UnfilteredRowIterator applyToPartition(UnfilteredRowIterator partition)
             {
-                return withRepairedDataInfo(partition);
+                return withRepairedDataInfo(partition, repairedDataInfo);
             }
         }
 
         return Transformation.apply(iterator, new WithRepairedDataTracking());
     }
 
-    protected UnfilteredRowIterator withRepairedDataInfo(final UnfilteredRowIterator iterator)
+    private static UnfilteredRowIterator withRepairedDataInfo(final UnfilteredRowIterator iterator,
+                                                              final RepairedDataInfo repairedDataInfo)
     {
-        if (!isTrackingRepairedStatus())
-            return iterator;
-
         class WithTracking extends Transformation
         {
             protected DecoratedKey applyToPartitionKey(DecoratedKey key)
@@ -802,6 +767,139 @@ public abstract class ReadCommand extends AbstractReadQuery
                 hasher = Hashing.crc32c().newHasher();
 
             return hasher;
+        }
+    }
+
+    @SuppressWarnings("resource") // resultant iterators are closed by their callers
+    InputCollector<UnfilteredRowIterator> iteratorsForPartition(ColumnFamilyStore.ViewFragment view)
+    {
+        BiFunction<List<UnfilteredRowIterator>, RepairedDataInfo, UnfilteredRowIterator> merge =
+            (unfilteredRowIterators, repairedDataInfo) ->
+                withRepairedDataInfo(UnfilteredRowIterators.merge(unfilteredRowIterators), repairedDataInfo);
+
+        return new InputCollector<>(view, repairedDataInfo, merge);
+    }
+
+    @SuppressWarnings("resource") // resultant iterators are closed by their callers
+    InputCollector<UnfilteredPartitionIterator> iteratorsForRange(ColumnFamilyStore.ViewFragment view)
+    {
+        BiFunction<List<UnfilteredPartitionIterator>, RepairedDataInfo, UnfilteredPartitionIterator> merge =
+            (unfilteredPartitionIterators, repairedDataInfo) ->
+                withRepairedDataInfo(UnfilteredPartitionIterators.merge(unfilteredPartitionIterators, UnfilteredPartitionIterators.MergeListener.NOOP), repairedDataInfo);
+
+        return new InputCollector<>(view, repairedDataInfo, merge);
+    }
+
+    /**
+     * Handles the collation of unfiltered row or partition iterators that comprise the
+     * input for a query. Separates them according to repaired status and of repaired
+     * status is being tracked, handles the merge and wrapping in a digest generator of
+     * the repaired iterators.
+     *
+     * Intentionally not AutoCloseable so we don't mistakenly use this in ARM blocks
+     * as this prematurely closes the underlying iterators
+     */
+    class InputCollector<T extends AutoCloseable>
+    {
+        final RepairedDataInfo repairedDataInfo;
+        final Set<SSTableReader> repairedSSTables;
+        BiFunction<List<T>, RepairedDataInfo, T> repairedMerger;
+        List<T> repairedIters;
+        List<T> unrepairedIters;
+
+        InputCollector(ColumnFamilyStore.ViewFragment view,
+                       RepairedDataInfo repairedDataInfo,
+                       BiFunction<List<T>, RepairedDataInfo, T> repairedMerger)
+        {
+            this.repairedDataInfo = repairedDataInfo;
+            repairedSSTables = Sets.newHashSetWithExpectedSize(view.sstables.size());
+            for (SSTableReader sstable : view.sstables)
+                if (considerRepairedForTracking(sstable))
+                    repairedSSTables.add(sstable);
+
+            if (repairedSSTables.isEmpty())
+            {
+                repairedIters = Collections.emptyList();
+                unrepairedIters = new ArrayList<>(view.sstables.size());
+            }
+            else
+            {
+                repairedIters = new ArrayList<>(repairedSSTables.size());
+                // when we're done collating, we'll merge the repaired iters and add the
+                // result to the unrepaired list, so size that list accordingly
+                unrepairedIters = new ArrayList<>((view.sstables.size() - repairedSSTables.size()) + Iterables.size(view.memtables) + 1);
+            }
+            this.repairedMerger = repairedMerger;
+        }
+
+        void addMemtableIterator(T iter)
+        {
+            unrepairedIters.add(iter);
+        }
+
+        void addSSTableIterator(SSTableReader sstable, T iter)
+        {
+            if (repairedSSTables.contains(sstable))
+                repairedIters.add(iter);
+            else
+                unrepairedIters.add(iter);
+        }
+
+        List<T> finalizeIterators()
+        {
+            if (repairedIters.isEmpty())
+                return unrepairedIters;
+
+            // merge the repaired data before returning, wrapping in a digest generator
+            unrepairedIters.add(repairedMerger.apply(repairedIters, repairedDataInfo));
+            return unrepairedIters;
+        }
+
+        boolean isEmpty()
+        {
+            return repairedIters.isEmpty() && unrepairedIters.isEmpty();
+        }
+
+        // For tracking purposes we consider data repaired if the sstable is either:
+        // * marked repaired
+        // * marked pending, but the local session has been committed. This reduces the window
+        //   whereby the tracking is affected by compaction backlog causing repaired sstables to
+        //   remain in the pending state
+        // If an sstable is involved in a pending repair which is not yet committed, we mark the
+        // repaired data info inconclusive, as the same data on other replicas may be in a
+        // slightly different state.
+        private boolean considerRepairedForTracking(SSTableReader sstable)
+        {
+            if (!isTrackingRepairedStatus())
+                return false;
+
+            UUID pendingRepair = sstable.getPendingRepair();
+            if (pendingRepair != ActiveRepairService.NO_PENDING_REPAIR)
+            {
+                if (ActiveRepairService.instance.consistent.local.isSessionFinalized(pendingRepair))
+                    return true;
+
+                // In the edge case where compaction is backed up long enough for the session to
+                // timeout and be purged by LocalSessions::cleanup, consider the sstable unrepaired
+                // as it will be marked unrepaired when compaction catches up
+                if (!ActiveRepairService.instance.consistent.local.sessionExists(pendingRepair))
+                    return false;
+
+                repairedDataInfo.markInconclusive();
+            }
+
+            return sstable.isRepaired();
+        }
+
+        void markInconclusive()
+        {
+            repairedDataInfo.markInconclusive();
+        }
+
+        public void close() throws Exception
+        {
+            FBUtilities.closeAll(unrepairedIters);
+            FBUtilities.closeAll(repairedIters);
         }
     }
 

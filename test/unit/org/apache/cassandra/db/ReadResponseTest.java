@@ -84,7 +84,7 @@ public class ReadResponseTest
     @Test
     public void fromCommandWithConclusiveEmptyRepairedDigest()
     {
-        ReadCommand command = command(key(), metadata, null, true);
+        ReadCommand command = command(key(), metadata, ByteBufferUtil.EMPTY_BYTE_BUFFER, true);
         ReadResponse response = command.createResponse(EmptyIterators.unfilteredPartition(metadata));
         assertTrue(response.isRepairedDigestConclusive());
         assertEquals(ByteBufferUtil.EMPTY_BYTE_BUFFER, response.repairedDataDigest());
@@ -94,7 +94,7 @@ public class ReadResponseTest
     @Test
     public void fromCommandWithInconclusiveEmptyRepairedDigest()
     {
-        ReadCommand command = command(key(), metadata, null, false);
+        ReadCommand command = command(key(), metadata, ByteBufferUtil.EMPTY_BYTE_BUFFER, false);
         ReadResponse response = command.createResponse(EmptyIterators.unfilteredPartition(metadata));
         assertFalse(response.isRepairedDigestConclusive());
         assertEquals(ByteBufferUtil.EMPTY_BYTE_BUFFER, response.repairedDataDigest());

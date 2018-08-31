@@ -18,11 +18,8 @@
 package org.apache.cassandra.db;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.Iterables;
 
 import org.apache.cassandra.net.ParameterType;
 import org.apache.cassandra.schema.TableMetadata;
@@ -47,7 +44,6 @@ import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.service.ClientState;
 import org.apache.cassandra.service.StorageProxy;
 import org.apache.cassandra.tracing.Tracing;
-import org.apache.cassandra.utils.FBUtilities;
 
 /**
  * A read command that selects a (part of a) range of partitions.
@@ -257,8 +253,7 @@ public class PartitionRangeReadCommand extends ReadCommand implements PartitionR
         Tracing.trace("Executing seq scan across {} sstables for {}", view.sstables.size(), dataRange().keyRange().getString(metadata().partitionKeyType));
 
         // fetch data from current memtable, historical memtables, and SSTables in the correct order.
-        final List<UnfilteredPartitionIterator> unrepairedIterators = new ArrayList<>(Iterables.size(view.memtables) + view.sstables.size());
-        List<UnfilteredPartitionIterator> repairedIterators = null;
+        InputCollector<UnfilteredPartitionIterator> inputCollector = iteratorsForRange(view);
         try
         {
             for (Memtable memtable : view.memtables)
@@ -266,7 +261,7 @@ public class PartitionRangeReadCommand extends ReadCommand implements PartitionR
                 @SuppressWarnings("resource") // We close on exception and on closing the result returned by this method
                 Memtable.MemtableUnfilteredPartitionIterator iter = memtable.makePartitionIterator(columnFilter(), dataRange());
                 oldestUnrepairedTombstone = Math.min(oldestUnrepairedTombstone, iter.getMinLocalDeletionTime());
-                unrepairedIterators.add(iter);
+                inputCollector.addMemtableIterator(iter);
             }
 
             SSTableReadsListener readCountUpdater = newReadCountUpdater();
@@ -274,48 +269,27 @@ public class PartitionRangeReadCommand extends ReadCommand implements PartitionR
             {
                 @SuppressWarnings("resource") // We close on exception and on closing the result returned by this method
                 UnfilteredPartitionIterator iter = sstable.getScanner(columnFilter(), dataRange(), readCountUpdater);
-                if (considerRepairedForTracking(sstable))
-                {
-                    if (repairedIterators == null)
-                        repairedIterators = new ArrayList<>(view.sstables.size());
-                    repairedIterators.add(iter);
-                }
-                else
-                {
-                    unrepairedIterators.add(iter);
-                }
+                inputCollector.addSSTableIterator(sstable, iter);
 
                 if (!sstable.isRepaired())
                     oldestUnrepairedTombstone = Math.min(oldestUnrepairedTombstone, sstable.getMinLocalDeletionTime());
             }
             // iterators can be empty for offline tools
-            if (unrepairedIterators.isEmpty() && repairedIterators == null)
+            if (inputCollector.isEmpty())
                 return EmptyIterators.unfilteredPartition(metadata());
 
-            // Merge repaired data before returning, wrapping in a digest generator
-            // if tracking is not enabled, all iterators will be considered unrepaired
-            if (repairedIterators != null)
-            {
-                unrepairedIterators.add(
-                    withRepairedDataInfo(
-                        UnfilteredPartitionIterators.merge(repairedIterators, UnfilteredPartitionIterators.MergeListener.NOOP)));
-            }
-
-            return checkCacheFilter(UnfilteredPartitionIterators.mergeLazily(unrepairedIterators), cfs);
+            return checkCacheFilter(UnfilteredPartitionIterators.mergeLazily(inputCollector.finalizeIterators()), cfs);
         }
         catch (RuntimeException | Error e)
         {
             try
             {
-                FBUtilities.closeAll(unrepairedIterators);
-                if (repairedIterators != null)
-                    FBUtilities.closeAll(repairedIterators);
+                inputCollector.close();
             }
-            catch (Exception suppressed)
+            catch (Exception e1)
             {
-                e.addSuppressed(suppressed);
+                e.addSuppressed(e1);
             }
-
             throw e;
         }
     }
