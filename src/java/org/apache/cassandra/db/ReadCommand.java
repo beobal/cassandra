@@ -777,7 +777,7 @@ public abstract class ReadCommand extends AbstractReadQuery
             (unfilteredRowIterators, repairedDataInfo) ->
                 withRepairedDataInfo(UnfilteredRowIterators.merge(unfilteredRowIterators), repairedDataInfo);
 
-        return new InputCollector<>(view, repairedDataInfo, merge);
+        return new InputCollector<>(view, repairedDataInfo, merge, isTrackingRepairedStatus());
     }
 
     @SuppressWarnings("resource") // resultant iterators are closed by their callers
@@ -787,7 +787,7 @@ public abstract class ReadCommand extends AbstractReadQuery
             (unfilteredPartitionIterators, repairedDataInfo) ->
                 withRepairedDataInfo(UnfilteredPartitionIterators.merge(unfilteredPartitionIterators, UnfilteredPartitionIterators.MergeListener.NOOP), repairedDataInfo);
 
-        return new InputCollector<>(view, repairedDataInfo, merge);
+        return new InputCollector<>(view, repairedDataInfo, merge, isTrackingRepairedStatus());
     }
 
     /**
@@ -799,25 +799,35 @@ public abstract class ReadCommand extends AbstractReadQuery
      * Intentionally not AutoCloseable so we don't mistakenly use this in ARM blocks
      * as this prematurely closes the underlying iterators
      */
-    class InputCollector<T extends AutoCloseable>
+    static class InputCollector<T extends AutoCloseable>
     {
         final RepairedDataInfo repairedDataInfo;
-        final Set<SSTableReader> repairedSSTables;
+        private final boolean isTrackingRepairedStatus;
+        Set<SSTableReader> repairedSSTables;
         BiFunction<List<T>, RepairedDataInfo, T> repairedMerger;
         List<T> repairedIters;
         List<T> unrepairedIters;
 
         InputCollector(ColumnFamilyStore.ViewFragment view,
                        RepairedDataInfo repairedDataInfo,
-                       BiFunction<List<T>, RepairedDataInfo, T> repairedMerger)
+                       BiFunction<List<T>, RepairedDataInfo, T> repairedMerger,
+                       boolean isTrackingRepairedStatus)
         {
             this.repairedDataInfo = repairedDataInfo;
-            repairedSSTables = Sets.newHashSetWithExpectedSize(view.sstables.size());
-            for (SSTableReader sstable : view.sstables)
-                if (considerRepairedForTracking(sstable))
-                    repairedSSTables.add(sstable);
-
-            if (repairedSSTables.isEmpty())
+            this.isTrackingRepairedStatus = isTrackingRepairedStatus;
+            if (isTrackingRepairedStatus)
+            {
+                for (SSTableReader sstable : view.sstables)
+                {
+                    if (considerRepairedForTracking(sstable))
+                    {
+                        if (repairedSSTables == null)
+                            repairedSSTables = Sets.newHashSetWithExpectedSize(view.sstables.size());
+                        repairedSSTables.add(sstable);
+                    }
+                }
+            }
+            if (repairedSSTables == null)
             {
                 repairedIters = Collections.emptyList();
                 unrepairedIters = new ArrayList<>(view.sstables.size());
@@ -839,7 +849,7 @@ public abstract class ReadCommand extends AbstractReadQuery
 
         void addSSTableIterator(SSTableReader sstable, T iter)
         {
-            if (repairedSSTables.contains(sstable))
+            if (repairedSSTables != null && repairedSSTables.contains(sstable))
                 repairedIters.add(iter);
             else
                 unrepairedIters.add(iter);
@@ -870,7 +880,7 @@ public abstract class ReadCommand extends AbstractReadQuery
         // slightly different state.
         private boolean considerRepairedForTracking(SSTableReader sstable)
         {
-            if (!isTrackingRepairedStatus())
+            if (!isTrackingRepairedStatus)
                 return false;
 
             UUID pendingRepair = sstable.getPendingRepair();
