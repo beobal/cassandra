@@ -26,6 +26,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import org.apache.cassandra.SchemaLoader;
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.ReadCommand;
 import org.apache.cassandra.db.SinglePartitionReadCommand;
@@ -59,6 +60,7 @@ public class RepairedDataVerifierTest
     {
         SchemaLoader.loadSchema();
         SchemaLoader.schemaDefinition(TEST_NAME);
+        DatabaseDescriptor.reportUnconfirmedRepairedDataMismatches(true);
     }
 
     @Before
