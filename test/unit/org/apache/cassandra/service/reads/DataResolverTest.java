@@ -55,6 +55,7 @@ import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.db.rows.RowIterator;
 import org.apache.cassandra.locator.EndpointsForRange;
 import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.locator.Replica;
 import org.apache.cassandra.locator.ReplicaLayout;
 import org.apache.cassandra.locator.ReplicaUtils;
 import org.apache.cassandra.net.*;
@@ -591,6 +592,7 @@ public class DataResolverTest extends AbstractReadResponseTest
     public void testRepairRangeTombstoneWithPartitionDeletion()
     {
         EndpointsForRange replicas = makeReplicas(2);
+
         DataResolver resolver = new DataResolver(command, plan(replicas, ConsistencyLevel.ALL), readRepair, System.nanoTime());
         InetAddressAndPort peer1 = replicas.get(0).endpoint();
         InetAddressAndPort peer2 = replicas.get(1).endpoint();
@@ -1174,6 +1176,31 @@ public class DataResolverTest extends AbstractReadResponseTest
         resolver.preprocess(response(command, peer2, iter(PartitionUpdate.emptyUpdate(cfm,dk)),
                                      false, MessagingService.VERSION_30,
                                      ByteBufferUtil.EMPTY_BYTE_BUFFER, false));
+
+        resolveAndConsume(resolver);
+        assertTrue(verifier.verified);
+    }
+
+    @Test
+    public void responsesFromTransientReplicasAreNotTracked()
+    {
+        EndpointsForRange replicas = makeReplicas(2);
+        EndpointsForRange.Mutable mutable = replicas.newMutable(2);
+        mutable.add(replicas.get(0));
+        mutable.add(Replica.transientReplica(replicas.get(1).endpoint(), replicas.range()));
+        replicas = mutable.asSnapshot();
+
+        TestRepairedDataVerifier verifier = new TestRepairedDataVerifier();
+        ByteBuffer digest1 = ByteBufferUtil.bytes("digest1");
+        ByteBuffer digest2 = ByteBufferUtil.bytes("digest2");
+        InetAddressAndPort peer1 = replicas.get(0).endpoint();
+        InetAddressAndPort peer2 = replicas.get(1).endpoint();
+        verifier.expectDigest(peer1, digest1, true);
+
+        DataResolver resolver = resolverWithVerifier(command, plan(replicas, ConsistencyLevel.ALL), readRepair, System.nanoTime(),  verifier);
+
+        resolver.preprocess(response(peer1, iter(PartitionUpdate.emptyUpdate(cfm,dk)), digest1, true, command));
+        resolver.preprocess(response(peer2, iter(PartitionUpdate.emptyUpdate(cfm,dk)), digest2, true, command));
 
         resolveAndConsume(resolver);
         assertTrue(verifier.verified);

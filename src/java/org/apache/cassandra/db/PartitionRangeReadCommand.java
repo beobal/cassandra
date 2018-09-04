@@ -345,10 +345,7 @@ public class PartitionRangeReadCommand extends ReadCommand implements PartitionR
 
     public MessageOut<ReadCommand> createMessage()
     {
-        MessageOut<ReadCommand> message = new MessageOut<>(MessagingService.Verb.RANGE_SLICE, this, serializer);
-        return isTrackingRepairedStatus()
-               ? message.withParameter(ParameterType.TRACK_REPAIRED_DATA, MessagingService.ONE_BYTE)
-               : message;
+        return new MessageOut<>(MessagingService.Verb.RANGE_SLICE, this, serializer);
     }
 
     protected void appendCQLWhereClause(StringBuilder sb)

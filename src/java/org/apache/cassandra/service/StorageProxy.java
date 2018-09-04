@@ -2122,16 +2122,20 @@ public class StorageProxy implements StorageProxyMBean
             Keyspace keyspace = Keyspace.open(command.metadata().keyspace);
 
             ReadCallback<EndpointsForRange, ReplicaLayout.ForRange> handler = new ReadCallback<>(resolver,
-                                                                              replicaLayout.consistencyLevel().blockFor(keyspace),
-                                                                              rangeCommand,
-                                                                              replicaLayout,
-                                                                              queryStartNanoTime);
+                                                                                                 replicaLayout.consistencyLevel().blockFor(keyspace),
+                                                                                                 rangeCommand,
+                                                                                                 replicaLayout,
+                                                                                                 queryStartNanoTime);
 
             handler.assureSufficientLiveNodes();
 
-            // If enabled, request repaired data tracking info from replicas
-            if (replicaLayout.selected().size() > 1 && DatabaseDescriptor.getRepairedDataTrackingForRangeReadsEnabled())
-                rangeCommand.trackRepairedStatus();
+            // If enabled, request repaired data tracking info from full replicas but
+            // only if there are multiple full replicas to compare results from
+            if (DatabaseDescriptor.getRepairedDataTrackingForPartitionReadsEnabled()
+                && replicaLayout.selected().filter(Replica::isFull).size() > 1)
+            {
+                command.trackRepairedStatus();
+            }
 
             if (replicaLayout.selected().size() == 1 && replicaLayout.selected().get(0).isLocal())
             {
@@ -2142,7 +2146,10 @@ public class StorageProxy implements StorageProxyMBean
                 for (Replica replica : replicaLayout.selected())
                 {
                     Tracing.trace("Enqueuing request to {}", replica);
-                    MessagingService.instance().sendRRWithFailure(rangeCommand.createMessage(), replica.endpoint(), handler);
+                    MessageOut<ReadCommand> message = rangeCommand.createMessage();
+                    if (command.isTrackingRepairedStatus() && replica.isFull())
+                        message =  message.withParameter(ParameterType.TRACK_REPAIRED_DATA, MessagingService.ONE_BYTE);
+                    MessagingService.instance().sendRRWithFailure(message, replica.endpoint(), handler);
                 }
             }
 

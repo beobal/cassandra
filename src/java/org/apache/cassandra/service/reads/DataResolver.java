@@ -81,23 +81,25 @@ public class DataResolver<E extends Endpoints<E>, L extends ReplicaLayout<E, L>>
         assert !any(messages, msg -> msg.payload.isDigestResponse());
 
         E replicas = replicaLayout.all().keep(transform(messages, msg -> msg.from));
+        List<UnfilteredPartitionIterator> iters = new ArrayList<>(
+        Collections2.transform(messages, msg -> msg.payload.makeIterator(command)));
+        assert replicas.size() == iters.size();
+
+        // If requested, inspect each response for a digest of the replica's repaired data set
         RepairedDataTracker repairedDataTracker = command.isTrackingRepairedStatus()
                                                   ? new RepairedDataTracker(getRepairedDataVerifier(command))
                                                   : null;
-
-        List<UnfilteredPartitionIterator> iters = new ArrayList<>(
-                Collections2.transform(messages, msg -> {
-                    // don't try and inspect repaired status from replicas which definitely didn't send it
-                    if (repairedDataTracker != null && msg.payload.mayIncludeRepairedDigest())
-                    {
-                        repairedDataTracker.recordDigest(msg.from,
-                                                         msg.payload.repairedDataDigest(),
-                                                         msg.payload.isRepairedDigestConclusive());
-                    }
-                    return msg.payload.makeIterator(command);
-                }));
-
-        assert replicas.size() == iters.size();
+        if (repairedDataTracker != null)
+        {
+            messages.forEach(msg -> {
+                if (msg.payload.mayIncludeRepairedDigest() && replicas.byEndpoint().get(msg.from).isFull())
+                {
+                    repairedDataTracker.recordDigest(msg.from,
+                                                     msg.payload.repairedDataDigest(),
+                                                     msg.payload.isRepairedDigestConclusive());
+                }
+            });
+        }
 
         /*
          * Even though every response, individually, will honor the limit, it is possible that we will, after the merge,
@@ -155,7 +157,7 @@ public class DataResolver<E extends Endpoints<E>, L extends ReplicaLayout<E, L>>
         return Joiner.on(",\n").join(transform(getMessages().snapshot(), m -> m.from + " => " + m.payload.toDebugString(command, partitionKey)));
     }
 
-    private UnfilteredPartitionIterators.MergeListener wrapMergeListener(UnfilteredPartitionIterators.MergeListener partitionListener, L sources, RepairedDataTracker repairedDataDigestTracker)
+    private UnfilteredPartitionIterators.MergeListener wrapMergeListener(UnfilteredPartitionIterators.MergeListener partitionListener, L sources, RepairedDataTracker repairedDataTracker)
     {
         return new UnfilteredPartitionIterators.MergeListener()
         {
@@ -244,8 +246,8 @@ public class DataResolver<E extends Endpoints<E>, L extends ReplicaLayout<E, L>>
             public void close()
             {
                 partitionListener.close();
-                if (repairedDataDigestTracker != null)
-                    repairedDataDigestTracker.verify();
+                if (repairedDataTracker != null)
+                    repairedDataTracker.verify();
             }
         };
     }

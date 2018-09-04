@@ -1005,10 +1005,7 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
 
     public MessageOut<ReadCommand> createMessage()
     {
-        MessageOut<ReadCommand> message = new MessageOut<>(MessagingService.Verb.READ, this, serializer);
-        return isTrackingRepairedStatus()
-               ? message.withParameter(ParameterType.TRACK_REPAIRED_DATA, MessagingService.ONE_BYTE)
-               : message;
+        return new MessageOut<>(MessagingService.Verb.READ, this, serializer);
     }
 
     protected void appendCQLWhereClause(StringBuilder sb)
