@@ -20,7 +20,7 @@ package org.apache.cassandra.db.columniterator;
 import java.io.IOException;
 import java.util.*;
 
-import com.google.common.base.Preconditions;
+import com.google.common.base.Verify;
 
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.db.*;
@@ -248,10 +248,10 @@ public class SSTableReversedIterator extends AbstractSSTableIterator
                     // here we compare the first name of this block to the last name of the next block to detect the
                     // compaction case, and clustering value of the unfiltered we just read to the index block's first name
                     // to detect the flush case.
-                    Preconditions.checkState(!sstable.descriptor.version.storeRows());
-                    Preconditions.checkState(openMarker == null);
-                    Preconditions.checkState(!skipLastIteratedItem);
-                    Preconditions.checkState(unfiltered.isRangeTombstoneMarker());
+                    Verify.verify(!sstable.descriptor.version.storeRows());
+                    Verify.verify(openMarker == null);
+                    Verify.verify(!skipLastIteratedItem);
+                    Verify.verify(unfiltered.isRangeTombstoneMarker());
                     buffer.add(unfiltered);
                     if (hasNextBlock)
                         skipLastIteratedItem = true;
@@ -265,7 +265,7 @@ public class SSTableReversedIterator extends AbstractSSTableIterator
                     // beginning of a block before we're reading the beginning of that row. So what we do is that if we detect
                     // that the row starting this block is also the row ending the next one we're read (previous on disk), then
                     // we'll skip that first result and  let it be read with the next block.
-                    Preconditions.checkState(!sstable.descriptor.version.storeRows());
+                    Verify.verify(!sstable.descriptor.version.storeRows());
                     isFirst = false;
                 }
                 else if (unfiltered.isEmpty())
@@ -410,7 +410,7 @@ public class SSTableReversedIterator extends AbstractSSTableIterator
                 // formats (see next comment)
                 if (!iterator.hasNext() && nextBlockIdx > lastBlockIdx)
                 {
-                    Preconditions.checkState(!sstable.descriptor.version.storeRows());
+                    Verify.verify(!sstable.descriptor.version.storeRows());
                     continue;
                 }
 
