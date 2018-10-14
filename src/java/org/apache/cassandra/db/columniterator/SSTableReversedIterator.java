@@ -237,16 +237,17 @@ public class SSTableReversedIterator extends AbstractSSTableIterator
                     && (precedes(currentFirstName, nextLastName) || precedes(unfiltered.clustering(), currentFirstName)))
                 {
                     // Range tombstones spanning multiple index blocks when reading legacy sstables need special handling.
-                    // Pre-3.0, the column index did't encode open markers. Instead, open range tombstones were rewritten
+                    // Pre-3.0, the column index didn't encode open markers. Instead, open range tombstones were rewritten
                     // at the start of index blocks they at least partially covered. These rewritten RTs found at the
                     // beginning of index blocks need to be handled as though they were an open marker, otherwise iterator
                     // validation will fail and/or some rows will be excluded from the result. These rewritten RTs can be
                     // detected based on their relation to the current index block and the next one depending on what wrote
                     // the sstable. For sstables coming from a memtable flush, a rewritten RT will have a clustering value
-                    // less than the first name of it's index block. For sstables coming from compaction, the index block
+                    // less than the first name of its index block. For sstables coming from compaction, the index block
                     // first name will be the RT open bound, which will be less than the last name of the next block. So,
                     // here we compare the first name of this block to the last name of the next block to detect the
-                    // compaction case, clustering value of the unfiltered we just read and compare it to the expected first name
+                    // compaction case, and clustering value of the unfiltered we just read to the index block's first name
+                    // to detect the flush case.
                     Preconditions.checkState(!sstable.descriptor.version.storeRows());
                     Preconditions.checkState(openMarker == null);
                     Preconditions.checkState(!skipLastIteratedItem);
@@ -286,21 +287,23 @@ public class SSTableReversedIterator extends AbstractSSTableIterator
                 && (end == null || deserializer.compareNextTo(end) < 0))
             {
                 // Range tombstone start and end bounds are stored together in legacy sstables. When we read one, we
-                // stash the closing bound until we reach the appropriate place to emit it. If it's the very last thing
-                // in an index block though, we won't read it because whatever was immediately before it will move the
-                // file pointer to the end of the index and SSTRI will think there's nothing left to read. So here we
-                // just check if there's a closing bound left in the deserializer. If there is one, we compare it against
-                // the most recently emitted unfiltered (ie: what would be the next one if we weren't reading in reverse).
-                // And we have to do THAT because the last name on the current index block will be whatever was written
-                // at the end of the index block, not the closing bound of the range tombstone fml. If all this indicates
-                // that there is indeed a range tombstone we're missing, we add it to the buffer and update the open marker.
+                // stash the closing bound until we reach the appropriate place to emit it, which is immediately before
+                // the next unfiltered with a greater clustering.
+                // If SSTRI considers the block exhausted before encountering such a clustering though, this end marker
+                // will never be emitted. So here we just check if there's a closing bound left in the deserializer.
+                // If there is, we compare it against the most recently emitted unfiltered (i.e.: the last unfiltered
+                // that this RT would enclose. And we have to do THAT comparison because the last name field on the
+                // current index block will be whatever was written at the end of the index block (i.e. the last name
+                // physically in the block), not the closing bound of the range tombstone (i.e. the last name logically
+                // in the block). If all this indicates that there is indeed a range tombstone we're missing, we add it
+                // to the buffer and update the open marker field.
                 Unfiltered unfiltered = deserializer.readNext();
                 RangeTombstoneMarker marker = unfiltered.isRangeTombstoneMarker() ? (RangeTombstoneMarker) unfiltered : null;
                 if (marker != null && marker.isClose(false)
                     && (mostRecentlyEmitted == null || precedes(marker.clustering(), mostRecentlyEmitted.clustering())))
                 {
-                    buffer.add(unfiltered);
-                    updateOpenMarker((RangeTombstoneMarker)unfiltered);
+                    buffer.add(marker);
+                    updateOpenMarker(marker);
                 }
             }
 
