@@ -241,7 +241,7 @@ public class LegacySSTableTest
          */
 
         String version = "ka";
-        for (String tableFmt : new String[]{"legacy_%s_compact_multi_block_rt%s", "legacy_%s_flush_multi_block_rt%s"})
+        for (String tableFmt : new String[]{"legacy_%s_compacted_multi_block_rt%s", "legacy_%s_flushed_multi_block_rt%s"})
         {
             String table = String.format(tableFmt, version, "");
             QueryProcessor.executeOnceInternal(String.format("CREATE TABLE legacy_tables.%s " +
