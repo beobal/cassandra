@@ -39,10 +39,12 @@ import org.apache.cassandra.config.KSMetaData;
 import org.apache.cassandra.cql3.QueryProcessor;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.Keyspace;
+import org.apache.cassandra.db.Mutation;
 import org.apache.cassandra.db.compaction.CompactionManager;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.locator.SimpleStrategy;
 import org.apache.cassandra.service.MigrationManager;
+import org.apache.cassandra.utils.ByteBufferUtil;
 
 public class SSTableUpgradeTest
 {
@@ -50,10 +52,10 @@ public class SSTableUpgradeTest
 
     private static final String KEYSPACE = "legacy_tables";
 
-    private static final String COMPACT_TABLE = "legacy_ka_compact_multi_block_rt";
+    private static final String COMPACT_TABLE = "legacy_ka_compacted_multi_block_rt";
     private static final String COMPACT_DDL = String.format("CREATE TABLE %s.%s (k int, c1 int, c2 int, v1 blob, v2 blob, PRIMARY KEY (k, c1, c2))", KEYSPACE, COMPACT_TABLE);
 
-    private static final String FLUSH_TABLE = "legacy_ka_flush_multi_block_rt";
+    private static final String FLUSH_TABLE = "legacy_ka_flushed_multi_block_rt";
     private static final String FLUSH_DDL = String.format("CREATE TABLE %s.%s (k int, c1 int, c2 int, v1 blob, v2 blob, PRIMARY KEY (k, c1, c2))", KEYSPACE, FLUSH_TABLE);
 
     private static final Random random = new Random(0);
@@ -99,7 +101,7 @@ public class SSTableUpgradeTest
 
     private static String destination(String tableName)
     {
-        return "/Users/blakeeggleston/code/cassandra-3/test/data/legacy-sstables/ka/legacy_tables/" + tableName;
+        return "/Users/sam/git/cassandra/test/data/legacy-sstables/ka/legacy_tables/" + tableName;
     }
 
     @Test
@@ -120,9 +122,19 @@ public class SSTableUpgradeTest
 
         // now an RT covering all of the row(2,*) range [2:_, 2:!]
         QueryProcessor.executeOnceInternal(delete, 200L, 2);
+        cfs.forceBlockingFlush();
 
-        String pointDelete = String.format("DELETE FROM %s.%s USING TIMESTAMP ? WHERE k=100 AND c1 = ? AND c2 = ?", KEYSPACE, COMPACT_TABLE);
-        QueryProcessor.executeOnceInternal(pointDelete, 150L, 2, 0);
+        // not an RT which is fully enclosed by the previous one, but with a higher timestamp
+        // this will cause multiple RTs to be duplicated after a block boundary. The outer RT
+        // gets split around the inner and so if there are rows < the inner RT which push over
+        // a boundary, both the inner RT and the remaining portion of the outer RT get repeated
+        Mutation m = new Mutation(KEYSPACE, ByteBufferUtil.bytes(100));
+        m.deleteRange(COMPACT_TABLE,
+                      cfs.metadata.comparator.make(2, 1).start(),
+                        cfs.metadata.comparator.make(2, 5).end(),
+                        250L);
+        m.applyUnsafe();
+        cfs.forceBlockingFlush();
 
         // now some large rows with c1 = 2 which push that RT across multiple index blocks
         QueryProcessor.executeOnceInternal(insert, k, 2, 0, createBuffer(size+1), createBuffer(size+1), 300L);
@@ -135,10 +147,9 @@ public class SSTableUpgradeTest
         // generating an unbounded RT bound because we don't fully exhaus OldFormatDeserializer - not necessary for
         // the main issue)
         QueryProcessor.executeOnceInternal(delete, 100L, 4);
-        cfs.forceBlockingFlush();
         QueryProcessor.executeOnceInternal(insert, k, 2, 3, createBuffer(100), createBuffer(100), 300L);
         cfs.forceBlockingFlush();
-        Assert.assertEquals(2, cfs.getLiveSSTableCount());
+        Assert.assertEquals(3, cfs.getLiveSSTableCount());
         List<Descriptor> descriptors = new ArrayList<>();
         for (SSTableReader sstable: cfs.getSSTables())
         {
@@ -147,7 +158,6 @@ public class SSTableUpgradeTest
         CompactionManager.instance.submitUserDefined(cfs,descriptors, Integer.MIN_VALUE).get();
 
         Assert.assertEquals(1, cfs.getLiveSSTableCount());
-
         copySSTables(cfs, dir);
     }
 
