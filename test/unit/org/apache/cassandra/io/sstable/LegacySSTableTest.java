@@ -345,6 +345,50 @@ public class LegacySSTableTest
         }
     }
 
+    @Test
+    public void test14912() throws Exception
+    {
+        /*
+         * When reading 2.1 sstables in 3.0, collection tombstones need to be are checked against
+         * the dropped columns stored in table metadata. Failure to do so can result in unreadable
+         * rows if a column with the same name but incompatible type has subsequently been added.
+         *
+         * We fake the system_schema.dropped_columns data, with a drop time after the collection tombstone's
+         * deletion time before initializing the table. This, in conjunction with the CREATE TABLE executed below,
+         * simulates the following DDL:
+         *
+         * CREATE TABLE legacy_tables.legacy_ka_14912 (k int PRIMARY KEY, v set<text>);
+         * ALTER TABLE legacy_tables.legacy_ka_14912 DROP v;
+         * ALTER TABLE legacy_tables.legacy_ka_14912 ADD v text;
+         *
+         * The SSTable loaded for this test emulates data being written before the ALTER statements and contains:
+         *
+         * insert into legacy_tables.legacy_ka_14912 (k, v1, v2) values (0, {}, 'abc') USING TIMESTAMP 1543244999672280;
+         * insert into legacy_tables.legacy_ka_14912 (k, v1, v2) values (1, {'abc'}, 'abc') USING TIMESTAMP 1543244999672280;
+         *
+         * The timestamps of the (generated) collection tombstones are 1543244999672279, e.g. the <TIMESTAMP of the mutation> - 1
+         */
+
+        QueryProcessor.executeInternal("INSERT INTO system_schema.dropped_columns " +
+                                       " (keyspace_name, table_name, column_name, dropped_time, type)" +
+                                       " VALUES " +
+                                       " ('legacy_tables', 'legacy_ka_14912', 'v1', 1543244999700000, 'set<text>')");
+
+        QueryProcessor.executeInternal("CREATE TABLE legacy_tables.legacy_ka_14912 (k int PRIMARY KEY, v1 text, v2 text)");
+        loadLegacyTable("legacy_%s_14912%s", "ka", "");
+
+        for (int i=0; i<=1; i++)
+        {
+            UntypedResultSet rows =
+                QueryProcessor.executeOnceInternal(
+                    String.format("SELECT * FROM legacy_tables.legacy_ka_14912 WHERE k = %s;", i));
+            Assert.assertEquals(1, rows.size());
+            UntypedResultSet.Row row = rows.one();
+            Assert.assertFalse(row.has("v"));
+            Assert.assertEquals("abc", row.getString("v2"));
+        }
+    }
+
     private void streamLegacyTables(String legacyVersion) throws Exception
     {
         for (int compact = 0; compact <= 1; compact++)
