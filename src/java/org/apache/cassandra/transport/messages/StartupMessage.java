@@ -17,7 +17,6 @@
  */
 package org.apache.cassandra.transport.messages;
 
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -130,15 +129,15 @@ public class StartupMessage extends Message.Request
     private ChecksumType getChecksumType() throws ProtocolException
     {
         String name = options.get(CHECKSUM);
-        if (name == null)
-            return null;
-
-        return Arrays.stream(ChecksumType.values())
-                     .filter(c -> c.name().equalsIgnoreCase(name))
-                     .findFirst()
-                     .orElseThrow(() -> new ProtocolException(String.format("Requested checksum type %s is " +
-                                                                            "not known or supported by this " +
-                                                                            "version of Cassandra", name)));
+        try
+        {
+            return name != null ? ChecksumType.valueOf(name.toUpperCase()) : null;
+        }
+        catch (IllegalArgumentException e)
+        {
+            throw new ProtocolException(String.format("Requested checksum type %s is not known or supported by " +
+                                                      "this version of Cassandra", name));
+        }
     }
 
     private Compressor getCompressor() throws ProtocolException
