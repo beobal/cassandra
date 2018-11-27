@@ -1341,6 +1341,14 @@ public abstract class LegacyLayout
             if (!helper.includes(tombstone.start.collectionName))
                 return false; // see CASSANDRA-13109
 
+            // The helper needs to be informed about the current complex column identifier before
+            // it can perform the comparison between the recorded drop time and the RT deletion time.
+            // If the RT has been superceded by a drop, we still return true as we don't want the
+            // grouper to terminate yet.
+            helper.startOfComplexColumn(tombstone.start.collectionName);
+            if (helper.isDroppedComplexDeletion(tombstone.deletionTime))
+                return true;
+
             if (clustering == null)
             {
                 clustering = tombstone.start.getAsClustering(metadata);
