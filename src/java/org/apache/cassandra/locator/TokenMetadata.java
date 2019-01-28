@@ -896,13 +896,12 @@ public class TokenMetadata
         for (InetAddress endpoint : bootstrapAddresses.keySet())
         {
             Collection<Token> tokens = bootstrapAddresses.get(endpoint);
-
-            allLeftMetadata.updateNormalTokens(tokens, endpoint);
-            for (Range<Token> range : strategy.getAddressRanges(allLeftMetadata).get(endpoint))
+            TokenMetadata cloned = allLeftMetadata.cloneOnlyTokenMap();
+            cloned.updateNormalTokens(tokens, endpoint);
+            for (Range<Token> range : strategy.getAddressRanges(cloned).get(endpoint))
             {
                 newPendingRanges.addPendingRange(range, endpoint);
             }
-            allLeftMetadata.removeEndpoint(endpoint);
         }
 
         // At this stage newPendingRanges has been updated according to leaving and bootstrapping nodes.
