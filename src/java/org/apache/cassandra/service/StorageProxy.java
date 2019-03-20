@@ -2049,7 +2049,7 @@ public class StorageProxy implements StorageProxyMBean
             PartitionRangeReadCommand rangeCommand = command.forSubRange(replicaPlan.range(), isFirst);
             // If enabled, request repaired data tracking info from full replicas but
             // only if there are multiple full replicas to compare results from
-            if (DatabaseDescriptor.getRepairedDataTrackingForPartitionReadsEnabled()
+            if (DatabaseDescriptor.getRepairedDataTrackingForRangeReadsEnabled()
                 && replicaPlan.contacts().filter(Replica::isFull).size() > 1)
             {
                 command.trackRepairedStatus();
