@@ -1435,7 +1435,7 @@ public abstract class ReadCommand extends MonitorableImpl implements ReadQuery
                 {
                     cellName = LegacyLayout.decodeCellName(metadata, buffer);
                 }
-                catch (UnknownColumnException exc)
+                catch (UnknownColumnException | IllegalLegacyColumnException exc)
                 {
                     // TODO this probably needs a new exception class that shares a parent with UnknownColumnFamilyException
                     throw new UnknownColumnFamilyException(
