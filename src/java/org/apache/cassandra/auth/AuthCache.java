@@ -25,13 +25,16 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import com.google.common.base.Throwables;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListenableFutureTask;
+import com.google.common.util.concurrent.UncheckedExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import org.apache.cassandra.utils.MBeanWrapper;
 
 import org.apache.cassandra.concurrent.DebuggableThreadPoolExecutor;
@@ -89,12 +92,19 @@ public class AuthCache<K, V> implements AuthCacheMBean
         return MBEAN_NAME_BASE + name;
     }
 
-    public V get(K k) throws ExecutionException
+    public V get(K k)
     {
         if (cache == null)
             return loadFunction.apply(k);
 
-        return cache.get(k);
+        try {
+            return cache.get(k);
+        }
+        catch (ExecutionException | UncheckedExecutionException e)
+        {
+            Throwables.propagateIfInstanceOf(e.getCause(), RuntimeException.class);
+            throw Throwables.propagate(e);
+        }
     }
 
     public void invalidate()
@@ -174,17 +184,7 @@ public class AuthCache<K, V> implements AuthCacheMBean
 
                                public ListenableFuture<V> reload(final K k, final V oldV)
                                {
-                                   ListenableFutureTask<V> task = ListenableFutureTask.create(() -> {
-                                       try
-                                       {
-                                           return loadFunction.apply(k);
-                                       }
-                                       catch (Exception e)
-                                       {
-                                           logger.trace("Error performing async refresh of auth data in {}", name, e);
-                                           throw e;
-                                       }
-                                   });
+                                   ListenableFutureTask<V> task = ListenableFutureTask.create(() -> loadFunction.apply(k));
                                    cacheRefreshExecutor.execute(task);
                                    return task;
                                }
