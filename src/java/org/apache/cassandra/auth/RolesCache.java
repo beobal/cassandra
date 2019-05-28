@@ -17,24 +17,22 @@
  */
 package org.apache.cassandra.auth;
 
-import java.lang.management.ManagementFactory;
 import java.util.Set;
 import java.util.concurrent.*;
 
+import com.google.common.base.Throwables;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListenableFutureTask;
+import com.google.common.util.concurrent.UncheckedExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.concurrent.DebuggableThreadPoolExecutor;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.utils.MBeanWrapper;
-
-import javax.management.MBeanServer;
-import javax.management.ObjectName;
 
 public class RolesCache implements RolesCacheMBean
 {
@@ -62,9 +60,10 @@ public class RolesCache implements RolesCacheMBean
         {
             return cache.get(role);
         }
-        catch (ExecutionException e)
+        catch (ExecutionException | UncheckedExecutionException e)
         {
-            throw new RuntimeException(e);
+            Throwables.propagateIfInstanceOf(e.getCause(), RuntimeException.class);
+            throw Throwables.propagate(e);
         }
     }
 
@@ -123,14 +122,7 @@ public class RolesCache implements RolesCacheMBean
                         {
                             public Set<RoleResource> call() throws Exception
                             {
-                                try
-                                {
-                                    return roleManager.getRoles(primaryRole, true);
-                                } catch (Exception e)
-                                {
-                                    logger.trace("Error performing async refresh of user roles", e);
-                                    throw e;
-                                }
+                                return roleManager.getRoles(primaryRole, true);
                             }
                         });
                         cacheRefreshExecutor.execute(task);
