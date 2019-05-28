@@ -17,16 +17,18 @@
  */
 package org.apache.cassandra.auth;
 
-import java.lang.management.ManagementFactory;
 import java.util.Set;
 import java.util.concurrent.*;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
+
+import com.google.common.base.Throwables;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListenableFutureTask;
+import com.google.common.util.concurrent.UncheckedExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,9 +63,10 @@ public class PermissionsCache implements PermissionsCacheMBean
         {
             return cache.get(Pair.create(user, resource));
         }
-        catch (ExecutionException e)
+        catch (ExecutionException | UncheckedExecutionException e)
         {
-            throw new RuntimeException(e);
+            Throwables.propagateIfInstanceOf(e.getCause(), RuntimeException.class);
+            throw Throwables.propagate(e);
         }
     }
 
@@ -117,21 +120,8 @@ public class PermissionsCache implements PermissionsCacheMBean
                                public ListenableFuture<Set<Permission>> reload(final Pair<AuthenticatedUser, IResource> userResource,
                                                                                final Set<Permission> oldValue)
                                {
-                                   ListenableFutureTask<Set<Permission>> task = ListenableFutureTask.create(new Callable<Set<Permission>>()
-                                   {
-                                       public Set<Permission>call() throws Exception
-                                       {
-                                           try
-                                           {
-                                               return authorizer.authorize(userResource.left, userResource.right);
-                                           }
-                                           catch (Exception e)
-                                           {
-                                               logger.trace("Error performing async refresh of user permissions", e);
-                                               throw e;
-                                           }
-                                       }
-                                   });
+                                   ListenableFutureTask<Set<Permission>> task =
+                                   ListenableFutureTask.create(() -> authorizer.authorize(userResource.left, userResource.right));
                                    cacheRefreshExecutor.execute(task);
                                    return task;
                                }
