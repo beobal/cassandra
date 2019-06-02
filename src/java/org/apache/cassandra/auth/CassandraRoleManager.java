@@ -270,12 +270,26 @@ public class CassandraRoleManager implements IRoleManager
 
     public boolean isSuper(RoleResource role)
     {
-        return getRole(role.getRoleName()).isSuper;
+        try
+        {
+            return getRole(role.getRoleName()).isSuper;
+        }
+        catch (RequestExecutionException e)
+        {
+            throw new UnauthorizedException("Unable to perform authorization: " + e.getMessage(), e);
+        }
     }
 
     public boolean canLogin(RoleResource role)
     {
-        return getRole(role.getRoleName()).canLogin;
+        try
+        {
+            return getRole(role.getRoleName()).canLogin;
+        }
+        catch (RequestExecutionException e)
+        {
+            throw new UnauthorizedException("Unable to perform authorization: " + e.getMessage(), e);
+        }
     }
 
     public Map<String, String> getCustomOptions(RoleResource role)
