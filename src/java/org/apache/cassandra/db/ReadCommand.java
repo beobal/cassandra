@@ -891,7 +891,7 @@ public abstract class ReadCommand extends AbstractReadQuery
             if (repairedSSTables == null)
             {
                 repairedIters = Collections.emptyList();
-                unrepairedIters = new ArrayList<>(view.sstables.size());
+                unrepairedIters = new ArrayList<>(view.sstables.size() + Iterables.size(view.memtables));
             }
             else
             {
@@ -969,8 +969,7 @@ public abstract class ReadCommand extends AbstractReadQuery
 
         public void close() throws Exception
         {
-            FBUtilities.closeAll(unrepairedIters);
-            FBUtilities.closeAll(repairedIters);
+            FBUtilities.closeAll(Iterables.concat(unrepairedIters, repairedIters));
         }
     }
 

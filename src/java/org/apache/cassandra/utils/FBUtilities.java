@@ -913,7 +913,7 @@ public class FBUtilities
         return historyDir;
     }
 
-    public static void closeAll(Collection<? extends AutoCloseable> l) throws Exception
+    public static void closeAll(Iterable<? extends AutoCloseable> l) throws Exception
     {
         Exception toThrow = null;
         for (AutoCloseable c : l)
