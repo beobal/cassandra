@@ -43,7 +43,13 @@ public class PermissionsCache implements PermissionsCacheMBean
     private final String MBEAN_NAME = "org.apache.cassandra.auth:type=PermissionsCache";
 
     private final ThreadPoolExecutor cacheRefreshExecutor = new DebuggableThreadPoolExecutor("PermissionsCacheRefresh",
-                                                                                             Thread.NORM_PRIORITY);
+                                                                                             Thread.NORM_PRIORITY)
+    {
+        protected void afterExecute(Runnable r, Throwable t)
+        {
+            // empty to avoid logging on background updates
+        }
+    };
     private final IAuthorizer authorizer;
     private volatile LoadingCache<Pair<AuthenticatedUser, IResource>, Set<Permission>> cache;
 
