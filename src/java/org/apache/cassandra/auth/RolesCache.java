@@ -40,7 +40,13 @@ public class RolesCache implements RolesCacheMBean
 
     private final String MBEAN_NAME = "org.apache.cassandra.auth:type=RolesCache";
     private final ThreadPoolExecutor cacheRefreshExecutor = new DebuggableThreadPoolExecutor("RolesCacheRefresh",
-                                                                                             Thread.NORM_PRIORITY);
+                                                                                             Thread.NORM_PRIORITY)
+    {
+        protected void afterExecute(Runnable r, Throwable t)
+        {
+            // empty to avoid logging on background updates
+        }
+    };
     private final IRoleManager roleManager;
     private volatile LoadingCache<RoleResource, Set<RoleResource>> cache;
 
