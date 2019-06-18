@@ -82,7 +82,13 @@ public class AuthCache<K, V> implements AuthCacheMBean
 
     protected void init()
     {
-        this.cacheRefreshExecutor = new DebuggableThreadPoolExecutor(name + "Refresh", Thread.NORM_PRIORITY);
+        this.cacheRefreshExecutor = new DebuggableThreadPoolExecutor(name + "Refresh", Thread.NORM_PRIORITY)
+        {
+            protected void afterExecute(Runnable r, Throwable t)
+            {
+                // empty to avoid logging on background updates
+            }
+        };
         this.cache = initCache(null);
         MBeanWrapper.instance.registerMBean(this, getObjectName());
     }
