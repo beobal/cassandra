@@ -276,7 +276,8 @@ public class CassandraRoleManager implements IRoleManager
         }
         catch (RequestExecutionException e)
         {
-            throw new UnauthorizedException("Unable to perform authorization: " + e.getMessage(), e);
+            logger.debug("Failed to authorize {} for super-user permission", role.getRoleName());
+            throw new UnauthorizedException("Unable to perform authorization of super-user permission: " + e.getMessage(), e);
         }
     }
 
@@ -288,7 +289,8 @@ public class CassandraRoleManager implements IRoleManager
         }
         catch (RequestExecutionException e)
         {
-            throw new UnauthorizedException("Unable to perform authorization: " + e.getMessage(), e);
+            logger.debug("Failed to authorize {} for login permission", role.getRoleName());
+            throw new UnauthorizedException("Unable to perform authorization of login permission: " + e.getMessage(), e);
         }
     }
 

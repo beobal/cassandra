@@ -32,6 +32,7 @@ import org.slf4j.LoggerFactory;
 import org.apache.cassandra.auth.*;
 import org.apache.cassandra.db.virtual.VirtualSchemaKeyspace;
 import org.apache.cassandra.exceptions.RequestExecutionException;
+import org.apache.cassandra.exceptions.RequestValidationException;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.schema.TableMetadataRef;
 import org.apache.cassandra.config.DatabaseDescriptor;
@@ -336,7 +337,7 @@ public class ClientState
         {
             return user.canLogin();
         }
-        catch (RequestExecutionException e)
+        catch (RequestExecutionException | RequestValidationException e)
         {
             throw new AuthenticationException("Unable to perform authentication: " + e.getMessage(), e);
         }
