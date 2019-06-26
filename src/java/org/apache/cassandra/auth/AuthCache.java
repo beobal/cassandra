@@ -190,7 +190,17 @@ public class AuthCache<K, V> implements AuthCacheMBean
 
                                public ListenableFuture<V> reload(final K k, final V oldV)
                                {
-                                   ListenableFutureTask<V> task = ListenableFutureTask.create(() -> loadFunction.apply(k));
+                                   ListenableFutureTask<V> task = ListenableFutureTask.create(() -> {
+                                       try
+                                       {
+                                           return loadFunction.apply(k);
+                                       }
+                                       catch (Exception e)
+                                       {
+                                           logger.trace("Error performing async refresh of auth data in {}", name, e);
+                                           throw e;
+                                       }
+                                   });
                                    cacheRefreshExecutor.execute(task);
                                    return task;
                                }
