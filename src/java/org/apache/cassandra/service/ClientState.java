@@ -279,7 +279,7 @@ public class ClientState
         {
             return DatabaseDescriptor.getRoleManager().canLogin(user.getPrimaryRole());
         } catch (RequestExecutionException e) {
-            throw new AuthenticationException("Unable to perform authenticaction: " + e.getMessage(), e);
+            throw new AuthenticationException("Unable to perform authentication: " + e.getMessage(), e);
         }
     }
 

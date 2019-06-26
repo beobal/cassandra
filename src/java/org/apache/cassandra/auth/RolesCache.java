@@ -128,7 +128,14 @@ public class RolesCache implements RolesCacheMBean
                         {
                             public Set<RoleResource> call() throws Exception
                             {
-                                return roleManager.getRoles(primaryRole, true);
+                                try
+                                {
+                                    return roleManager.getRoles(primaryRole, true);
+                                } catch (Exception e)
+                                {
+                                    logger.trace("Error performing async refresh of user roles", e);
+                                    throw e;
+                                }
                             }
                         });
                         cacheRefreshExecutor.execute(task);

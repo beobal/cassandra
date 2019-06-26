@@ -130,7 +130,15 @@ public class PermissionsCache implements PermissionsCacheMBean
                                    {
                                        public Set<Permission>call() throws Exception
                                        {
-                                           return authorizer.authorize(userResource.left, userResource.right);
+                                           try
+                                           {
+                                               return authorizer.authorize(userResource.left, userResource.right);
+                                           }
+                                           catch (Exception e)
+                                           {
+                                               logger.trace("Error performing async refresh of user permissions", e);
+                                               throw e;
+                                           }
                                        }
                                    });
                                    cacheRefreshExecutor.execute(task);
