@@ -123,8 +123,21 @@ public class RolesCache implements RolesCacheMBean
                     public ListenableFuture<Set<RoleResource>> reload(final RoleResource primaryRole,
                                                                       final Set<RoleResource> oldValue)
                     {
-                        ListenableFutureTask<Set<RoleResource>> task =
-                        ListenableFutureTask.create(() -> roleManager.getRoles(primaryRole, true));
+                        ListenableFutureTask<Set<RoleResource>> task;
+                        task = ListenableFutureTask.create(new Callable<Set<RoleResource>>()
+                        {
+                            public Set<RoleResource> call() throws Exception
+                            {
+                                try
+                                {
+                                    return roleManager.getRoles(primaryRole, true);
+                                } catch (Exception e)
+                                {
+                                    logger.trace("Error performing async refresh of user roles", e);
+                                    throw e;
+                                }
+                            }
+                        });
                         cacheRefreshExecutor.execute(task);
                         return task;
                     }

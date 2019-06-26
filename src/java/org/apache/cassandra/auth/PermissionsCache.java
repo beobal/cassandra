@@ -126,8 +126,21 @@ public class PermissionsCache implements PermissionsCacheMBean
                                public ListenableFuture<Set<Permission>> reload(final Pair<AuthenticatedUser, IResource> userResource,
                                                                                final Set<Permission> oldValue)
                                {
-                                   ListenableFutureTask<Set<Permission>> task =
-                                   ListenableFutureTask.create(() -> authorizer.authorize(userResource.left, userResource.right));
+                                   ListenableFutureTask<Set<Permission>> task = ListenableFutureTask.create(new Callable<Set<Permission>>()
+                                   {
+                                       public Set<Permission>call() throws Exception
+                                       {
+                                           try
+                                           {
+                                               return authorizer.authorize(userResource.left, userResource.right);
+                                           }
+                                           catch (Exception e)
+                                           {
+                                               logger.trace("Error performing async refresh of user permissions", e);
+                                               throw e;
+                                           }
+                                       }
+                                   });
                                    cacheRefreshExecutor.execute(task);
                                    return task;
                                }

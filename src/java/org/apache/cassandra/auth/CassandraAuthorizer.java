@@ -87,8 +87,8 @@ public class CassandraAuthorizer implements IAuthorizer
         }
         catch (RequestExecutionException | RequestValidationException e)
         {
-            logger.warn("CassandraAuthorizer failed to authorize {} for {}", user, resource);
-            throw new UnauthorizedException("Unable to perform authorization: " + e.getMessage(), e);
+            logger.debug("Failed to authorize {} for {}", user, resource);
+            throw new UnauthorizedException("Unable to perform authorization of permissions: " + e.getMessage(), e);
         }
     }
 
