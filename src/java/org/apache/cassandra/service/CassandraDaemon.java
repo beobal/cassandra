@@ -25,6 +25,7 @@ import java.net.InetAddress;
 import java.net.URL;
 import java.net.UnknownHostException;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
@@ -707,6 +708,15 @@ public class CassandraDaemon
         return nativeTransportService != null ? nativeTransportService.isRunning() : false;
     }
 
+    public int getMaxNativeProtocolVersion()
+    {
+        return nativeTransportService.getMaxProtocolVersion();
+    }
+
+    public void refreshMaxNativeProtocolVersion(ExecutorService executor)
+    {
+        nativeTransportService.refreshMaxNegotiableProtocolVersion(executor);
+    }
 
     /**
      * A convenience method to stop and destroy the daemon in one shot.

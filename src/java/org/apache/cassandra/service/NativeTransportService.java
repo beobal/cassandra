@@ -21,6 +21,7 @@ import java.net.InetAddress;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -35,6 +36,7 @@ import io.netty.util.concurrent.EventExecutor;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.metrics.AuthMetrics;
 import org.apache.cassandra.metrics.ClientMetrics;
+import org.apache.cassandra.transport.ConfiguredLimit;
 import org.apache.cassandra.transport.RequestThreadPoolExecutor;
 import org.apache.cassandra.transport.Server;
 
@@ -51,6 +53,7 @@ public class NativeTransportService
     private boolean initialized = false;
     private EventLoopGroup workerGroup;
     private EventExecutor eventExecutorGroup;
+    private ConfiguredLimit protocolVersionLimit;
 
     /**
      * Creates netty thread pools and event loops.
@@ -75,6 +78,8 @@ public class NativeTransportService
             logger.info("Netty using Java NIO event loop");
         }
 
+        protocolVersionLimit = ConfiguredLimit.newLimit();
+
         int nativePort = DatabaseDescriptor.getNativeTransportPort();
         int nativePortSSL = DatabaseDescriptor.getNativeTransportPortSSL();
         InetAddress nativeAddr = DatabaseDescriptor.getRpcAddress();
@@ -82,7 +87,8 @@ public class NativeTransportService
         org.apache.cassandra.transport.Server.Builder builder = new org.apache.cassandra.transport.Server.Builder()
                                                                 .withEventExecutor(eventExecutorGroup)
                                                                 .withEventLoopGroup(workerGroup)
-                                                                .withHost(nativeAddr);
+                                                                .withHost(nativeAddr)
+                                                                .withProtocolVersionLimiter(protocolVersionLimit);
 
         if (!DatabaseDescriptor.getClientEncryptionOptions().enabled)
         {
@@ -136,6 +142,19 @@ public class NativeTransportService
     public void stop()
     {
         servers.forEach(Server::stop);
+    }
+
+    public int getMaxProtocolVersion()
+    {
+        return protocolVersionLimit.getMaxVersion().asInt();
+    }
+
+    public void refreshMaxNegotiableProtocolVersion(ExecutorService executor)
+    {
+        // lowering the max negotiable protocol version is only safe if we haven't already
+        // allowed clients to connect with a higher version. This still allows the max
+        // version to be raised, as that is safe.
+        executor.submit(protocolVersionLimit::updateMaxSupportedVersion);
     }
 
     /**
