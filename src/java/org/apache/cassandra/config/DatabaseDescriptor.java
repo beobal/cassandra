@@ -766,14 +766,14 @@ public class DatabaseDescriptor
         }
 
         // If max protocol version has been set, just validate it's within an acceptable range
-        if (conf.native_transport_max_protocol_version != Integer.MIN_VALUE)
+        if (conf.native_transport_max_negotiable_protocol_version != Integer.MIN_VALUE)
         {
-            if (conf.native_transport_max_protocol_version < Server.MIN_SUPPORTED_VERSION
-                || conf.native_transport_max_protocol_version > Server.CURRENT_VERSION)
+            if (conf.native_transport_max_negotiable_protocol_version < Server.MIN_SUPPORTED_VERSION
+                || conf.native_transport_max_negotiable_protocol_version > Server.CURRENT_VERSION)
             {
-                throw new ConfigurationException(String.format("Invalid setting for native_transport_max_protocol_version (%d); " +
+                throw new ConfigurationException(String.format("Invalid setting for native_transport_max_negotiable_version (%d); " +
                                                                "Values between %s and %s are supported",
-                                                               conf.native_transport_max_protocol_version,
+                                                               conf.native_transport_max_negotiable_protocol_version,
                                                                Server.MIN_SUPPORTED_VERSION,
                                                                Server.CURRENT_VERSION));
             }
@@ -1542,7 +1542,7 @@ public class DatabaseDescriptor
 
     public static int getNativeProtocolMaxVersionOverride()
     {
-        return conf.native_transport_max_protocol_version;
+        return conf.native_transport_max_negotiable_protocol_version;
     }
 
     public static double getCommitLogSyncBatchWindow()

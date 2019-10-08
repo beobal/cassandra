@@ -71,7 +71,7 @@ public class ProtocolTestHelper
         try
         {
             Field field = FBUtilities.getProtectedField(DatabaseDescriptor.class, "conf");
-            ((Config)field.get(null)).native_transport_max_protocol_version = version == null ? Integer.MIN_VALUE : version;
+            ((Config)field.get(null)).native_transport_max_negotiable_protocol_version = version == null ? Integer.MIN_VALUE : version;
         }
         catch (IllegalAccessException e)
         {
