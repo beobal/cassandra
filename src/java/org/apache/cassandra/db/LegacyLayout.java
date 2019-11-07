@@ -526,7 +526,7 @@ public abstract class LegacyLayout
         List<LegacyLayout.LegacyCell> cells = Lists.newArrayList(pair.right);
 
         int maxCellsPerPartition = maxLiveCellsPerPartition(command);
-        cells = maybeTrimLiveCells(cells, maxCellsPerPartition, command.nowInSec());
+        cells = maybeTrimLiveCells(cells, maxCellsPerPartition, command);
 
         // The LegacyRangeTombstoneList already has range tombstones for the single-row deletions and complex
         // deletions.  Go through our normal range tombstones and add then to the LegacyRTL so that the range
@@ -547,8 +547,12 @@ public abstract class LegacyLayout
         return new LegacyUnfilteredPartition(info.getPartitionDeletion(), rtl, cells);
     }
 
-    private static List<LegacyCell> maybeTrimLiveCells(List<LegacyCell> cells, int maxLiveCells, int nowInSec)
+    private static List<LegacyCell> maybeTrimLiveCells(List<LegacyCell> cells, int maxLiveCells, ReadCommand command)
     {
+        if (null == command || maxLiveCells > cells.size())
+            return cells;
+
+        int nowInSec = command.nowInSec();
         int endIdx = -1;
         int liveCount = 0;
         for (int i = 0; i < cells.size(); i++)
