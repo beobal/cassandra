@@ -24,7 +24,7 @@ import java.util.zip.CRC32;
 import io.netty.buffer.ByteBuf;
 import io.netty.util.concurrent.FastThreadLocal;
 
-class Crc
+public class Crc
 {
     private static final FastThreadLocal<CRC32> crc32 = new FastThreadLocal<CRC32>()
     {
@@ -37,15 +37,15 @@ class Crc
 
     private static final byte[] initialBytes = new byte[] { (byte) 0xFA, (byte) 0x2D, (byte) 0x55, (byte) 0xCA };
 
-    static final class InvalidCrc extends IOException
+    public static final class InvalidCrc extends IOException
     {
-        InvalidCrc(int read, int computed)
+        public InvalidCrc(int read, int computed)
         {
             super(String.format("Read %d, Computed %d", read, computed));
         }
     }
 
-    static CRC32 crc32()
+    public static CRC32 crc32()
     {
         CRC32 crc = crc32.get();
         crc.reset();
@@ -53,21 +53,21 @@ class Crc
         return crc;
     }
 
-    static int computeCrc32(ByteBuf buffer, int startReaderIndex, int endReaderIndex)
+    public static int computeCrc32(ByteBuf buffer, int startReaderIndex, int endReaderIndex)
     {
         CRC32 crc = crc32();
         crc.update(buffer.internalNioBuffer(startReaderIndex, endReaderIndex - startReaderIndex));
         return (int) crc.getValue();
     }
 
-    static int computeCrc32(ByteBuffer buffer, int start, int end)
+    public static int computeCrc32(ByteBuffer buffer, int start, int end)
     {
         CRC32 crc = crc32();
         updateCrc32(crc, buffer, start, end);
         return (int) crc.getValue();
     }
 
-    static void updateCrc32(CRC32 crc, ByteBuffer buffer, int start, int end)
+    public static void updateCrc32(CRC32 crc, ByteBuffer buffer, int start, int end)
     {
         int savePosition = buffer.position();
         int saveLimit = buffer.limit();
@@ -116,7 +116,7 @@ class Crc
      * @param len   the number of bytes, greater than 0 and fewer than 9, to be read from bytes
      * @return      the least-significant bit AND byte order crc24 using the CRC24_POLY polynomial
      */
-    static int crc24(long bytes, int len)
+    public static int crc24(long bytes, int len)
     {
         int crc = CRC24_INIT;
         while (len-- > 0)

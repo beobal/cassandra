@@ -21,13 +21,13 @@ import java.io.IOException;
 
 import static java.lang.String.format;
 
-class InvalidSerializedSizeException extends IOException
+public class InvalidSerializedSizeException extends IOException
 {
     final Verb verb;
     final long expectedSize;
     final long actualSizeAtLeast;
 
-    InvalidSerializedSizeException(Verb verb, long expectedSize, long actualSizeAtLeast)
+    public InvalidSerializedSizeException(Verb verb, long expectedSize, long actualSizeAtLeast)
     {
         super(format("Invalid serialized size; expected %d, actual size at least %d, for verb %s", expectedSize, actualSizeAtLeast, verb));
         this.verb = verb;

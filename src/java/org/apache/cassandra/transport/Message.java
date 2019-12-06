@@ -314,7 +314,7 @@ public abstract class Message
     @ChannelHandler.Sharable
     public static class ProtocolDecoder extends MessageToMessageDecoder<Frame>
     {
-        public void decode(ChannelHandlerContext ctx, Frame frame, List results)
+        public Message decodeFrame(Frame frame)
         {
             boolean isRequest = frame.header.type.direction == Direction.REQUEST;
             boolean isTracing = frame.header.flags.contains(Frame.Header.Flag.TRACING);
@@ -335,14 +335,9 @@ public abstract class Message
                 message.setSourceFrame(frame);
                 message.setCustomPayload(customPayload);
 
-                if (isRequest)
+                if (isRequest && isTracing)
                 {
-                    assert message instanceof Request;
-                    Request req = (Request)message;
-                    Connection connection = ctx.channel().attr(Connection.attributeKey).get();
-                    req.attach(connection);
-                    if (isTracing)
-                        req.setTracingRequested();
+                    ((Request)message).setTracingRequested();
                 }
                 else
                 {
@@ -353,7 +348,7 @@ public abstract class Message
                         ((Response)message).setWarnings(warnings);
                 }
 
-                results.add(message);
+                return message;
             }
             catch (Throwable ex)
             {
@@ -361,6 +356,21 @@ public abstract class Message
                 // Remember the streamId
                 throw ErrorMessage.wrap(ex, frame.header.streamId);
             }
+        }
+
+        public void decode(ChannelHandlerContext ctx, Frame frame, List results)
+        {
+            Message message = decodeFrame(frame);
+            boolean isRequest = frame.header.type.direction == Direction.REQUEST;
+            if (isRequest)
+            {
+                assert message instanceof Request;
+                Request req = (Request)message;
+                Connection connection = ctx.channel().attr(Connection.attributeKey).get();
+                req.attach(connection);
+            }
+
+            results.add(message);
         }
     }
 

@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.cassandra.net;
+package org.apache.cassandra.transport;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -28,6 +28,10 @@ import com.google.common.annotations.VisibleForTesting;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelPipeline;
+import org.apache.cassandra.net.BufferPoolAllocator;
+import org.apache.cassandra.net.InboundMessageHandler;
+import org.apache.cassandra.net.Message;
+import org.apache.cassandra.net.ShareableBytes;
 
 import static org.apache.cassandra.utils.ByteBufferUtil.copyBytes;
 
@@ -47,13 +51,13 @@ import static org.apache.cassandra.utils.ByteBufferUtil.copyBytes;
  * Five frame decoders currently exist, one used for each connection depending on flags and messaging version:
  * 1. {@link FrameDecoderCrc}:
           no compression; payload is protected by CRC32
- * 2. {@link FrameDecoderLZ4}:
+ * 2. {FrameDecoderLZ4}:
           LZ4 compression with custom frame format; payload is protected by CRC32
- * 3. {@link FrameDecoderUnprotected}:
+ * 3. {FrameDecoderUnprotected}:
           no compression; no integrity protection
- * 4. {@link FrameDecoderLegacy}:
+ * 4. {FrameDecoderLegacy}:
           no compression; no integrity protection; turns unframed streams of legacy messages (< 4.0) into frames
- * 5. {@link FrameDecoderLegacyLZ4}
+ * 5. {FrameDecoderLegacyLZ4}
  *        LZ4 compression using standard LZ4 frame format; groups legacy messages (< 4.0) into frames
  */
 abstract class FrameDecoder extends ChannelInboundHandlerAdapter
@@ -77,8 +81,8 @@ abstract class FrameDecoder extends ChannelInboundHandlerAdapter
 
     abstract static class Frame
     {
-        public final boolean isSelfContained;
-        public final int frameSize;
+        final boolean isSelfContained;
+        final int frameSize;
 
         Frame(boolean isSelfContained, int frameSize)
         {

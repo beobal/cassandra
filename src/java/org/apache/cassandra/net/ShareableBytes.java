@@ -29,7 +29,7 @@ import org.apache.cassandra.utils.memory.BufferPool;
  * When sharing is necessary, {@link #share()} method must be invoked by the owning thread
  * before a {@link ShareableBytes} instance can be shared with another thread.
  */
-class ShareableBytes
+public class ShareableBytes
 {
     private final ByteBuffer bytes;
     private final ShareableBytes owner;
@@ -53,28 +53,28 @@ class ShareableBytes
         this.bytes = bytes;
     }
 
-    ByteBuffer get()
+    public ByteBuffer get()
     {
         assert owner.count != 0;
         return bytes;
     }
 
-    boolean hasRemaining()
+    public boolean hasRemaining()
     {
         return bytes.hasRemaining();
     }
 
-    int remaining()
+    public int remaining()
     {
         return bytes.remaining();
     }
 
-    void skipBytes(int skipBytes)
+    public void skipBytes(int skipBytes)
     {
         bytes.position(bytes.position() + skipBytes);
     }
 
-    void consume()
+    public void consume()
     {
         bytes.position(bytes.limit());
     }
@@ -84,7 +84,7 @@ class ShareableBytes
      * The first invocation must occur while the calling thread has exclusive access (though there may be more
      * than one 'owner', these must all either be owned by the calling thread or otherwise not being used)
      */
-    ShareableBytes share()
+    public ShareableBytes share()
     {
         int count = owner.count;
         if (count < 0)
@@ -119,7 +119,7 @@ class ShareableBytes
         }
     }
 
-    void release()
+    public void release()
     {
         owner.doRelease();
     }
@@ -139,7 +139,7 @@ class ShareableBytes
             BufferPool.put(bytes);
     }
 
-    boolean isReleased()
+    public boolean isReleased()
     {
         return owner.count == RELEASED;
     }
@@ -147,7 +147,7 @@ class ShareableBytes
     /**
      * Create a slice over the next {@code length} bytes, consuming them from our buffer, and incrementing the owner count
      */
-    ShareableBytes sliceAndConsume(int length)
+    public ShareableBytes sliceAndConsume(int length)
     {
         int begin = bytes.position();
         int end = begin + length;
@@ -159,14 +159,14 @@ class ShareableBytes
     /**
      * Create a new slice, incrementing the number of owners (making it shared if it was previously unshared)
      */
-    ShareableBytes slice(int begin, int end)
+    public ShareableBytes slice(int begin, int end)
     {
         ByteBuffer slice = bytes.duplicate();
         slice.position(begin).limit(end);
         return new ShareableBytes(owner.retain(), slice);
     }
 
-    static ShareableBytes wrap(ByteBuffer buffer)
+    public static ShareableBytes wrap(ByteBuffer buffer)
     {
         return new ShareableBytes(buffer);
     }

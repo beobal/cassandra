@@ -280,7 +280,7 @@ public final class SocketFactory
         return isCausedBy(t, SocketFactory::isConnectionReset);
     }
 
-    static String channelId(InetAddressAndPort from, InetSocketAddress realFrom, InetAddressAndPort to, InetSocketAddress realTo, ConnectionType type, String id)
+    public static String channelId(InetAddressAndPort from, InetSocketAddress realFrom, InetAddressAndPort to, InetSocketAddress realTo, ConnectionType type, String id)
     {
         return addressId(from, realFrom) + "->" + addressId(to, realTo) + '-' + type + '-' + id;
     }
@@ -293,7 +293,7 @@ public final class SocketFactory
         return str;
     }
 
-    static String channelId(InetAddressAndPort from, InetAddressAndPort to, ConnectionType type, String id)
+    public static String channelId(InetAddressAndPort from, InetAddressAndPort to, ConnectionType type, String id)
     {
         return from + "->" + to + '-' + type + '-' + id;
     }

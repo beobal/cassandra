@@ -32,7 +32,7 @@ import org.apache.cassandra.io.util.RebufferingInputStream;
  *
  * {@link #close()} <em>MUST</em> be invoked in the end.
  */
-class ChunkedInputPlus extends RebufferingInputStream
+public class ChunkedInputPlus extends RebufferingInputStream
 {
     private final PeekingIterator<ShareableBytes> iter;
 
@@ -47,7 +47,7 @@ class ChunkedInputPlus extends RebufferingInputStream
      *
      * The provided iterable <em>must</em> contain at least one buffer.
      */
-    static ChunkedInputPlus of(Iterable<ShareableBytes> buffers)
+    public static ChunkedInputPlus of(Iterable<ShareableBytes> buffers)
     {
         PeekingIterator<ShareableBytes> iter = Iterators.peekingIterator(buffers.iterator());
         if (!iter.hasNext())
@@ -80,7 +80,7 @@ class ChunkedInputPlus extends RebufferingInputStream
      *
      * Should only be used for sanity checking, once the input is no longer needed, as it will implicitly close the input.
      */
-    int remainder()
+    public int remainder()
     {
         buffer = null;
 

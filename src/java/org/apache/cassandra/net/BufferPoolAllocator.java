@@ -30,7 +30,7 @@ import org.apache.cassandra.utils.memory.BufferPool;
  * A trivial wrapper around BufferPool for integrating with Netty, but retaining ownership of pooling behaviour
  * that is integrated into Cassandra's other pooling.
  */
-abstract class BufferPoolAllocator extends AbstractByteBufAllocator
+public abstract class BufferPoolAllocator extends AbstractByteBufAllocator
 {
     BufferPoolAllocator()
     {
@@ -58,27 +58,27 @@ abstract class BufferPoolAllocator extends AbstractByteBufAllocator
         return result;
     }
 
-    ByteBuffer get(int size)
+    public ByteBuffer get(int size)
     {
         return BufferPool.get(size, BufferType.OFF_HEAP);
     }
 
-    ByteBuffer getAtLeast(int size)
+    public ByteBuffer getAtLeast(int size)
     {
         return BufferPool.getAtLeast(size, BufferType.OFF_HEAP);
     }
 
-    void put(ByteBuffer buffer)
+    public void put(ByteBuffer buffer)
     {
         BufferPool.put(buffer);
     }
 
-    void putUnusedPortion(ByteBuffer buffer)
+    public void putUnusedPortion(ByteBuffer buffer)
     {
         BufferPool.putUnusedPortion(buffer);
     }
 
-    void release()
+    public void release()
     {
     }
 
