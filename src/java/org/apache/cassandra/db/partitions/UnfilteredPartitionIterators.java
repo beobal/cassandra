@@ -266,7 +266,7 @@ public abstract class UnfilteredPartitionIterators
         {
             try (UnfilteredRowIterator partition = iterator.next())
             {
-                    UnfilteredRowIterators.digest(partition, digest, version);
+                UnfilteredRowIterators.digest(partition, digest, version);
             }
         }
     }

@@ -28,14 +28,7 @@ import org.apache.cassandra.utils.FastByteOperations;
 
 public class Digest
 {
-    private static final ThreadLocal<byte[]> localBuffer = new ThreadLocal<byte[]>()
-    {
-        @Override
-        protected byte[] initialValue()
-        {
-            return new byte[4096];
-        }
-    };
+    private static final ThreadLocal<byte[]> localBuffer = ThreadLocal.withInitial(() -> new byte[4096]);
 
     private final Hasher hasher;
     private long inputBytes = 0;
@@ -110,7 +103,7 @@ public class Digest
      * not modify the position of the supplied buffer, so callers are not
      * required to duplicate() the source buffer before calling
      */
-    public Digest update(ByteBuffer input, int pos, int len)
+    private Digest update(ByteBuffer input, int pos, int len)
     {
         if (len <= 0)
             return this;
@@ -139,7 +132,7 @@ public class Digest
     }
 
     /**
-     * Update a MessageDigest with the content of a context.
+     * Update the digest with the content of a counter context.
      * Note that this skips the header entirely since the header information
      * has local meaning only, while digests are meant for comparison across
      * nodes. This means in particular that we always have:
