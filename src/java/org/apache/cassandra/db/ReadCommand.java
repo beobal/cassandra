@@ -891,6 +891,7 @@ public abstract class ReadCommand extends AbstractReadQuery
 
                     byte[] partitionDigest = perPartitionDigest.digest();
                     perCommandDigest.update(partitionDigest, 0, partitionDigest.length);
+                    isFullyPurged = true;
                 }
 
                 perPartitionDigest = null;

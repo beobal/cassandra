@@ -69,7 +69,6 @@ import org.apache.cassandra.schema.KeyspaceParams;
 import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.schema.TableParams;
-import org.apache.cassandra.schema.Tables;
 import org.apache.cassandra.service.ActiveRepairService;
 import org.apache.cassandra.streaming.PreviewKind;
 import org.apache.cassandra.tracing.Tracing;
@@ -772,7 +771,6 @@ public class ReadCommandTest
         // Partition with 2 rows, one fully deleted
         new RowUpdateBuilder(cfs.metadata.get(), 0, keys[3]).clustering("bb").add("a", ByteBufferUtil.bytes("a")).delete("b").build().apply();
         RowUpdateBuilder.deleteRow(cfs.metadata(), 0, keys[3], "cc").apply();
-
         cfs.forceBlockingFlush();
         cfs.getLiveSSTables().forEach(sstable -> mutateRepaired(cfs, sstable, 111, null));
 
@@ -848,7 +846,8 @@ public class ReadCommandTest
         fullyPurgedPartitionCreatesEmptyDigest(cfs, partitionRead);
     }
 
-    @Test public void rangeReadFullyPurged() throws Exception
+    @Test
+    public void rangeReadFullyPurged() throws Exception
     {
         ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(CF6);
         ReadCommand rangeRead = Util.cmd(cfs).build();
@@ -893,6 +892,52 @@ public class ReadCommandTest
         assertTrue(partitions.isEmpty());
         ByteBuffer digestWithoutTombstones = command.getRepairedDataDigest();
         assertEquals(0, ByteBufferUtil.compareUnsigned(EMPTY_BYTE_BUFFER, digestWithoutTombstones));
+    }
+
+    /**
+     * Verifies that during range reads which include multiple partitions, fully purged partitions
+     * have no material effect on the calculated digest. This test writes two sstables, each containing
+     * a single partition; the first is live and the second fully deleted and eligible for purging.
+     * Initially, only the sstable containing the live partition is marked repaired, while a range read
+     * which covers both partitions is performed to generate a digest. Then the sstable containing the
+     * purged partition is also marked repaired and the query reexecuted. The digests produced by both
+     * queries should match as the digest calculation should exclude the fully purged partition.
+     */
+    @Test
+    public void mixedPurgedAndNonPurgedPartitions()
+    {
+        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(CF6);
+        cfs.truncateBlocking();
+        cfs.disableAutoCompaction();
+        setGCGrace(cfs, 0);
+
+        ReadCommand command = Util.cmd(cfs).withNowInSeconds(FBUtilities.nowInSeconds() + 60).build();
+
+        // Live partition in a repaired sstable, so included in the digest calculation
+        new RowUpdateBuilder(cfs.metadata.get(), 0, ByteBufferUtil.bytes("key-0")).clustering("cc").add("a", ByteBufferUtil.bytes("a")).build().apply();
+        cfs.forceBlockingFlush();
+        cfs.getLiveSSTables().forEach(sstable -> mutateRepaired(cfs, sstable, 111, null));
+        // Fully deleted partition in an unrepaired sstable, so not included in the intial digest
+        RowUpdateBuilder.deleteRow(cfs.metadata(), 0, ByteBufferUtil.bytes("key-1"), "cc").apply();
+        cfs.forceBlockingFlush();
+
+        command.trackRepairedStatus();
+        List<ImmutableBTreePartition> partitions = Util.getAllUnfiltered(command);
+        assertEquals(1, partitions.size());
+        ByteBuffer digestWithoutPurgedPartition = command.getRepairedDataDigest();
+        assertTrue(ByteBufferUtil.compareUnsigned(EMPTY_BYTE_BUFFER, digestWithoutPurgedPartition) != 0);
+
+        // mark the sstable containing the purged partition as repaired, so both partitions are now
+        // read during in the digest calculation. Because the purged partition is entirely
+        // discarded, the resultant digest should match the earlier one.
+        cfs.getLiveSSTables().forEach(sstable -> mutateRepaired(cfs, sstable, 111, null));
+        command = Util.cmd(cfs).withNowInSeconds(command.nowInSec()).build();
+        command.trackRepairedStatus();
+
+        partitions = Util.getAllUnfiltered(command);
+        assertEquals(1, partitions.size());
+        ByteBuffer digestWithPurgedPartition = command.getRepairedDataDigest();
+        assertEquals(0, ByteBufferUtil.compareUnsigned(digestWithPurgedPartition, digestWithoutPurgedPartition));
     }
 
     @Test
