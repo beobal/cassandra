@@ -742,6 +742,13 @@ public abstract class ReadCommand extends AbstractReadQuery
     {
         class WithTracking extends Transformation
         {
+            protected DecoratedKey applyToPartitionKey(DecoratedKey key)
+            {
+                repairedDataInfo.onNewPartition(iterator);
+                repairedDataInfo.trackPartitionKey(key);
+                return key;
+            }
+
             protected DeletionTime applyToDeletion(DeletionTime deletionTime)
             {
                 repairedDataInfo.trackDeletion(deletionTime);
@@ -771,7 +778,6 @@ public abstract class ReadCommand extends AbstractReadQuery
                 repairedDataInfo.onPartitionClose();
             }
         }
-        repairedDataInfo.onNewPartition(iterator);
         return Transformation.apply(iterator, new WithTracking());
     }
 
@@ -803,7 +809,6 @@ public abstract class ReadCommand extends AbstractReadQuery
             assert purger != null;
             purger.setCurrentKey(partition.partitionKey());
             purger.setIsReverseOrder(partition.isReverseOrder());
-            trackPartitionKey(partition.partitionKey());
         }
 
         protected void setPurger(RepairedDataPurger purger)
@@ -910,9 +915,6 @@ public abstract class ReadCommand extends AbstractReadQuery
                            int nowInSec,
                            int oldestUnrepairedTombstone)
         {
-            // isForThrift is hardcoded as this is never used to actually purge
-            // from the partitions, only to determine which atoms are used to
-            // construct the repaired data digest
             super(nowInSec,
                   cfs.gcBefore(nowInSec),
                   oldestUnrepairedTombstone,
