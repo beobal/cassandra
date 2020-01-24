@@ -23,7 +23,6 @@ import java.util.BitSet;
 import java.util.Map;
 import java.util.function.Consumer;
 
-import com.google.common.base.Predicates;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 
@@ -190,7 +189,7 @@ public class RowIteratorMergeListener<E extends Endpoints<E>>
         if (buildFullDiff)
         {
             if (repairs[repairs.length - 1] == null)
-                repairs[i] = new PartitionUpdate.Builder(command.metadata(), partitionKey, columns, 1);
+                repairs[repairs.length - 1] = new PartitionUpdate.Builder(command.metadata(), partitionKey, columns, 1);
             f.accept(repairs[repairs.length - 1]);
         }
     }
@@ -370,8 +369,10 @@ public class RowIteratorMergeListener<E extends Endpoints<E>>
         {
             PartitionUpdate update = null;
             int i = -1 + sourceIds.get(replica.endpoint());
-            if (i < 0) update = fullDiffRepair;
-            else if (repairs[i] != null) update = repairs[i].build();
+            if (i < 0)
+                update = fullDiffRepair;
+            else if (repairs[i] != null)
+                update = repairs[i].build();
 
             Mutation mutation = BlockingReadRepairs.createRepairMutation(update, readPlan.consistencyLevel(), replica.endpoint(), false);
             if (mutation == null)

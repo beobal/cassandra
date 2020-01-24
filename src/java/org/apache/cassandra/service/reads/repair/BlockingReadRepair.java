@@ -51,7 +51,6 @@ public class BlockingReadRepair<E extends Endpoints<E>, P extends ReplicaPlan.Fo
 {
     private static final Logger logger = LoggerFactory.getLogger(BlockingReadRepair.class);
 
-    //
     protected final Queue<BlockingPartitionRepair> repairs = new ConcurrentLinkedQueue<>();
 
     BlockingReadRepair(ReadCommand command, ReplicaPlan.Shared<E, P> replicaPlan, long queryStartNanoTime)
