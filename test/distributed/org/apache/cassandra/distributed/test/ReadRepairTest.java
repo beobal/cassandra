@@ -57,7 +57,7 @@ public class ReadRepairTest extends DistributedTestBase
             assertRows(cluster.get(3).executeInternal("SELECT * FROM " + KEYSPACE + ".tbl WHERE pk = 1"));
 
             assertRows(cluster.coordinator(1).execute("SELECT * FROM " + KEYSPACE + ".tbl WHERE pk = 1",
-                                                      ConsistencyLevel.QUORUM),
+                                                      ConsistencyLevel.ALL),
                        row(1, 1, 1));
 
             // Verify that data got repaired to the third node
