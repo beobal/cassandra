@@ -45,6 +45,7 @@ public class ChecksummingTransformerTest
 {
     private static final int DEFAULT_BLOCK_SIZE = 1 << 15;
     private static final int MAX_INPUT_SIZE = 1 << 18;
+    private static final int EXAMPLES = 40;
     private static final EnumSet<Frame.Header.Flag> FLAGS = EnumSet.of(Frame.Header.Flag.COMPRESSED, Frame.Header.Flag.CHECKSUMMED);
 
     @BeforeClass
@@ -57,7 +58,7 @@ public class ChecksummingTransformerTest
     @Test
     public void roundTripSafetyProperty()
     {
-        qt().withExamples(500)
+        qt().withFixedSeed(552252992721215L).withExamples(EXAMPLES)
             .forAll(inputs(),
                     compressors(),
                     checksumTypes(),
@@ -79,7 +80,7 @@ public class ChecksummingTransformerTest
     @Test
     public void corruptionCausesFailure()
     {
-        qt().withExamples(500)
+        qt().withFixedSeed(552252992721215L).withExamples(EXAMPLES)
             .forAll(inputWithCorruptablePosition(),
                     integers().between(0, Byte.MAX_VALUE).map(Integer::byteValue),
                     compressors(),
