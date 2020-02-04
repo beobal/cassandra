@@ -19,22 +19,15 @@
 package org.apache.cassandra.distributed.test;
 
 import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import org.junit.Test;
 
 import org.apache.cassandra.db.ConsistencyLevel;
-import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.marshal.Int32Type;
-import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.distributed.Cluster;
-import org.apache.cassandra.distributed.api.IMessageFilters;
 import org.apache.cassandra.locator.InetAddressAndPort;
-import org.apache.cassandra.locator.TokenMetadata;
-import org.apache.cassandra.net.Verb;
 import org.apache.cassandra.service.PendingRangeCalculatorService;
 import org.apache.cassandra.service.StorageService;
 
@@ -117,10 +110,10 @@ public class ReadRepairTest extends DistributedTestBase
 
             // prevent #4 from reading or writing to #3, so our QUORUM must contain #2 and #4
             // since #1 is taking over the range, this means any read-repair must make it to #1 as well
-            cluster.filters().verbs(READ_REQ).from(4).to(3).drop();
-            cluster.filters().verbs(READ_REPAIR_REQ).from(4).to(3).drop();
+            cluster.filters().verbs(READ_REQ.ordinal()).from(4).to(3).drop();
+            cluster.filters().verbs(READ_REPAIR_REQ.ordinal()).from(4).to(3).drop();
             assertRows(cluster.coordinator(4).execute("SELECT * FROM " + KEYSPACE + ".tbl WHERE pk = ?",
-                                                      ConsistencyLevel.QUORUM, i),
+                                                      ConsistencyLevel.ALL, i),
                        row(i, 1, 1));
 
             // verify that #1 receives the write
