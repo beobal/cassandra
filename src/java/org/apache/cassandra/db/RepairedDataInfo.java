@@ -21,17 +21,19 @@ package org.apache.cassandra.db;
 import java.nio.ByteBuffer;
 import java.util.function.LongPredicate;
 
+import org.apache.cassandra.db.filter.DataLimits;
 import org.apache.cassandra.db.partitions.PurgeFunction;
 import org.apache.cassandra.db.partitions.UnfilteredPartitionIterator;
 import org.apache.cassandra.db.rows.RangeTombstoneMarker;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.db.rows.UnfilteredRowIterator;
+import org.apache.cassandra.db.transform.MoreRows;
 import org.apache.cassandra.db.transform.Transformation;
 import org.apache.cassandra.utils.ByteBufferUtil;
 
 class RepairedDataInfo
 {
-    public static final RepairedDataInfo NULL_REPAIRED_DATA_INFO = new RepairedDataInfo()
+    public static final RepairedDataInfo NULL_REPAIRED_DATA_INFO = new RepairedDataInfo(null)
     {
         boolean isConclusive(){ return true; }
         ByteBuffer getDigest(){ return ByteBufferUtil.EMPTY_BYTE_BUFFER; }
@@ -52,6 +54,20 @@ class RepairedDataInfo
     private RepairedDataPurger purger;
     private boolean isFullyPurged = true;
 
+    // Supplies additional partitions from the repaired data set to be consumed when the limit of
+    // executing ReadCommand has been reached. This is to ensure that each replica attempts to
+    // read the same amount of repaired data, otherwise comparisons of the repaired data digests
+    // may be invalidated by varying amounts of repaired data being present on each replica.
+    // This can't be initialized until after the underlying repaired iterators have been merged.
+    private UnfilteredPartitionIterator postLimitPartitions = null;
+    private final DataLimits.Counter repairedCounter;
+    private UnfilteredRowIterator currentPartition;
+
+    public RepairedDataInfo(DataLimits.Counter repairedCounter)
+    {
+        this.repairedCounter = repairedCounter;
+    }
+
     ByteBuffer getDigest()
     {
         if (calculatedDigest != null)
@@ -64,17 +80,14 @@ class RepairedDataInfo
         return calculatedDigest;
     }
 
-    protected void onNewPartition(UnfilteredRowIterator partition)
+    void prepare(ColumnFamilyStore cfs, int nowInSec, int oldestUnrepairedTombstone)
     {
-        assert purger != null;
-        purger.setCurrentKey(partition.partitionKey());
-        purger.setIsReverseOrder(partition.isReverseOrder());
-        getPerPartitionDigest().update(partition.partitionKey().getKey());
+        this.purger = new RepairedDataPurger(cfs, nowInSec, oldestUnrepairedTombstone);
     }
 
-    protected void prepare(ColumnFamilyStore cfs, int nowInSec, int oldestUnrepairedTombstone)
+    void finalize(UnfilteredPartitionIterator postLimitPartitions)
     {
-        this.purger= new RepairedDataPurger(cfs, nowInSec, oldestUnrepairedTombstone);
+        this.postLimitPartitions = postLimitPartitions;
     }
 
     boolean isConclusive()
@@ -87,6 +100,14 @@ class RepairedDataInfo
         isConclusive = false;
     }
 
+    private void onNewPartition(UnfilteredRowIterator partition)
+    {
+        assert purger != null;
+        purger.setCurrentKey(partition.partitionKey());
+        purger.setIsReverseOrder(partition.isReverseOrder());
+        this.currentPartition = partition;
+    }
+
     private Digest getPerPartitionDigest()
     {
         if (perPartitionDigest == null)
@@ -97,20 +118,19 @@ class RepairedDataInfo
 
     public UnfilteredPartitionIterator withRepairedDataInfo(final UnfilteredPartitionIterator iterator)
     {
-        class WithRepairedDataTracking extends Transformation<UnfilteredRowIterator>
+        class WithTracking extends Transformation<UnfilteredRowIterator>
         {
             protected UnfilteredRowIterator applyToPartition(UnfilteredRowIterator partition)
             {
                 return withRepairedDataInfo(partition);
             }
         }
-
-        return Transformation.apply(iterator, new WithRepairedDataTracking());
+        return Transformation.apply(iterator, new WithTracking());
     }
 
     public UnfilteredRowIterator withRepairedDataInfo(final UnfilteredRowIterator iterator)
     {
-        class WithTracking extends Transformation
+        class WithTracking extends Transformation<UnfilteredRowIterator>
         {
             protected DecoratedKey applyToPartitionKey(DecoratedKey key)
             {
@@ -120,13 +140,16 @@ class RepairedDataInfo
 
             protected DeletionTime applyToDeletion(DeletionTime deletionTime)
             {
-
+                assert purger != null;
+                DeletionTime purged = purger.applyToDeletion(deletionTime);
+                if (!purged.isLive())
+                    isFullyPurged = false;
+                purged.digest(getPerPartitionDigest());
                 return deletionTime;
             }
 
             protected RangeTombstoneMarker applyToMarker(RangeTombstoneMarker marker)
             {
-
                 assert purger != null;
                 RangeTombstoneMarker purged = purger.applyToMarker(marker);
                 if (purged != null)
@@ -139,7 +162,6 @@ class RepairedDataInfo
 
             protected Row applyToStatic(Row row)
             {
-
                 assert purger != null;
                 Row purged = purger.applyToRow(row);
                 if (!purged.isEmpty())
@@ -152,7 +174,6 @@ class RepairedDataInfo
 
             protected Row applyToRow(Row row)
             {
-
                 assert purger != null;
                 Row purged = purger.applyToRow(row);
                 if (purged != null)
@@ -184,8 +205,52 @@ class RepairedDataInfo
                 isFullyPurged = true;
             }
         }
-        onNewPartition(iterator);
-        return Transformation.apply(iterator, new WithTracking());
+        UnfilteredRowIterator tracked = repairedCounter.applyTo(Transformation.apply(iterator, new WithTracking()));
+        onNewPartition(tracked);
+        return tracked;
+    }
+
+    public UnfilteredPartitionIterator extend(UnfilteredPartitionIterator partitions)
+    {
+        class OverreadRepairedData extends Transformation<UnfilteredRowIterator> implements MoreRows<UnfilteredRowIterator>
+        {
+            protected UnfilteredRowIterator applyToPartition(UnfilteredRowIterator partition)
+            {
+                return MoreRows.extend(partition, this, partition.columns());
+            }
+
+            public UnfilteredRowIterator moreContents()
+            {
+                if (currentPartition != null)
+                {
+                    consumePartition(currentPartition, repairedCounter);
+                }
+
+                if (postLimitPartitions != null)
+                {
+                    while (postLimitPartitions.hasNext() && !repairedCounter.isDone())
+                    {
+                        UnfilteredRowIterator p = postLimitPartitions.next();
+                        consumePartition(p, repairedCounter);
+                    }
+                }
+
+                // we're not actually providing any more rows, just consuming the repaired data
+                return null;
+            }
+
+            private void consumePartition(UnfilteredRowIterator partition, DataLimits.Counter counter)
+            {
+                if (partition == null)
+                    return;
+
+                while (partition.hasNext() && !counter.isDone())
+                    partition.next();
+
+                partition.close();
+            }
+        }
+        return Transformation.apply(partitions, new OverreadRepairedData());
     }
 
     /**

@@ -171,9 +171,9 @@ public class RepairDigestTrackingTest extends DistributedTestBase implements Ser
             // insert data on both nodes and flush
             for (int i=0; i<20; i++)
             {
-                cluster.coordinator(1).execute("INSERT INTO " + KEYSPACE + ".tbl3 (k, c, v1) VALUES (0, ?, ?)",
+                cluster.coordinator(1).execute("INSERT INTO " + KEYSPACE + ".tbl3 (k, c, v1) VALUES (0, ?, ?) USING TIMESTAMP 0",
                                                ConsistencyLevel.ALL, i, i);
-                cluster.coordinator(1).execute("INSERT INTO " + KEYSPACE + ".tbl3 (k, c, v1) VALUES (1, ?, ?)",
+                cluster.coordinator(1).execute("INSERT INTO " + KEYSPACE + ".tbl3 (k, c, v1) VALUES (1, ?, ?) USING TIMESTAMP 1",
                                                ConsistencyLevel.ALL, i, i);
             }
             cluster.forEach(c -> c.flush(KEYSPACE));
@@ -186,13 +186,13 @@ public class RepairDigestTrackingTest extends DistributedTestBase implements Ser
             // Add some unrepaired data to both nodes
             for (int i=20; i<30; i++)
             {
-                cluster.coordinator(1).execute("INSERT INTO " + KEYSPACE + ".tbl3 (k, c, v1) VALUES (1, ?, ?)",
+                cluster.coordinator(1).execute("INSERT INTO " + KEYSPACE + ".tbl3 (k, c, v1) VALUES (1, ?, ?) USING TIMESTAMP 1",
                                                ConsistencyLevel.ALL, i, i);
             }
             // And some more unrepaired data to node2 only. This causes node2 to read less repaired data than node1
             // when satisfying the limits of the read. So node2 needs to overread more repaired data than node1 when
             // calculating the repaired data digest.
-            cluster.get(2).executeInternal("INSERT INTO "  + KEYSPACE + ".tbl3 (k, c, v1) VALUES (1, ?, ?) ", 30, 30);
+            cluster.get(2).executeInternal("INSERT INTO "  + KEYSPACE + ".tbl3 (k, c, v1) VALUES (1, ?, ?) USING TIMESTAMP 1", 30, 30);
 
             // Verify single partition read
             long ccBefore = getConfirmedInconsistencies(cluster.get(1), "tbl3");

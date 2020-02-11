@@ -23,6 +23,7 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.function.LongPredicate;
+import java.util.function.Function;
 
 import javax.annotation.Nullable;
 
@@ -67,6 +68,7 @@ import org.apache.cassandra.utils.FBUtilities;
 import static com.google.common.collect.Iterables.any;
 import static com.google.common.collect.Iterables.filter;
 import static org.apache.cassandra.utils.MonotonicClock.approxTime;
+import static org.apache.cassandra.db.partitions.UnfilteredPartitionIterators.MergeListener.NOOP;
 
 /**
  * General interface for storage-engine read commands (common to both range and
@@ -439,7 +441,13 @@ public abstract class ReadCommand extends AbstractReadQuery
         }
 
         if (isTrackingRepairedStatus())
-            repairedDataInfo = new RepairedDataInfo();
+        {
+            final DataLimits.Counter repairedReadCount = limits().newCounter(nowInSec(),
+                                                                             false,
+                                                                             selectsFullPartition(),
+                                                                             metadata().enforceStrictLiveness()).onlyCount();
+            repairedDataInfo = new RepairedDataInfo(repairedReadCount);
+        }
 
         UnfilteredPartitionIterator iterator = (null == searcher) ? queryStorage(cfs, executionController) : searcher.search(executionController);
         iterator = RTBoundValidator.validate(iterator, Stage.MERGED, false);
@@ -465,6 +473,12 @@ public abstract class ReadCommand extends AbstractReadQuery
             // apply the limits/row counter; this transformation is stopping and would close the iterator as soon
             // as the count is observed; if that happens in the middle of an open RT, its end bound will not be included.
             iterator = limits().filter(iterator, nowInSec(), selectsFullPartition());
+
+            // if tracking repaired data, ensure that a consistent amount of repaired data is read on each replica. This
+            // causes silent overreading from the repaired data set, up to limits(). The extra data is not visible to
+            // the caller, only iterated to produce the repaired data digest.
+            if (isTrackingRepairedStatus())
+                iterator = repairedDataInfo.extend(iterator);
 
             // because of the above, we need to append an aritifical end bound if the source iterator was stopped short by a counter.
             return RTBoundCloser.close(iterator);
@@ -715,21 +729,34 @@ public abstract class ReadCommand extends AbstractReadQuery
     @SuppressWarnings("resource") // resultant iterators are closed by their callers
     InputCollector<UnfilteredRowIterator> iteratorsForPartition(ColumnFamilyStore.ViewFragment view)
     {
-        BiFunction<List<UnfilteredRowIterator>, RepairedDataInfo, UnfilteredRowIterator> merge =
-            (unfilteredRowIterators, repairedDataInfo) ->
-                repairedDataInfo.withRepairedDataInfo(UnfilteredRowIterators.merge(unfilteredRowIterators));
+        final BiFunction<List<UnfilteredRowIterator>, RepairedDataInfo, UnfilteredRowIterator> merge =
+            (unfilteredRowIterators, repairedDataInfo) -> {
+                UnfilteredRowIterator repaired = UnfilteredRowIterators.merge(unfilteredRowIterators);
+                return repairedDataInfo.withRepairedDataInfo(repaired);
+            };
 
-        return new InputCollector<>(view, repairedDataInfo, merge, isTrackingRepairedStatus());
+        // For single partition reads, after reading up to the command's DataLimit nothing extra is required.
+        // The merged & repaired row iterator will be consumed until it's exhausted or the RepairedDataInfo's
+        // internal counter is satisfied
+        final Function<UnfilteredRowIterator, UnfilteredPartitionIterator> postLimitPartitions =
+            (rows) -> EmptyIterators.unfilteredPartition(metadata());
+        return new InputCollector<>(view, repairedDataInfo, merge, postLimitPartitions, isTrackingRepairedStatus());
     }
 
     @SuppressWarnings("resource") // resultant iterators are closed by their callers
     InputCollector<UnfilteredPartitionIterator> iteratorsForRange(ColumnFamilyStore.ViewFragment view)
     {
-        BiFunction<List<UnfilteredPartitionIterator>, RepairedDataInfo, UnfilteredPartitionIterator> merge =
-            (unfilteredPartitionIterators, repairedDataInfo) ->
-                repairedDataInfo.withRepairedDataInfo(UnfilteredPartitionIterators.merge(unfilteredPartitionIterators, UnfilteredPartitionIterators.MergeListener.NOOP));
+        final BiFunction<List<UnfilteredPartitionIterator>, RepairedDataInfo, UnfilteredPartitionIterator> merge =
+            (unfilteredPartitionIterators, repairedDataInfo) -> {
+                UnfilteredPartitionIterator repaired = UnfilteredPartitionIterators.merge(unfilteredPartitionIterators,
+                                                                                          NOOP);
+                return repairedDataInfo.withRepairedDataInfo(repaired);
+            };
 
-        return new InputCollector<>(view, repairedDataInfo, merge, isTrackingRepairedStatus());
+        // Uses identity function to provide additional partitions to be consumed after the command's
+        // DataLimits are satisfied. The input to the function will be the iterator of merged, repaired partitions
+        // which we'll keep reading until the RepairedDataInfo's internal counter is satisfied.
+        return new InputCollector<>(view, repairedDataInfo, merge, Function.identity(), isTrackingRepairedStatus());
     }
 
     /**
@@ -747,12 +774,14 @@ public abstract class ReadCommand extends AbstractReadQuery
         private final boolean isTrackingRepairedStatus;
         Set<SSTableReader> repairedSSTables;
         BiFunction<List<T>, RepairedDataInfo, T> repairedMerger;
+        Function<T, UnfilteredPartitionIterator> postLimitAdditionalPartitions;
         List<T> repairedIters;
         List<T> unrepairedIters;
 
         InputCollector(ColumnFamilyStore.ViewFragment view,
                        RepairedDataInfo repairedDataInfo,
                        BiFunction<List<T>, RepairedDataInfo, T> repairedMerger,
+                       Function<T, UnfilteredPartitionIterator> postLimitAdditionalPartitions,
                        boolean isTrackingRepairedStatus)
         {
             this.repairedDataInfo = repairedDataInfo;
@@ -782,6 +811,7 @@ public abstract class ReadCommand extends AbstractReadQuery
                 unrepairedIters = new ArrayList<>((view.sstables.size() - repairedSSTables.size()) + Iterables.size(view.memtables) + 1);
             }
             this.repairedMerger = repairedMerger;
+            this.postLimitAdditionalPartitions = postLimitAdditionalPartitions;
         }
 
         void addMemtableIterator(T iter)
@@ -804,7 +834,9 @@ public abstract class ReadCommand extends AbstractReadQuery
 
             // merge the repaired data before returning, wrapping in a digest generator
             repairedDataInfo.prepare(cfs, nowInSec, oldestUnrepairedTombstone);
-            unrepairedIters.add(repairedMerger.apply(repairedIters, repairedDataInfo));
+            T repairedIter = repairedMerger.apply(repairedIters, repairedDataInfo);
+            repairedDataInfo.finalize(postLimitAdditionalPartitions.apply(repairedIter));
+            unrepairedIters.add(repairedIter);
             return unrepairedIters;
         }
 
