@@ -62,13 +62,11 @@ import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.ActiveRepairService;
 import org.apache.cassandra.service.ClientWarn;
 import org.apache.cassandra.tracing.Tracing;
-import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.FBUtilities;
 
 import static com.google.common.collect.Iterables.any;
 import static com.google.common.collect.Iterables.filter;
 import static org.apache.cassandra.utils.MonotonicClock.approxTime;
-import static org.apache.cassandra.db.RepairedDataInfo.withRepairedDataInfo;
 
 /**
  * General interface for storage-engine read commands (common to both range and
@@ -719,7 +717,7 @@ public abstract class ReadCommand extends AbstractReadQuery
     {
         BiFunction<List<UnfilteredRowIterator>, RepairedDataInfo, UnfilteredRowIterator> merge =
             (unfilteredRowIterators, repairedDataInfo) ->
-                withRepairedDataInfo(UnfilteredRowIterators.merge(unfilteredRowIterators), repairedDataInfo);
+                repairedDataInfo.withRepairedDataInfo(UnfilteredRowIterators.merge(unfilteredRowIterators));
 
         return new InputCollector<>(view, repairedDataInfo, merge, isTrackingRepairedStatus());
     }
@@ -729,7 +727,7 @@ public abstract class ReadCommand extends AbstractReadQuery
     {
         BiFunction<List<UnfilteredPartitionIterator>, RepairedDataInfo, UnfilteredPartitionIterator> merge =
             (unfilteredPartitionIterators, repairedDataInfo) ->
-                withRepairedDataInfo(UnfilteredPartitionIterators.merge(unfilteredPartitionIterators, UnfilteredPartitionIterators.MergeListener.NOOP), repairedDataInfo);
+                repairedDataInfo.withRepairedDataInfo(UnfilteredPartitionIterators.merge(unfilteredPartitionIterators, UnfilteredPartitionIterators.MergeListener.NOOP));
 
         return new InputCollector<>(view, repairedDataInfo, merge, isTrackingRepairedStatus());
     }

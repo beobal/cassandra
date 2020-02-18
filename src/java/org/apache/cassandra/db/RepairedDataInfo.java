@@ -33,10 +33,6 @@ class RepairedDataInfo
 {
     public static final RepairedDataInfo NULL_REPAIRED_DATA_INFO = new RepairedDataInfo()
     {
-        void trackPartitionKey(DecoratedKey key){}
-        void trackDeletion(DeletionTime deletion){}
-        void trackRangeTombstoneMarker(RangeTombstoneMarker marker){}
-        void trackRow(Row row){}
         boolean isConclusive(){ return true; }
         ByteBuffer getDigest(){ return ByteBufferUtil.EMPTY_BYTE_BUFFER; }
     };
@@ -73,7 +69,7 @@ class RepairedDataInfo
         assert purger != null;
         purger.setCurrentKey(partition.partitionKey());
         purger.setIsReverseOrder(partition.isReverseOrder());
-        trackPartitionKey(partition.partitionKey());
+        getPerPartitionDigest().update(partition.partitionKey().getKey());
     }
 
     protected void prepare(ColumnFamilyStore cfs, int nowInSec, int oldestUnrepairedTombstone)
@@ -91,54 +87,6 @@ class RepairedDataInfo
         isConclusive = false;
     }
 
-    void trackPartitionKey(DecoratedKey key)
-    {
-        getPerPartitionDigest().update(key.getKey());
-    }
-
-    void trackDeletion(DeletionTime deletion)
-    {
-        assert purger != null;
-        DeletionTime purged = purger.applyToDeletion(deletion);
-        if (!purged.isLive())
-            isFullyPurged = false;
-
-        purged.digest(getPerPartitionDigest());
-    }
-
-    void trackRangeTombstoneMarker(RangeTombstoneMarker marker)
-    {
-        assert purger != null;
-        RangeTombstoneMarker purged = purger.applyToMarker(marker);
-        if (purged != null)
-        {
-            isFullyPurged = false;
-            purged.digest(getPerPartitionDigest());
-        }
-    }
-
-    void trackStaticRow(Row row)
-    {
-        assert purger != null;
-        Row purged = purger.applyToRow(row);
-        if (!purged.isEmpty())
-        {
-            isFullyPurged = false;
-            purged.digest(getPerPartitionDigest());
-        }
-    }
-
-    void trackRow(Row row)
-    {
-        assert purger != null;
-        Row purged = purger.applyToRow(row);
-        if (purged != null)
-        {
-            isFullyPurged = false;
-            purged.digest(getPerPartitionDigest());
-        }
-    }
-
     private Digest getPerPartitionDigest()
     {
         if (perPartitionDigest == null)
@@ -147,82 +95,96 @@ class RepairedDataInfo
         return perPartitionDigest;
     }
 
-    private void onPartitionClose()
-    {
-        if (perPartitionDigest != null)
-        {
-            // If the partition wasn't completely emptied by the purger,
-            // calculate the digest for the partition and use it to
-            // update the overall digest
-            if (!isFullyPurged)
-            {
-                if (perCommandDigest == null)
-                    perCommandDigest = Digest.forRepairedDataTracking();
-
-                byte[] partitionDigest = perPartitionDigest.digest();
-                perCommandDigest.update(partitionDigest, 0, partitionDigest.length);
-                isFullyPurged = true;
-            }
-
-            perPartitionDigest = null;
-        }
-    }
-
-    public static UnfilteredPartitionIterator withRepairedDataInfo(final UnfilteredPartitionIterator iterator,
-                                                                   final RepairedDataInfo repairedDataInfo)
+    public UnfilteredPartitionIterator withRepairedDataInfo(final UnfilteredPartitionIterator iterator)
     {
         class WithRepairedDataTracking extends Transformation<UnfilteredRowIterator>
         {
             protected UnfilteredRowIterator applyToPartition(UnfilteredRowIterator partition)
             {
-                return withRepairedDataInfo(partition, repairedDataInfo);
+                return withRepairedDataInfo(partition);
             }
         }
 
         return Transformation.apply(iterator, new WithRepairedDataTracking());
     }
 
-    public static UnfilteredRowIterator withRepairedDataInfo(final UnfilteredRowIterator iterator,
-                                                             final RepairedDataInfo repairedDataInfo)
+    public UnfilteredRowIterator withRepairedDataInfo(final UnfilteredRowIterator iterator)
     {
         class WithTracking extends Transformation
         {
             protected DecoratedKey applyToPartitionKey(DecoratedKey key)
             {
-                repairedDataInfo.trackPartitionKey(key);
+                getPerPartitionDigest().update(key.getKey());
                 return key;
             }
 
             protected DeletionTime applyToDeletion(DeletionTime deletionTime)
             {
-                repairedDataInfo.trackDeletion(deletionTime);
+
                 return deletionTime;
             }
 
             protected RangeTombstoneMarker applyToMarker(RangeTombstoneMarker marker)
             {
-                repairedDataInfo.trackRangeTombstoneMarker(marker);
+
+                assert purger != null;
+                RangeTombstoneMarker purged = purger.applyToMarker(marker);
+                if (purged != null)
+                {
+                    isFullyPurged = false;
+                    purged.digest(getPerPartitionDigest());
+                }
                 return marker;
             }
 
             protected Row applyToStatic(Row row)
             {
-                repairedDataInfo.trackStaticRow(row);
+
+                assert purger != null;
+                Row purged = purger.applyToRow(row);
+                if (!purged.isEmpty())
+                {
+                    isFullyPurged = false;
+                    purged.digest(getPerPartitionDigest());
+                }
                 return row;
             }
 
             protected Row applyToRow(Row row)
             {
-                repairedDataInfo.trackRow(row);
+
+                assert purger != null;
+                Row purged = purger.applyToRow(row);
+                if (purged != null)
+                {
+                    isFullyPurged = false;
+                    purged.digest(getPerPartitionDigest());
+                }
                 return row;
             }
 
             protected void onPartitionClose()
             {
-                repairedDataInfo.onPartitionClose();
+                if (perPartitionDigest != null)
+                {
+                    // If the partition wasn't completely emptied by the purger,
+                    // calculate the digest for the partition and use it to
+                    // update the overall digest
+                    if (!isFullyPurged)
+                    {
+                        if (perCommandDigest == null)
+                            perCommandDigest = Digest.forRepairedDataTracking();
+
+                        byte[] partitionDigest = perPartitionDigest.digest();
+                        perCommandDigest.update(partitionDigest, 0, partitionDigest.length);
+                    }
+
+                    perPartitionDigest = null;
+                }
+                isFullyPurged = true;
             }
         }
-        repairedDataInfo.onNewPartition(iterator);
+        onNewPartition(iterator);
         return Transformation.apply(iterator, new WithTracking());
     }
 
