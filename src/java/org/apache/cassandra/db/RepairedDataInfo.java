@@ -20,6 +20,7 @@ package org.apache.cassandra.db;
 
 import java.nio.ByteBuffer;
 import java.util.function.LongPredicate;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.cassandra.db.filter.DataLimits;
 import org.apache.cassandra.db.partitions.PurgeFunction;
@@ -29,6 +30,7 @@ import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.db.rows.UnfilteredRowIterator;
 import org.apache.cassandra.db.transform.MoreRows;
 import org.apache.cassandra.db.transform.Transformation;
+import org.apache.cassandra.metrics.TableMetrics;
 import org.apache.cassandra.utils.ByteBufferUtil;
 
 class RepairedDataInfo
@@ -62,6 +64,7 @@ class RepairedDataInfo
     private UnfilteredPartitionIterator postLimitPartitions = null;
     private final DataLimits.Counter repairedCounter;
     private UnfilteredRowIterator currentPartition;
+    private TableMetrics metrics;
 
     public RepairedDataInfo(DataLimits.Counter repairedCounter)
     {
@@ -83,6 +86,7 @@ class RepairedDataInfo
     void prepare(ColumnFamilyStore cfs, int nowInSec, int oldestUnrepairedTombstone)
     {
         this.purger = new RepairedDataPurger(cfs, nowInSec, oldestUnrepairedTombstone);
+        this.metrics = cfs.metric;
     }
 
     void finalize(UnfilteredPartitionIterator postLimitPartitions)
@@ -214,6 +218,8 @@ class RepairedDataInfo
     {
         class OverreadRepairedData extends Transformation<UnfilteredRowIterator> implements MoreRows<UnfilteredRowIterator>
         {
+            private final long countBeforeOverreads = repairedCounter.counted();
+
             protected UnfilteredRowIterator applyToPartition(UnfilteredRowIterator partition)
             {
                 return MoreRows.extend(partition, this, partition.columns());
@@ -221,21 +227,17 @@ class RepairedDataInfo
 
             public UnfilteredRowIterator moreContents()
             {
+                long overreadStartTime = System.nanoTime();
                 if (currentPartition != null)
-                {
                     consumePartition(currentPartition, repairedCounter);
-                }
 
                 if (postLimitPartitions != null)
-                {
                     while (postLimitPartitions.hasNext() && !repairedCounter.isDone())
-                    {
-                        UnfilteredRowIterator p = postLimitPartitions.next();
-                        consumePartition(p, repairedCounter);
-                    }
-                }
+                        consumePartition(postLimitPartitions.next(), repairedCounter);
 
                 // we're not actually providing any more rows, just consuming the repaired data
+                metrics.repairedDataTrackingOverreadRows.update(repairedCounter.counted() - countBeforeOverreads);
+                metrics.repairedDataTrackingOverreadTime.update(System.nanoTime() - overreadStartTime, TimeUnit.NANOSECONDS);
                 return null;
             }
 
@@ -250,6 +252,10 @@ class RepairedDataInfo
                 partition.close();
             }
         }
+        // If the read didn't touch any sstables prepare() hasn't been called and
+        // we can skip this transformation
+        if (metrics == null)
+            return partitions;
         return Transformation.apply(partitions, new OverreadRepairedData());
     }
 

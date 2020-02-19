@@ -23,11 +23,11 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.stream.IntStream;
 
+import org.junit.BeforeClass;
 import org.junit.Test;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
+import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.db.commitlog.CommitLog;
 import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.schema.MockSchema;
 import org.apache.cassandra.db.filter.DataLimits;
@@ -58,21 +58,25 @@ import static org.junit.Assert.assertEquals;
 
 public class RepairedDataInfoTest
 {
-    static final ColumnFamilyStore cfs;
-    static final TableMetadata metadata;
-    static final ColumnMetadata valueMetadata;
-    static final ColumnMetadata staticMetadata;
+    private static ColumnFamilyStore cfs;
+    private static TableMetadata metadata;
+    private static ColumnMetadata valueMetadata;
+    private static ColumnMetadata staticMetadata;
 
-    static
+    private final int nowInSec = FBUtilities.nowInSeconds();
+
+    @BeforeClass
+    public static void setUp()
     {
+        DatabaseDescriptor.daemonInitialization();
+        CommitLog.instance.start();
+        MockSchema.cleanup();
         String ks = "repaired_data_info_test";
         cfs = MockSchema.newCFS(ks, metadata -> metadata.addStaticColumn("s", UTF8Type.instance));
         metadata = cfs.metadata();
         valueMetadata = metadata.regularColumns().getSimple(0);
         staticMetadata = metadata.staticColumns().getSimple(0);
     }
-
-    private final int nowInSec = FBUtilities.nowInSeconds();
 
     @Test
     public void withTrackingAppliesRepairedDataCounter()
@@ -180,14 +184,12 @@ public class RepairedDataInfoTest
         Digest perPartitionDigest = Digest.forRepairedDataTracking();
         if (!staticRow.isEmpty())
             staticRow.digest(perPartitionDigest);
-        deletion.digest(perPartitionDigest);
         perPartitionDigest.update(partitionKey);
+        deletion.digest(perPartitionDigest);
         for (Unfiltered unfiltered : unfiltereds)
             unfiltered.digest(perPartitionDigest);
         byte[] rowDigestBytes = perPartitionDigest.digest();
-        System.out.println("INNER: " + Hex.bytesToHex(rowDigestBytes));
         aggregate.update(rowDigestBytes, 0, rowDigestBytes.length);
-        System.out.println(String.format("INNER: %d, OUTER: %d", perPartitionDigest.inputBytes(), aggregate.inputBytes()));
         return aggregate;
     }
 
