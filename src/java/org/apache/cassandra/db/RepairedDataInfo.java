@@ -214,7 +214,8 @@ class RepairedDataInfo
         return tracked;
     }
 
-    public UnfilteredPartitionIterator extend(UnfilteredPartitionIterator partitions)
+    public UnfilteredPartitionIterator extend(final UnfilteredPartitionIterator partitions,
+                                              final DataLimits.Counter limit)
     {
         class OverreadRepairedData extends Transformation<UnfilteredRowIterator> implements MoreRows<UnfilteredRowIterator>
         {
@@ -227,6 +228,11 @@ class RepairedDataInfo
 
             public UnfilteredRowIterator moreContents()
             {
+                // We don't need to do anything until the DataLimits of the
+                // of the read have been reached
+                if (!limit.isDone())
+                    return null;
+
                 long overreadStartTime = System.nanoTime();
                 if (currentPartition != null)
                     consumePartition(currentPartition, repairedCounter);
@@ -248,8 +254,6 @@ class RepairedDataInfo
 
                 while (partition.hasNext() && !counter.isDone())
                     partition.next();
-
-                partition.close();
             }
         }
         // If the read didn't touch any sstables prepare() hasn't been called and
