@@ -881,13 +881,11 @@ public class ReadCommandTest
         readAndCheckRowCount(Util.getAll(cmd), limit);
         assertEquals(0, getAndResetOverreadCount(cfs));
 
-        // Overread up to limit if tracking is enabled
+        // Overread up to (limit - 1) if tracking is enabled
         cmd = cmd.copy();
         cmd.trackRepairedStatus();
         readAndCheckRowCount(Util.getAll(cmd), limit);
-        // in this case, there's no merging between repaired & unrepaired data, so expect overread count
-        // to equal limit
-        assertEquals(limit, getAndResetOverreadCount(cfs));
+        assertEquals(limit - 1, getAndResetOverreadCount(cfs));
 
         // if limit already requires reading all repaired data, no overreads should be recorded
         limit = 100;

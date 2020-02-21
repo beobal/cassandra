@@ -144,6 +144,9 @@ class RepairedDataInfo
 
             protected DeletionTime applyToDeletion(DeletionTime deletionTime)
             {
+                if (repairedCounter.isDone())
+                    return deletionTime;
+
                 assert purger != null;
                 DeletionTime purged = purger.applyToDeletion(deletionTime);
                 if (!purged.isLive())
@@ -154,6 +157,9 @@ class RepairedDataInfo
 
             protected RangeTombstoneMarker applyToMarker(RangeTombstoneMarker marker)
             {
+                if (repairedCounter.isDone())
+                    return marker;
+
                 assert purger != null;
                 RangeTombstoneMarker purged = purger.applyToMarker(marker);
                 if (purged != null)
@@ -166,6 +172,9 @@ class RepairedDataInfo
 
             protected Row applyToStatic(Row row)
             {
+                if (repairedCounter.isDone())
+                    return row;
+
                 assert purger != null;
                 Row purged = purger.applyToRow(row);
                 if (!purged.isEmpty())
@@ -178,6 +187,9 @@ class RepairedDataInfo
 
             protected Row applyToRow(Row row)
             {
+                if (repairedCounter.isDone())
+                    return row;
+
                 assert purger != null;
                 Row purged = purger.applyToRow(row);
                 if (purged != null)
@@ -209,6 +221,10 @@ class RepairedDataInfo
                 isFullyPurged = true;
             }
         }
+
+        if (repairedCounter.isDone())
+            return iterator;
+
         UnfilteredRowIterator tracked = repairedCounter.applyTo(Transformation.apply(iterator, new WithTracking()));
         onNewPartition(tracked);
         return tracked;
@@ -219,7 +235,6 @@ class RepairedDataInfo
     {
         class OverreadRepairedData extends Transformation<UnfilteredRowIterator> implements MoreRows<UnfilteredRowIterator>
         {
-            private final long countBeforeOverreads = repairedCounter.counted();
 
             protected UnfilteredRowIterator applyToPartition(UnfilteredRowIterator partition)
             {
@@ -230,9 +245,10 @@ class RepairedDataInfo
             {
                 // We don't need to do anything until the DataLimits of the
                 // of the read have been reached
-                if (!limit.isDone())
+                if (!limit.isDone() || repairedCounter.isDone())
                     return null;
 
+                long countBeforeOverreads = repairedCounter.counted();
                 long overreadStartTime = System.nanoTime();
                 if (currentPartition != null)
                     consumePartition(currentPartition, repairedCounter);
@@ -242,6 +258,8 @@ class RepairedDataInfo
                         consumePartition(postLimitPartitions.next(), repairedCounter);
 
                 // we're not actually providing any more rows, just consuming the repaired data
+                long rows = repairedCounter.counted() - countBeforeOverreads;
+                long nanos = System.nanoTime() - overreadStartTime;
                 metrics.repairedDataTrackingOverreadRows.update(repairedCounter.counted() - countBeforeOverreads);
                 metrics.repairedDataTrackingOverreadTime.update(System.nanoTime() - overreadStartTime, TimeUnit.NANOSECONDS);
                 return null;
@@ -252,13 +270,15 @@ class RepairedDataInfo
                 if (partition == null)
                     return;
 
-                while (partition.hasNext() && !counter.isDone())
+                while (!counter.isDone() && partition.hasNext())
                     partition.next();
+
+                partition.close();
             }
         }
         // If the read didn't touch any sstables prepare() hasn't been called and
         // we can skip this transformation
-        if (metrics == null)
+        if (metrics == null || repairedCounter.isDone())
             return partitions;
         return Transformation.apply(partitions, new OverreadRepairedData());
     }
