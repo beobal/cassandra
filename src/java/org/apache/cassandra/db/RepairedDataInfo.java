@@ -31,6 +31,7 @@ import org.apache.cassandra.db.rows.UnfilteredRowIterator;
 import org.apache.cassandra.db.transform.MoreRows;
 import org.apache.cassandra.db.transform.Transformation;
 import org.apache.cassandra.metrics.TableMetrics;
+import org.apache.cassandra.tracing.Tracing;
 import org.apache.cassandra.utils.ByteBufferUtil;
 
 class RepairedDataInfo
@@ -260,8 +261,9 @@ class RepairedDataInfo
                 // we're not actually providing any more rows, just consuming the repaired data
                 long rows = repairedCounter.counted() - countBeforeOverreads;
                 long nanos = System.nanoTime() - overreadStartTime;
-                metrics.repairedDataTrackingOverreadRows.update(repairedCounter.counted() - countBeforeOverreads);
-                metrics.repairedDataTrackingOverreadTime.update(System.nanoTime() - overreadStartTime, TimeUnit.NANOSECONDS);
+                metrics.repairedDataTrackingOverreadRows.update(rows);
+                metrics.repairedDataTrackingOverreadTime.update(nanos, TimeUnit.NANOSECONDS);
+                Tracing.trace("Read {} additional rows of repaired data for tracking in {}ps", rows, TimeUnit.NANOSECONDS.toMicros(nanos));
                 return null;
             }
 
