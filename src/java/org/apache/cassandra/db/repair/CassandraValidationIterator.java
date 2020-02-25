@@ -174,7 +174,7 @@ public class CassandraValidationIterator extends ValidationPartitionIterator
             sstables = Refs.tryRef(sstablesToValidate);
             if (sstables == null)
             {
-                logger.error("Could not reference sstables");
+                logger.error("Could not reference sstables for {}", parentId);
                 throw new RuntimeException("Could not reference sstables");
             }
         }
@@ -226,6 +226,17 @@ public class CassandraValidationIterator extends ValidationPartitionIterator
         }
 
         Preconditions.checkArgument(sstables != null);
+        ActiveRepairService.ParentRepairSession prs = ActiveRepairService.instance.getParentRepairSession(parentId);
+        if (prs != null)
+        {
+            logger.info("{}, parentSessionId={}: Performing validation compaction on {} sstables in {}.{}",
+                        prs.previewKind.logPrefix(sessionID),
+                        parentId,
+                        sstables.size(),
+                        cfs.keyspace.getName(),
+                        cfs.getTableName());
+        }
+
         controller = new ValidationCompactionController(cfs, getDefaultGcBefore(cfs, nowInSec));
         scanners = cfs.getCompactionStrategyManager().getScanners(sstables, ranges);
         ci = new ValidationCompactionIterator(scanners.scanners, controller, nowInSec, CompactionManager.instance.active);

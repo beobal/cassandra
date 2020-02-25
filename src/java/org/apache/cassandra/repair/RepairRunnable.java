@@ -168,7 +168,7 @@ public class RepairRunnable extends WrappedRunnable implements ProgressEventNoti
 
         if (Iterables.isEmpty(validColumnFamilies))
         {
-            String message = String.format("Empty keyspace, skipping repair: %s", keyspace);
+            String message = String.format("%s Empty keyspace, skipping repair: %s", parentSession, keyspace);
             logger.info(message);
             fireProgressEvent(new ProgressEvent(ProgressEventType.COMPLETE, 0, 0, message));
             return;
@@ -627,7 +627,7 @@ public class RepairRunnable extends WrappedRunnable implements ProgressEventNoti
             String duration = DurationFormatUtils.formatDurationWords(durationMillis,true, true);
             String message = String.format("Repair command #%d finished in %s", cmd, duration);
             fireProgressEvent(new ProgressEvent(ProgressEventType.COMPLETE, progress.get(), totalProgress, message));
-            logger.info(message);
+            logger.info(options.getPreviewKind().logPrefix(parentSession) + message);
             if (options.isTraced() && traceState != null)
             {
                 for (ProgressListener listener : listeners)
