@@ -115,4 +115,8 @@ public interface StorageProxyMBean
     void enableReportingUnconfirmedRepairedDataMismatches();
     void disableReportingUnconfirmedRepairedDataMismatches();
     boolean getReportingUnconfirmedRepairedDataMismatchesEnabled();
+
+    void enableSnapshotOnRepairedDataMismatch();
+    void disableSnapshotOnRepairedDataMismatch();
+    boolean getSnapshotOnRepairedDataMismatchEnabled();
 }
