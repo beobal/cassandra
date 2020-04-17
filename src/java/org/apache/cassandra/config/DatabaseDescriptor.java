@@ -2164,4 +2164,14 @@ public class DatabaseDescriptor
     {
         return strictRuntimeChecks;
     }
+
+    public static boolean snapshotOnDuplicateRowDetection()
+    {
+        return conf.snapshot_on_duplicate_row_detection;
+    }
+
+    public static void setSnapshotOnDuplicateRowDetection(boolean enabled)
+    {
+        conf.snapshot_on_duplicate_row_detection = enabled;
+    }
 }

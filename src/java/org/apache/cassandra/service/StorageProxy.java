@@ -2685,4 +2685,22 @@ public class StorageProxy implements StorageProxyMBean
     public void setOtcBacklogExpirationInterval(int intervalInMillis) {
         DatabaseDescriptor.setOtcBacklogExpirationInterval(intervalInMillis);
     }
+
+    @Override
+    public boolean getSnapshotOnDuplicateRowDetectionEnabled()
+    {
+        return DatabaseDescriptor.snapshotOnDuplicateRowDetection();
+    }
+
+    @Override
+    public void enableSnapshotOnDuplicateRowDetection()
+    {
+        DatabaseDescriptor.setSnapshotOnDuplicateRowDetection(true);
+    }
+
+    @Override
+    public void disableSnapshotOnDuplicateRowDetection()
+    {
+        DatabaseDescriptor.setSnapshotOnDuplicateRowDetection(false);
+    }
 }

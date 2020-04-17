@@ -361,6 +361,15 @@ public class Config
         outboundBindAny = value;
     }
 
+    /**
+     * If true, when rows with duplicate clustering keys are detected during a read or compaction
+     * a snapshot will be taken. In the read case, each a snapshot request will be issued to each
+     * replica involved in the query, for compaction the snapshot will be created locally.
+     * These are limited at the replica level so that only a single snapshot per-day can be taken
+     * via this method.
+     */
+    public volatile boolean snapshot_on_duplicate_row_detection = true;
+
     public static boolean isClientMode()
     {
         return isClientMode;
