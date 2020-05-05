@@ -817,8 +817,8 @@ column_index_cache_size_in_kb: 2
 # to the number of cores.
 #concurrent_compactors: 1
 
-# Number of simultaneous repair validations to allow. Default is unbounded
-# Values less than one are interpreted as unbounded (the default)
+# Number of simultaneous repair validations to allow. If not set or set to
+# a value less than 1, it defaults to the value of concurrent_compactors.
 # concurrent_validations: 0
 
 # Number of simultaneous materialized view builder tasks to allow.

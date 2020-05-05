@@ -33,6 +33,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.*;
 import com.google.common.util.concurrent.*;
 
+import org.apache.cassandra.config.Config;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.locator.RangesAtEndpoint;
 import org.slf4j.Logger;
@@ -124,7 +125,7 @@ public class CompactionManager implements CompactionManagerMBean
     }
 
     private final CompactionExecutor executor = new CompactionExecutor();
-    private final CompactionExecutor validationExecutor = new ValidationExecutor();
+    private final ValidationExecutor validationExecutor = new ValidationExecutor();
     private final CompactionExecutor cacheCleanupExecutor = new CacheCleanupExecutor();
     private final CompactionExecutor viewBuildExecutor = new ViewBuildExecutor();
 
@@ -1899,7 +1900,30 @@ public class CompactionManager implements CompactionManagerMBean
     {
         public ValidationExecutor()
         {
-            super(1, DatabaseDescriptor.getConcurrentValidations(), "ValidationExecutor", new SynchronousQueue<Runnable>());
+            super(corePoolSize(),
+                  DatabaseDescriptor.getConcurrentValidations(),
+                  "ValidationExecutor",
+                  workQueue());
+        }
+
+        private static int corePoolSize()
+        {
+            return DatabaseDescriptor.getValidationPoolFullStrategy() == Config.ValidationPoolFullStrategy.queue
+                   ? DatabaseDescriptor.getConcurrentValidations()
+                   : 1;
+        }
+
+        private static BlockingQueue<Runnable> workQueue()
+        {
+            return DatabaseDescriptor.getValidationPoolFullStrategy() == Config.ValidationPoolFullStrategy.queue
+                   ? new LinkedBlockingQueue<>()
+                   : new SynchronousQueue<>();
+        }
+
+        public void adjustPoolSize()
+        {
+            setCoreThreads(corePoolSize());
+            setMaximumThreads(DatabaseDescriptor.getConcurrentValidations());
         }
     }
 
@@ -2021,10 +2045,9 @@ public class CompactionManager implements CompactionManagerMBean
         }
     }
 
-    public void setConcurrentValidations(int value)
+    public void setConcurrentValidations()
     {
-        value = value > 0 ? value : Integer.MAX_VALUE;
-        validationExecutor.setMaximumPoolSize(value);
+        validationExecutor.adjustPoolSize();
     }
 
     public void setConcurrentViewBuilders(int value)

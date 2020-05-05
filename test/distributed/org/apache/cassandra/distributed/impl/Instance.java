@@ -556,7 +556,7 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
                                 () -> Memtable.MEMORY_POOL.shutdownAndWait(1L, MINUTES),
                                 () -> ScheduledExecutors.shutdownAndWait(1L, MINUTES),
                                 () -> SSTableReader.shutdownBlocking(1L, MINUTES),
-                                () -> shutdownAndWait(Collections.singletonList(ActiveRepairService.repairCommandExecutor)),
+                                () -> shutdownAndWait(Collections.singletonList(ActiveRepairService.repairCommandExecutor())),
                                 () -> ScheduledExecutors.shutdownAndWait(1L, MINUTES)
             );
 

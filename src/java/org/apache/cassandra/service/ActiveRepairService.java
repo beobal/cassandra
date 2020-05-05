@@ -126,26 +126,48 @@ public class ActiveRepairService implements IEndpointStateChangeSubscriber, IFai
 
     private final ConcurrentMap<UUID, ParentRepairSession> parentRepairSessions = new ConcurrentHashMap<>();
 
-    public final static ExecutorService repairCommandExecutor;
-    static
+    public static class RepairCommandExecutorHandle
     {
-        Config.RepairCommandPoolFullStrategy strategy = DatabaseDescriptor.getRepairCommandPoolFullStrategy();
-        BlockingQueue<Runnable> queue;
-        if (strategy == Config.RepairCommandPoolFullStrategy.reject)
-            queue = new SynchronousQueue<>();
-        else
-            queue = new LinkedBlockingQueue<>();
+        private static final ThreadPoolExecutor repairCommandExecutor;
 
-        repairCommandExecutor = new JMXEnabledThreadPoolExecutor(1,
-                                                                 DatabaseDescriptor.getRepairCommandPoolSize(),
-                                                                 1, TimeUnit.HOURS,
-                                                                 queue,
-                                                                 new NamedThreadFactory("Repair-Task"),
-                                                                 "internal",
-                                                                 new ThreadPoolExecutor.AbortPolicy());
-        RepairMetrics.init();
+        static
+        {
+            Config.RepairCommandPoolFullStrategy strategy = DatabaseDescriptor.getRepairCommandPoolFullStrategy();
+            int corePoolSize = 1;
+            BlockingQueue<Runnable> queue;
+            if (strategy == Config.RepairCommandPoolFullStrategy.reject)
+            {
+                // new threads will be created on demand up to max pool
+                // size so we can leave corePoolSize at 1 to start with
+                queue = new SynchronousQueue<>();
+            }
+            else
+            {
+                // tasks will be queued if at least corePoolSize threads
+                // are running, so initialize it to the desired size
+                corePoolSize = DatabaseDescriptor.getRepairCommandPoolSize();
+                queue = new LinkedBlockingQueue<>();
+            }
+
+            repairCommandExecutor = new JMXEnabledThreadPoolExecutor(corePoolSize,
+                                                                     DatabaseDescriptor.getRepairCommandPoolSize(),
+                                                                     1,
+                                                                     TimeUnit.HOURS,
+                                                                     queue,
+                                                                     new NamedThreadFactory("Repair-Task"),
+                                                                     "internal",
+                                                                     new ThreadPoolExecutor.AbortPolicy());
+            // allow idle core threads to be terminated
+            repairCommandExecutor.allowCoreThreadTimeOut(true);
+        }
     }
 
+    public static ThreadPoolExecutor repairCommandExecutor()
+    {
+        return RepairCommandExecutorHandle.repairCommandExecutor;
+    }
+
+    //    RepairMetrics.init();
     private final IFailureDetector failureDetector;
     private final Gossiper gossiper;
     private final Cache<Integer, Pair<ParentRepairStatus, List<String>>> repairStatusByCmd;
@@ -461,8 +483,8 @@ public class ActiveRepairService implements IEndpointStateChangeSubscriber, IFai
         }
         try
         {
-            // Failed repair is expensive so we wait for longer time.
-            if (!prepareLatch.await(1, TimeUnit.HOURS)) {
+            if (!prepareLatch.await(DatabaseDescriptor.getRpcTimeout(TimeUnit.MILLISECONDS), TimeUnit.MILLISECONDS))
+            {
                 failRepair(parentRepairSession, "Did not get replies from all endpoints.");
             }
         }

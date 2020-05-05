@@ -216,7 +216,6 @@ public class Config
     public volatile int compaction_large_partition_warning_threshold_mb = 100;
     public int min_free_space_per_drive_in_mb = 50;
 
-    public volatile int concurrent_validations = Integer.MAX_VALUE;
     public volatile int concurrent_materialized_view_builders = 1;
 
     /**
@@ -416,8 +415,10 @@ public class Config
     public volatile boolean back_pressure_enabled = false;
     public volatile ParameterizedClass back_pressure_strategy;
 
+    public ValidationPoolFullStrategy validation_pool_full_strategy = ValidationPoolFullStrategy.queue;
+    public volatile int concurrent_validations;
     public RepairCommandPoolFullStrategy repair_command_pool_full_strategy = RepairCommandPoolFullStrategy.queue;
-    public int repair_command_pool_size = concurrent_validations;
+    public int repair_command_pool_size;
 
     /**
      * When a node first starts up it intially considers all other peers as DOWN and is disconnected from all of them.
@@ -582,6 +583,12 @@ public class Config
     }
 
     public enum RepairCommandPoolFullStrategy
+    {
+        queue,
+        reject
+    }
+
+    public enum ValidationPoolFullStrategy
     {
         queue,
         reject
