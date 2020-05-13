@@ -33,6 +33,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.*;
 import com.google.common.util.concurrent.*;
 
+import org.apache.cassandra.config.Config;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.locator.RangesAtEndpoint;
 import org.slf4j.Logger;
@@ -124,7 +125,7 @@ public class CompactionManager implements CompactionManagerMBean
     }
 
     private final CompactionExecutor executor = new CompactionExecutor();
-    private final CompactionExecutor validationExecutor = new ValidationExecutor();
+    private final ValidationExecutor validationExecutor = new ValidationExecutor(DatabaseDescriptor.getValidationPoolFullStrategy());
     private final CompactionExecutor cacheCleanupExecutor = new CacheCleanupExecutor();
     private final CompactionExecutor viewBuildExecutor = new ViewBuildExecutor();
 
@@ -1897,9 +1898,44 @@ public class CompactionManager implements CompactionManagerMBean
     // TODO: pull out relevant parts of CompactionExecutor and move to ValidationManager
     public static class ValidationExecutor extends CompactionExecutor
     {
-        public ValidationExecutor()
+        // CompactionExecutor, and by extension ValidationExecutor, use DebuggableThreadPoolExecutor's
+        // default RejectedExecutionHandler which blocks the submitting thread when the work queue is
+        // full. The calling thread in this case is AntiEntropyStage, so in most cases we don't actually
+        // want to block when the ValidationExecutor is saturated as this prevents progress on all
+        // repair tasks and may cause repair sessions to time out. Also, it can lead to references to
+        // heavyweight validation responses containing merkle trees being held for extended periods which
+        // increases GC pressure. Choosing the appropriate ValidationPoolFullStrategy allows us to decide
+        // whether to queue tasks and unblock the caller or keep the blocking behaviour when the
+        // ValidationExecutor is fully loaded.
+
+        private final Config.ValidationPoolFullStrategy strategy;
+        public ValidationExecutor(Config.ValidationPoolFullStrategy strategy)
         {
-            super(1, DatabaseDescriptor.getConcurrentValidations(), "ValidationExecutor", new SynchronousQueue<Runnable>());
+            super(corePoolSize(strategy),
+                  DatabaseDescriptor.getConcurrentValidations(),
+                  "ValidationExecutor",
+                  workQueue(strategy));
+            this.strategy = strategy;
+        }
+
+        private static int corePoolSize(Config.ValidationPoolFullStrategy strategy)
+        {
+            return strategy == Config.ValidationPoolFullStrategy.queue
+                   ? DatabaseDescriptor.getConcurrentValidations()
+                   : 1;
+        }
+
+        private static BlockingQueue<Runnable> workQueue(Config.ValidationPoolFullStrategy strategy)
+        {
+            return strategy == Config.ValidationPoolFullStrategy.queue
+                   ? new LinkedBlockingQueue<>()
+                   : new SynchronousQueue<>();
+        }
+
+        public void adjustPoolSize()
+        {
+            setMaximumPoolSize(DatabaseDescriptor.getConcurrentValidations());
+            setCorePoolSize(corePoolSize(strategy));
         }
     }
 
@@ -2021,10 +2057,9 @@ public class CompactionManager implements CompactionManagerMBean
         }
     }
 
-    public void setConcurrentValidations(int value)
+    public void setConcurrentValidations()
     {
-        value = value > 0 ? value : Integer.MAX_VALUE;
-        validationExecutor.setMaximumPoolSize(value);
+        validationExecutor.adjustPoolSize();
     }
 
     public void setConcurrentViewBuilders(int value)

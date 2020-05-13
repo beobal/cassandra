@@ -152,6 +152,8 @@ public class DatabaseDescriptor
     // turns some warnings into exceptions for testing
     private static final boolean strictRuntimeChecks = Boolean.getBoolean("cassandra.strict.runtime.checks");
 
+    public static volatile boolean allowUnlimitedConcurrentValidations = Boolean.getBoolean("cassandra.allow_unlimited_concurrent_validations");
+
     private static Function<CommitLog, AbstractCommitLogSegmentManager> commitLogSegmentMgrProvider = c -> DatabaseDescriptor.isCDCEnabled()
                                        ? new CommitLogSegmentManagerCDC(c, DatabaseDescriptor.getCommitLogLocation())
                                        : new CommitLogSegmentManagerStandard(c, DatabaseDescriptor.getCommitLogLocation());
@@ -668,11 +670,13 @@ public class DatabaseDescriptor
         if (conf.concurrent_compactors == null)
             conf.concurrent_compactors = Math.min(8, Math.max(2, Math.min(FBUtilities.getAvailableProcessors(), conf.data_file_directories.length)));
 
-        if (conf.concurrent_validations < 1)
-            conf.concurrent_validations = Integer.MAX_VALUE;
-
         if (conf.concurrent_compactors <= 0)
             throw new ConfigurationException("concurrent_compactors should be strictly greater than 0, but was " + conf.concurrent_compactors, false);
+
+        applyConcurrentValidations(conf);
+
+        if (conf.repair_command_pool_size < 1)
+            conf.repair_command_pool_size = conf.concurrent_validations;
 
         if (conf.concurrent_materialized_view_builders <= 0)
             throw new ConfigurationException("concurrent_materialized_view_builders should be strictly greater than 0, but was " + conf.concurrent_materialized_view_builders, false);
@@ -839,6 +843,20 @@ public class DatabaseDescriptor
         }
 
         validateMaxConcurrentAutoUpgradeTasksConf(conf.max_concurrent_automatic_sstable_upgrades);
+    }
+
+    @VisibleForTesting
+    static void applyConcurrentValidations(Config config)
+    {
+        if (config.concurrent_validations < 1)
+        {
+            config.concurrent_validations = config.concurrent_compactors;
+        }
+        else if (config.concurrent_validations > config.concurrent_compactors && !allowUnlimitedConcurrentValidations)
+        {
+            throw new ConfigurationException("To set concurrent_validations > concurrent_compactors, " +
+                                             "set the system property cassandra.allow_unlimited_concurrent_validations=true");
+        }
     }
 
     private static String storagedirFor(String type)
@@ -2906,6 +2924,11 @@ public class DatabaseDescriptor
     public static Config.RepairCommandPoolFullStrategy getRepairCommandPoolFullStrategy()
     {
         return conf.repair_command_pool_full_strategy;
+    }
+
+    public static Config.ValidationPoolFullStrategy getValidationPoolFullStrategy()
+    {
+        return conf.validation_pool_full_strategy;
     }
 
     public static FullQueryLoggerOptions getFullQueryLogOptions()
