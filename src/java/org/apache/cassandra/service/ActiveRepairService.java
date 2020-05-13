@@ -461,10 +461,8 @@ public class ActiveRepairService implements IEndpointStateChangeSubscriber, IFai
         }
         try
         {
-            // Failed repair is expensive so we wait for longer time.
-            if (!prepareLatch.await(1, TimeUnit.HOURS)) {
+            if (!prepareLatch.await(DatabaseDescriptor.getRpcTimeout(TimeUnit.MILLISECONDS), TimeUnit.MILLISECONDS))
                 failRepair(parentRepairSession, "Did not get replies from all endpoints.");
-            }
         }
         catch (InterruptedException e)
         {
