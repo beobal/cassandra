@@ -486,4 +486,20 @@ public class DatabaseDescriptorTest
         DatabaseDescriptor.applyConcurrentValidations(conf);
         assertThat(conf.concurrent_validations).isEqualTo(conf.concurrent_compactors + 1);
     }
+
+    @Test
+    public void testRepairCommandPoolSize()
+    {
+        Config conf = new Config();
+        conf.concurrent_validations = 3;
+        // if repair_command_pool_size is < 1 (including being unset) it should default to concurrent_validations
+        assertThat(conf.repair_command_pool_size).isLessThan(1);
+        DatabaseDescriptor.applyRepairCommandPoolSize(conf);
+        assertThat(conf.repair_command_pool_size).isEqualTo(conf.concurrent_validations);
+
+        // but it can be overridden
+        conf.repair_command_pool_size = conf.concurrent_validations + 1;
+        DatabaseDescriptor.applyRepairCommandPoolSize(conf);
+        assertThat(conf.repair_command_pool_size).isEqualTo(conf.concurrent_validations + 1);
+    }
 }

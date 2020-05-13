@@ -3766,7 +3766,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             return Pair.create(0, Futures.immediateFuture(null));
 
         int cmd = nextRepairCommand.incrementAndGet();
-        return Pair.create(cmd, ActiveRepairService.repairCommandExecutor.submit(createRepairTask(cmd, keyspace, option, listeners)));
+        return Pair.create(cmd, ActiveRepairService.repairCommandExecutor().submit(createRepairTask(cmd, keyspace, option, listeners)));
     }
 
     /**

@@ -674,9 +674,7 @@ public class DatabaseDescriptor
             throw new ConfigurationException("concurrent_compactors should be strictly greater than 0, but was " + conf.concurrent_compactors, false);
 
         applyConcurrentValidations(conf);
-
-        if (conf.repair_command_pool_size < 1)
-            conf.repair_command_pool_size = conf.concurrent_validations;
+        applyRepairCommandPoolSize(conf);
 
         if (conf.concurrent_materialized_view_builders <= 0)
             throw new ConfigurationException("concurrent_materialized_view_builders should be strictly greater than 0, but was " + conf.concurrent_materialized_view_builders, false);
@@ -857,6 +855,13 @@ public class DatabaseDescriptor
             throw new ConfigurationException("To set concurrent_validations > concurrent_compactors, " +
                                              "set the system property cassandra.allow_unlimited_concurrent_validations=true");
         }
+    }
+
+    @VisibleForTesting
+    static void applyRepairCommandPoolSize(Config config)
+    {
+        if (config.repair_command_pool_size < 1)
+            config.repair_command_pool_size = config.concurrent_validations;
     }
 
     private static String storagedirFor(String type)
