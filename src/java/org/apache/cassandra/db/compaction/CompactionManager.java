@@ -33,7 +33,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.*;
 import com.google.common.util.concurrent.*;
 
-import org.apache.cassandra.config.Config;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.locator.RangesAtEndpoint;
 import org.slf4j.Logger;
@@ -125,7 +124,7 @@ public class CompactionManager implements CompactionManagerMBean
     }
 
     private final CompactionExecutor executor = new CompactionExecutor();
-    private final ValidationExecutor validationExecutor = new ValidationExecutor(DatabaseDescriptor.getValidationPoolFullStrategy());
+    private final ValidationExecutor validationExecutor = new ValidationExecutor();
     private final CompactionExecutor cacheCleanupExecutor = new CacheCleanupExecutor();
     private final CompactionExecutor viewBuildExecutor = new ViewBuildExecutor();
 
@@ -1904,38 +1903,26 @@ public class CompactionManager implements CompactionManagerMBean
         // want to block when the ValidationExecutor is saturated as this prevents progress on all
         // repair tasks and may cause repair sessions to time out. Also, it can lead to references to
         // heavyweight validation responses containing merkle trees being held for extended periods which
-        // increases GC pressure. Choosing the appropriate ValidationPoolFullStrategy allows us to decide
-        // whether to queue tasks and unblock the caller or keep the blocking behaviour when the
-        // ValidationExecutor is fully loaded.
+        // increases GC pressure. Using LinkedBlockingQueue instead of the default SynchronousQueue allows
+        // tasks to be submitted without blocking the caller, but will always prefer queueing to creating
+        // new threads if the pool already has at least `corePoolSize` threads already running. For this
+        // reason we set corePoolSize to the maximum desired concurrency, but allow idle core threads to
+        // be terminated.
 
-        private final Config.ValidationPoolFullStrategy strategy;
-        public ValidationExecutor(Config.ValidationPoolFullStrategy strategy)
+        public ValidationExecutor()
         {
-            super(corePoolSize(strategy),
+            super(DatabaseDescriptor.getConcurrentValidations(),
                   DatabaseDescriptor.getConcurrentValidations(),
                   "ValidationExecutor",
-                  workQueue(strategy));
-            this.strategy = strategy;
-        }
+                  new LinkedBlockingQueue());
 
-        private static int corePoolSize(Config.ValidationPoolFullStrategy strategy)
-        {
-            return strategy == Config.ValidationPoolFullStrategy.queue
-                   ? DatabaseDescriptor.getConcurrentValidations()
-                   : 1;
-        }
-
-        private static BlockingQueue<Runnable> workQueue(Config.ValidationPoolFullStrategy strategy)
-        {
-            return strategy == Config.ValidationPoolFullStrategy.queue
-                   ? new LinkedBlockingQueue<>()
-                   : new SynchronousQueue<>();
+            allowCoreThreadTimeOut(true);
         }
 
         public void adjustPoolSize()
         {
             setMaximumPoolSize(DatabaseDescriptor.getConcurrentValidations());
-            setCorePoolSize(corePoolSize(strategy));
+            setCorePoolSize(DatabaseDescriptor.getConcurrentValidations());
         }
     }
 

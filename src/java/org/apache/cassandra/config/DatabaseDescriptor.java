@@ -2931,11 +2931,6 @@ public class DatabaseDescriptor
         return conf.repair_command_pool_full_strategy;
     }
 
-    public static Config.ValidationPoolFullStrategy getValidationPoolFullStrategy()
-    {
-        return conf.validation_pool_full_strategy;
-    }
-
     public static FullQueryLoggerOptions getFullQueryLogOptions()
     {
         return  conf.full_query_logging_options;

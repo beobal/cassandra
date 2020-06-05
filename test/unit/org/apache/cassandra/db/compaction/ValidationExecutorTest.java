@@ -21,7 +21,6 @@ package org.apache.cassandra.db.compaction;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
@@ -31,14 +30,11 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import org.apache.cassandra.config.Config;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.utils.concurrent.SimpleCondition;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
 public class ValidationExecutorTest
 {
@@ -70,7 +66,7 @@ public class ValidationExecutorTest
         Condition taskBlocked = new SimpleCondition();
         AtomicInteger threadsAvailable = new AtomicInteger(DatabaseDescriptor.getConcurrentValidations());
         CountDownLatch taskComplete = new CountDownLatch(5);
-        validationExecutor = new CompactionManager.ValidationExecutor(Config.ValidationPoolFullStrategy.queue);
+        validationExecutor = new CompactionManager.ValidationExecutor();
 
         ExecutorService testExecutor = Executors.newSingleThreadExecutor();
         for (int i=0; i< 5; i++)
@@ -92,44 +88,12 @@ public class ValidationExecutorTest
     }
 
     @Test
-    public void testBlockOnValidationSubmission() throws InterruptedException
-    {
-        Condition taskBlocked = new SimpleCondition();
-        CountDownLatch tasksToComplete = new CountDownLatch(3);
-        validationExecutor = new CompactionManager.ValidationExecutor(Config.ValidationPoolFullStrategy.block);
-
-        Condition poolFull = new SimpleCondition();
-
-        ExecutorService testExecutor = Executors.newSingleThreadExecutor();
-        Future<?> f1 = testExecutor.submit(() -> validationExecutor.submit(new Task(taskBlocked, tasksToComplete)));
-        Future<?> f2 = testExecutor.submit(() -> validationExecutor.submit(new Task(taskBlocked, tasksToComplete)));
-        Future<?> f3 = testExecutor.submit(() -> {
-            // pool should be filled by the prior submissions, so signal we're ready to check that
-            poolFull.signalAll();
-            validationExecutor.submit(new Task(taskBlocked, tasksToComplete));
-        });
-
-        // wait for the submissions to fill the pool so that we start blocking
-        poolFull.await();
-
-        // submission of the third task should be blocked until the previous tasks complete
-        assertTrue(f1.isDone());
-        assertTrue(f2.isDone());
-        assertFalse(f3.isDone());
-        // neither of the two tasks are complete
-        assertEquals(3, tasksToComplete.getCount());
-        // unblock the tasks and wait for all 3 tasks to complete
-        taskBlocked.signalAll();
-        tasksToComplete.await(10, TimeUnit.SECONDS);
-    }
-
-    @Test
     public void testAdjustPoolSize()
     {
-        // if the pool full strategy is queue, adjusting the pool size should dynamically
-        // set core and max pool size to DatabaseDescriptor::getConcurrentValidations
+        // adjusting the pool size should dynamically set core and max pool
+        // size to DatabaseDescriptor::getConcurrentValidations
 
-        validationExecutor = new CompactionManager.ValidationExecutor(Config.ValidationPoolFullStrategy.queue);
+        validationExecutor = new CompactionManager.ValidationExecutor();
 
         int corePoolSize = validationExecutor.getCorePoolSize();
         int maxPoolSize = validationExecutor.getMaximumPoolSize();
@@ -139,13 +103,6 @@ public class ValidationExecutorTest
         assertThat(validationExecutor.getCorePoolSize()).isEqualTo(corePoolSize * 2);
         assertThat(validationExecutor.getMaximumPoolSize()).isEqualTo(maxPoolSize * 2);
         validationExecutor.shutdownNow();
-
-        // if the strategy is to block, then adjustPool size has no effect as the
-        // use of SynchronousQueue will allow core threads to be created when necessary
-        validationExecutor = new CompactionManager.ValidationExecutor(Config.ValidationPoolFullStrategy.block);
-        assertThat(validationExecutor.getCorePoolSize()).isEqualTo(1);
-        validationExecutor.adjustPoolSize();
-        assertThat(validationExecutor.getCorePoolSize()).isEqualTo(1);
     }
 
     private static class Task implements Runnable
