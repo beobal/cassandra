@@ -160,6 +160,16 @@ public abstract class AbstractBTreePartition implements Partition, Iterable<Row>
 
                 return row.filter(columns, activeDeletion, true, metadata());
             }
+
+            public boolean hasNext()
+            {
+                return rawIter.hasNext();
+            }
+
+            public Row next()
+            {
+                return rawIter.next();
+            }
         };
     }
 
