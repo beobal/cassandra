@@ -54,4 +54,17 @@ public class SerializationHelper
         iterator.rewind();
         return iterator;
     }
+
+    public boolean hasAllColumns(Row row, boolean isStatic)
+    {
+        SearchIterator<ColumnMetadata, ColumnMetadata> colIter = iterator(isStatic);
+        SearchIterator<ColumnMetadata, ColumnData> rowIter = row.searchIterator();
+        while (colIter.hasNext())
+        {
+            ColumnMetadata column = colIter.next();
+            if (rowIter.next(column) == null)
+                return false;
+        }
+        return true;
+    }
 }

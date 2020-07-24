@@ -87,6 +87,16 @@ public abstract class EnsureOnHeap extends Transformation
                 {
                     return applyToRow(partition.next(key));
                 }
+
+                public boolean hasNext()
+                {
+                    return partition.hasNext();
+                }
+
+                public Row next()
+                {
+                    return partition.next();
+                }
             };
         }
 

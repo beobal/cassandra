@@ -202,6 +202,11 @@ public final class ColumnMetadata extends ColumnSpecification implements Selecta
         };
     }
 
+    public static ColumnMetadata dummy(TableMetadata table, ByteBuffer name, boolean isStatic)
+    {
+        return new ColumnMetadata(table, name, EmptyType.instance, NO_POSITION, isStatic ? Kind.STATIC : Kind.REGULAR);
+    }
+
     public ColumnMetadata copy()
     {
         return new ColumnMetadata(ksName, cfName, name, type, position, kind);
