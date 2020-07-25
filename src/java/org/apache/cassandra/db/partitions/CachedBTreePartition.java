@@ -177,7 +177,7 @@ public class CachedBTreePartition extends ImmutableBTreePartition implements Cac
 
 
             TableMetadata metadata = Schema.instance.getExistingTableMetadata(TableId.deserialize(in));
-            UnfilteredRowIteratorSerializer.Header header = UnfilteredRowIteratorSerializer.serializer.deserializeHeader(metadata, null, in, version, DeserializationHelper.Flag.LOCAL);
+            UnfilteredRowIteratorSerializer.Header header = UnfilteredRowIteratorSerializer.serializer.deserializeHeader(metadata, null, in, version, DeserializationHelper.Flag.LOCAL, false);
             assert !header.isReversed && header.rowEstimate >= 0;
 
             Holder holder;
