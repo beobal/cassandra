@@ -436,7 +436,32 @@ public class Columns extends AbstractCollection<ColumnMetadata> implements Colle
             return size;
         }
 
-        private Columns deserialize(DataInputPlus in, TableMetadata metadata, boolean isStatic) throws IOException
+        private static ColumnMetadata getColumn(TableMetadata metadata, ByteBuffer name, boolean isStatic, boolean forRead) throws IOException
+        {
+            ColumnMetadata column = metadata.getColumn(name);
+
+            if (column != null)
+                return column;
+
+            // If we don't find the definition, it could be we have data for a dropped column, and we shouldn't
+            // fail deserialization because of that. So we grab a "fake" ColumnMetadata that ensure proper
+            // deserialization. The column will be ignore later on anyway.
+            column = metadata.getDroppedColumn(name);
+
+            if (column != null)
+                return column;
+
+            // If there's no dropped column, it may be for a column we haven't received a schema update for yet
+            // throw an exception if this is for a write, since we can't complete a write for a column we don't know about
+            if (!forRead)
+                throw new UnknownColumnException("Unknown column " + UTF8Type.instance.getString(name) + " during deserialization");
+
+
+            // If this is for a read, we create a dummy column, since it won't be on this node anyway.
+            return ColumnMetadata.dummy(metadata, name, isStatic);
+        }
+
+        private Columns deserialize(DataInputPlus in, TableMetadata metadata, boolean isStatic, boolean forRead) throws IOException
         {
             int length = (int)in.readUnsignedVInt();
             BTree.Builder<ColumnMetadata> builder = BTree.builder(Comparator.naturalOrder());
@@ -444,33 +469,19 @@ public class Columns extends AbstractCollection<ColumnMetadata> implements Colle
             for (int i = 0; i < length; i++)
             {
                 ByteBuffer name = ByteBufferUtil.readWithVIntLength(in);
-                ColumnMetadata column = metadata.getColumn(name);
-                if (column == null)
-                {
-                    // If we don't find the definition, it could be we have data for a dropped column, and we shouldn't
-                    // fail deserialization because of that. So we grab a "fake" ColumnMetadata that ensure proper
-                    // deserialization. The column will be ignore later on anyway.
-                    column = metadata.getDroppedColumn(name);
-
-                    // If there's no dropped column, it may be for a column we haven't received a schema update for yet
-                    // so we create a dummy column. We can't just skip it because the response serializer needs to know
-                    // it's not serializing all the requested columns when it writes row flags
-                    if (column == null)
-                        column = ColumnMetadata.dummy(metadata, name, isStatic);
-                }
-                builder.add(column);
+                builder.add(getColumn(metadata, name, isStatic, forRead));
             }
             return new Columns(builder.build());
         }
 
-        public Columns deserializeStatics(DataInputPlus in, TableMetadata metadata) throws IOException
+        public Columns deserializeStatics(DataInputPlus in, TableMetadata metadata, boolean forRead) throws IOException
         {
-            return deserialize(in, metadata, true);
+            return deserialize(in, metadata, true, forRead);
         }
 
-        public Columns deserializeRegulars(DataInputPlus in, TableMetadata metadata) throws IOException
+        public Columns deserializeRegulars(DataInputPlus in, TableMetadata metadata, boolean forRead) throws IOException
         {
-            return deserialize(in, metadata, false);
+            return deserialize(in, metadata, false, forRead);
         }
 
         /**

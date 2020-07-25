@@ -587,8 +587,8 @@ public class ColumnFilter
             {
                 if (version >= MessagingService.VERSION_3014)
                 {
-                    Columns statics = Columns.serializer.deserializeStatics(in, metadata);
-                    Columns regulars = Columns.serializer.deserializeRegulars(in, metadata);
+                    Columns statics = Columns.serializer.deserializeStatics(in, metadata, true);
+                    Columns regulars = Columns.serializer.deserializeRegulars(in, metadata, true);
                     fetched = new RegularAndStaticColumns(statics, regulars);
                 }
                 else
@@ -599,8 +599,8 @@ public class ColumnFilter
 
             if (hasQueried)
             {
-                Columns statics = Columns.serializer.deserializeStatics(in, metadata);
-                Columns regulars = Columns.serializer.deserializeRegulars(in, metadata);
+                Columns statics = Columns.serializer.deserializeStatics(in, metadata, true);
+                Columns regulars = Columns.serializer.deserializeRegulars(in, metadata, true);
                 queried = new RegularAndStaticColumns(statics, regulars);
             }
 

@@ -212,6 +212,9 @@ public class SimpleReadWriteTest extends TestBaseImpl
         }
     }
 
+    /**
+     * If a node receives a mutation for a column it's not aware of, it should fail, since it can't write the data.
+     */
     @Test
     public void writeWithSchemaDisagreement() throws Throwable
     {
@@ -229,7 +232,7 @@ public class SimpleReadWriteTest extends TestBaseImpl
             try
             {
                 cluster.coordinator(1).execute("INSERT INTO " + KEYSPACE + ".tbl (pk, ck, v1, v2) VALUES (2, 2, 2, 2)",
-                                              ConsistencyLevel.QUORUM);
+                                              ConsistencyLevel.ALL);
                 fail("Should have failed because of schema disagreement.");
             }
             catch (Exception e)
@@ -245,6 +248,32 @@ public class SimpleReadWriteTest extends TestBaseImpl
         }
     }
 
+    /**
+     * If a node isn't aware of a column, but receives a mutation without that column, the write should succeed
+     */
+    @Test
+    public void writeWithInconsequentialSchemaDisagreement() throws Throwable
+    {
+        try (ICluster cluster = init(builder().withNodes(3).withConfig(config -> config.with(NETWORK)).start()))
+        {
+            cluster.schemaChange("CREATE TABLE " + KEYSPACE + ".tbl (pk int, ck int, v1 int, PRIMARY KEY (pk, ck))");
+
+            cluster.get(1).executeInternal("INSERT INTO " + KEYSPACE + ".tbl (pk, ck, v1) VALUES (1, 1, 1)");
+            cluster.get(2).executeInternal("INSERT INTO " + KEYSPACE + ".tbl (pk, ck, v1) VALUES (1, 1, 1)");
+            cluster.get(3).executeInternal("INSERT INTO " + KEYSPACE + ".tbl (pk, ck, v1) VALUES (1, 1, 1)");
+
+            // Introduce schema disagreement
+            cluster.schemaChange("ALTER TABLE " + KEYSPACE + ".tbl ADD v2 int", 1);
+
+            // this write shouldn't cause any problems because it doesn't write to the new column
+            cluster.coordinator(1).execute("INSERT INTO " + KEYSPACE + ".tbl (pk, ck, v1) VALUES (2, 2, 2)",
+                                           ConsistencyLevel.ALL);
+        }
+    }
+
+    /**
+     * If a node receives a read for a column it's not aware of, it shouldn't complain, since it won't have any data for that column
+     */
     @Test
     public void readWithSchemaDisagreement() throws Throwable
     {
@@ -259,21 +288,8 @@ public class SimpleReadWriteTest extends TestBaseImpl
             // Introduce schema disagreement
             cluster.schemaChange("ALTER TABLE " + KEYSPACE + ".tbl ADD v2 int", 1);
 
-            try
-            {
-                cluster.coordinator(1).execute("SELECT * FROM " + KEYSPACE + ".tbl WHERE pk = 1", ConsistencyLevel.ALL);
-                fail("Should have failed because of schema disagreement.");
-            }
-            catch (Exception e)
-            {
-                // for some reason, we get weird errors when trying to check class directly
-                // I suppose it has to do with some classloader manipulation going on
-                Assert.assertTrue(e.getClass().toString().contains("ReadFailureException"));
-                // we may see 1 or 2 failures in here, because of the fail-fast behavior of ReadCallback
-                Assert.assertTrue(e.getMessage().contains("INCOMPATIBLE_SCHEMA from 127.0.0.2")
-                                  || e.getMessage().contains("INCOMPATIBLE_SCHEMA from 127.0.0.3"));
-            }
-
+            Object[][] expected = new Object[][]{new Object[]{1, 1, 1, null}};
+            assertRows(cluster.coordinator(1).execute("SELECT * FROM " + KEYSPACE + ".tbl WHERE pk = 1", ConsistencyLevel.ALL), expected);
         }
     }
 
