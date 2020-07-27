@@ -180,7 +180,7 @@ public class UnfilteredRowIteratorSerializer
         return size;
     }
 
-    public Header deserializeHeader(TableMetadata metadata, ColumnFilter selection, DataInputPlus in, int version, DeserializationHelper.Flag flag, boolean forRead) throws IOException
+    public Header deserializeHeader(TableMetadata metadata, ColumnFilter selection, DataInputPlus in, int version, DeserializationHelper.Flag flag) throws IOException
     {
         DecoratedKey key = metadata.partitioner.decorateKey(ByteBufferUtil.readWithVIntLength(in));
         int flags = in.readUnsignedByte();
@@ -195,7 +195,7 @@ public class UnfilteredRowIteratorSerializer
         boolean hasStatic = (flags & HAS_STATIC_ROW) != 0;
         boolean hasRowEstimate = (flags & HAS_ROW_ESTIMATE) != 0;
 
-        SerializationHeader header = SerializationHeader.serializer.deserializeForMessaging(in, metadata, selection, hasStatic, forRead);
+        SerializationHeader header = SerializationHeader.serializer.deserializeForMessaging(in, metadata, selection, hasStatic);
 
         DeletionTime partitionDeletion = hasPartitionDeletion ? header.readDeletionTime(in) : DeletionTime.LIVE;
 
@@ -235,7 +235,7 @@ public class UnfilteredRowIteratorSerializer
 
     public UnfilteredRowIterator deserialize(DataInputPlus in, int version, TableMetadata metadata, ColumnFilter selection, DeserializationHelper.Flag flag) throws IOException
     {
-        return deserialize(in, version, metadata, flag, deserializeHeader(metadata, selection, in, version, flag, true));
+        return deserialize(in, version, metadata, flag, deserializeHeader(metadata, selection, in, version, flag));
     }
 
     public static class Header

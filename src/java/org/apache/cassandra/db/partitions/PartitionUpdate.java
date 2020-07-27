@@ -17,21 +17,21 @@
  */
 package org.apache.cassandra.db.partitions;
 
+import java.io.IOError;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.db.*;
 import org.apache.cassandra.db.filter.ColumnFilter;
 import org.apache.cassandra.db.rows.*;
+import org.apache.cassandra.exceptions.IncompatibleSchemaException;
 import org.apache.cassandra.index.IndexRegistry;
 import org.apache.cassandra.io.util.*;
 import org.apache.cassandra.schema.ColumnMetadata;
@@ -638,7 +638,7 @@ public class PartitionUpdate extends AbstractBTreePartition
         public PartitionUpdate deserialize(DataInputPlus in, int version, DeserializationHelper.Flag flag) throws IOException
         {
             TableMetadata metadata = Schema.instance.getExistingTableMetadata(TableId.deserialize(in));
-            UnfilteredRowIteratorSerializer.Header header = UnfilteredRowIteratorSerializer.serializer.deserializeHeader(metadata, null, in, version, flag, false);
+            UnfilteredRowIteratorSerializer.Header header = UnfilteredRowIteratorSerializer.serializer.deserializeHeader(metadata, null, in, version, flag);
             if (header.isEmpty)
                 return emptyUpdate(metadata, header.key);
 
@@ -659,6 +659,12 @@ public class PartitionUpdate extends AbstractBTreePartition
                     else
                         deletionBuilder.add((RangeTombstoneMarker)unfiltered);
                 }
+            }
+            catch (IOError e)
+            {
+                if (e.getCause() != null && e.getCause() instanceof IncompatibleSchemaException)
+                    throw (IncompatibleSchemaException) e.getCause();
+                throw e;
             }
 
             MutableDeletionInfo deletionInfo = deletionBuilder.build();
@@ -855,11 +861,6 @@ public class PartitionUpdate extends AbstractBTreePartition
             return metadata;
         }
 
-        protected RegularAndStaticColumns columnsForUpdate()
-        {
-            return columns;
-        }
-
         public PartitionUpdate build()
         {
             // assert that we are not calling build() several times
@@ -873,7 +874,7 @@ public class PartitionUpdate extends AbstractBTreePartition
             isBuilt = true;
             return new PartitionUpdate(metadata,
                                        partitionKey(),
-                                       new Holder(columnsForUpdate(),
+                                       new Holder(columns,
                                                   merged,
                                                   deletionInfo,
                                                   staticRow,
@@ -933,38 +934,5 @@ public class PartitionUpdate extends AbstractBTreePartition
                    '}';
         }
 
-    }
-
-    /**
-     * Builder variant that excludes unused columns from the PartitionUpdate columns object. This is to support reading
-     * from nodes that haven't received schema updates adding a column. If we read from a node in that state, and need to
-     * perform a read repair, including all columns metadata in the repair mutation will cause the write to fail and the
-     * read to timeout. See CASSANDRA-15899
-     */
-    public static class MinimalColumnBuilder extends Builder
-    {
-        private final Set<ColumnMetadata> statics;
-        private final Set<ColumnMetadata> regulars;
-
-        public MinimalColumnBuilder(TableMetadata metadata, DecoratedKey key, RegularAndStaticColumns columnDefinitions, int size)
-        {
-            super(metadata, key, columnDefinitions, size);
-            statics = Sets.newHashSetWithExpectedSize(columnDefinitions.statics.size());
-            regulars = Sets.newHashSetWithExpectedSize(columnDefinitions.regulars.size());
-        }
-
-        public void add(Row row)
-        {
-            super.add(row);
-            if (row.isStatic())
-                statics.addAll(row.columns());
-            else
-                regulars.addAll(row.columns());
-        }
-
-        protected RegularAndStaticColumns columnsForUpdate()
-        {
-            return new RegularAndStaticColumns(Columns.from(statics), Columns.from(regulars));
-        }
     }
 }

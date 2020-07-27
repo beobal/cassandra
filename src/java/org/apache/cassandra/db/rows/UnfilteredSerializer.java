@@ -20,6 +20,8 @@ package org.apache.cassandra.db.rows;
 import java.io.IOException;
 
 import net.nicoulaj.compilecommand.annotations.Inline;
+import org.apache.cassandra.db.marshal.UTF8Type;
+import org.apache.cassandra.exceptions.UnknownColumnException;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.db.*;
 import org.apache.cassandra.db.rows.Row.Deletion;
@@ -242,7 +244,7 @@ public class UnfilteredSerializer
 
                 // we may have columns that the remote node isn't aware of due to inflight schema changes
                 // in cases where it tries to fetch all columns, it will set the `all columns` flag, but only
-                // specify a subset of columns from this node's perspective. See CASSANDRA-15899
+                // expect a subset of columns (from this node's perspective). See CASSANDRA-15899
                 if (column == null)
                     return;
 
@@ -609,6 +611,10 @@ public class UnfilteredSerializer
                 columns.apply(column -> {
                     try
                     {
+                        // if the column is a placeholder, then it's not part of our schema, and we can't deserialize it
+                        if (column.isPlaceholder())
+                            throw new UnknownColumnException("Unknown column " + UTF8Type.instance.getString(column.name.bytes) + " during deserialization");
+
                         if (column.isSimple())
                             readSimpleColumn(column, in, header, helper, builder, livenessInfo);
                         else

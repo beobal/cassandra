@@ -416,7 +416,7 @@ public class SerializationHeader
             }
         }
 
-        public SerializationHeader deserializeForMessaging(DataInputPlus in, TableMetadata metadata, ColumnFilter selection, boolean hasStatic, boolean forRead) throws IOException
+        public SerializationHeader deserializeForMessaging(DataInputPlus in, TableMetadata metadata, ColumnFilter selection, boolean hasStatic) throws IOException
         {
             EncodingStats stats = EncodingStats.serializer.deserialize(in);
 
@@ -426,8 +426,8 @@ public class SerializationHeader
             Columns statics, regulars;
             if (selection == null)
             {
-                statics = hasStatic ? Columns.serializer.deserializeStatics(in, metadata, forRead) : Columns.NONE;
-                regulars = Columns.serializer.deserializeRegulars(in, metadata, forRead);
+                statics = hasStatic ? Columns.serializer.deserializeStatics(in, metadata) : Columns.NONE;
+                regulars = Columns.serializer.deserializeRegulars(in, metadata);
             }
             else
             {
