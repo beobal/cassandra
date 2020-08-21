@@ -31,6 +31,7 @@ import org.apache.cassandra.distributed.api.ICluster;
 import org.apache.cassandra.distributed.api.IInvokableInstance;
 import org.apache.cassandra.metrics.ReadRepairMetrics;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
+//import org.apache.cassandra.utils.ByteBufferUtil;
 
 import static org.apache.cassandra.distributed.api.Feature.NETWORK;
 import static org.apache.cassandra.distributed.shared.AssertUtils.*;
@@ -218,7 +219,7 @@ public class SimpleReadWriteTest extends TestBaseImpl
     @Test
     public void writeWithSchemaDisagreement() throws Throwable
     {
-        try (ICluster cluster = init(builder().withNodes(3).withConfig(config -> config.with(NETWORK)).start()))
+        try (Cluster cluster = init(builder().withNodes(3).withConfig(config -> config.with(NETWORK)).start()))
         {
             cluster.schemaChange("CREATE TABLE " + KEYSPACE + ".tbl (pk int, ck int, v1 int, PRIMARY KEY (pk, ck))");
 
@@ -245,6 +246,39 @@ public class SimpleReadWriteTest extends TestBaseImpl
                                   || e.getMessage().contains("INCOMPATIBLE_SCHEMA from 127.0.0.3"));
 
             }
+        }
+    }
+
+    /**
+     * If a node receives a mutation for a column it knows has been dropped, the write should succeed
+     */
+    @Test
+    public void writeWithSchemaDisagreement2() throws Throwable
+    {
+        try (Cluster cluster = init(builder().withNodes(3).withConfig(config -> config.with(NETWORK)).start()))
+        {
+            cluster.schemaChange("CREATE TABLE " + KEYSPACE + ".tbl (pk int, ck int, v1 int, v2 int, PRIMARY KEY (pk, ck))");
+
+            cluster.get(1).executeInternal("INSERT INTO " + KEYSPACE + ".tbl (pk, ck, v1, v2) VALUES (1, 1, 1, 1)");
+            cluster.get(2).executeInternal("INSERT INTO " + KEYSPACE + ".tbl (pk, ck, v1, v2) VALUES (1, 1, 1, 1)");
+            cluster.get(3).executeInternal("INSERT INTO " + KEYSPACE + ".tbl (pk, ck, v1, v2) VALUES (1, 1, 1, 1)");
+            cluster.forEach((instance) -> instance.flush(KEYSPACE));
+
+            // Introduce schema disagreement
+            cluster.schemaChange("ALTER TABLE " + KEYSPACE + ".tbl DROP v2", 1);
+
+            // execute a write including the dropped column where the coordinator is not yet aware of the drop
+            // all nodes should process this without error
+            cluster.coordinator(2).execute("INSERT INTO " + KEYSPACE + ".tbl (pk, ck, v1, v2) VALUES (2, 2, 2, 2)",
+                                               ConsistencyLevel.ALL);
+            // and flushing should also be fine
+            cluster.forEach((instance) -> instance.flush(KEYSPACE));
+            // the results of reads will vary depending on whether the coordinator has seen the schema change
+            // note: read repairs will propagate the v2 value to node1, but this is safe and handled correctly
+            assertRows(cluster.coordinator(2).execute("SELECT * FROM " + KEYSPACE + ".tbl", ConsistencyLevel.ALL),
+                       rows(row(1,1,1,1), row(2,2,2,2)));
+            assertRows(cluster.coordinator(1).execute("SELECT * FROM " + KEYSPACE + ".tbl", ConsistencyLevel.ALL),
+                       rows(row(1,1,1), row(2,2,2)));
         }
     }
 
@@ -531,4 +565,12 @@ public class SimpleReadWriteTest extends TestBaseImpl
     {
         return instance.callOnInstance(() -> Keyspace.open(KEYSPACE).getColumnFamilyStore("tbl").metric.readLatency.latency.getCount());
     }
+
+    private static Object[][] rows(Object[]...rows)
+    {
+        Object[][] r = new Object[rows.length][];
+        System.arraycopy(rows, 0, r, 0, rows.length);
+        return r;
+    }
+
 }
