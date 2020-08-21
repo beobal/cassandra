@@ -17,9 +17,7 @@
  */
 package org.apache.cassandra.utils;
 
-import java.util.Iterator;
-
-public interface SearchIterator<K, V> extends Iterator<V>
+public interface SearchIterator<K, V>
 {
     /**
      * Searches "forwards" (in direction of travel) in the iterator for the required key;
