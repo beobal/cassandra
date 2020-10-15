@@ -18,6 +18,12 @@
 
 package org.apache.cassandra.config;
 
+import java.util.Collections;
+import java.util.Set;
+
+import com.google.common.base.Splitter;
+import com.google.common.collect.ImmutableSet;
+
 import org.apache.cassandra.exceptions.ConfigurationException;
 
 /** A class that extracts system properties for the cassandra node it runs within. */
@@ -147,6 +153,25 @@ public enum CassandraRelevantProperties
      */
     BOOTSTRAP_SCHEMA_DELAY_MS("cassandra.schema_delay_ms"),
 
+    /**
+     * Gossip quarantine delay is used while evaluating membership changes and should only be changed with extreme care.
+     */
+    GOSSIPER_QUARANTINE_DELAY("cassandra.gossip_quarantine_delay_ms"),
+
+    /**
+     * When doing a host replacement gossip status is checked to make sure the endpoint is only in an allowed set of
+     * states, these states are controled via this property. Changing this is not advised as the behavior is undefined
+     * when replacing a node not on NORMAL or shutdown states.
+     */
+    REPLACEMENT_ALLOWED_GOSSIP_STATUSES("cassandra.replacement_allowed_gossip_statuses", "NORMAL,shutdown"),
+
+    /**
+     * When doing a host replacement its possible that the gossip state is "empty" meaning that the endpoint is known
+     * but the current state isn't known.  If the host replacement is needed to repair this state, this property must
+     * be true.
+     */
+    REPLACEMENT_ALLOW_EMPTY("cassandra.allow_empty_replace_address", "false"),
+
     //cassandra properties (without the "cassandra." prefix)
 
     /**
@@ -207,6 +232,11 @@ public enum CassandraRelevantProperties
         return BOOLEAN_CONVERTER.convert(value == null ? defaultVal : value);
     }
 
+    public void setBoolean(boolean value)
+    {
+        System.setProperty(key, Boolean.toString(value));
+    }
+
     /**
      * Gets the value of a system property as a int.
      * @return system property int value if it exists, defaultValue otherwise.
@@ -216,6 +246,32 @@ public enum CassandraRelevantProperties
         String value = System.getProperty(key);
 
         return INTEGER_CONVERTER.convert(value == null ? defaultVal : value);
+    }
+
+    /**
+     * Gets the value of a system property as a int.
+     * @return system property int value if it exists, overrideDefaultValue otherwise.
+     */
+    public int getInt(int overrideDefaultValue)
+    {
+        String value = System.getProperty(key);
+        if (value == null)
+            return overrideDefaultValue;
+
+        return INTEGER_CONVERTER.convert(value);
+    }
+
+    public void setInt(int value)
+    {
+        System.setProperty(key, Integer.toString(value));
+    }
+
+    public Set<String> getSet()
+    {
+        String value = System.getProperty(key, defaultVal);
+        if (value == null || value.isEmpty())
+            return Collections.emptySet();
+        return ImmutableSet.copyOf(Splitter.on(",").trimResults().split(value));
     }
 
     private interface PropertyConverter<T>

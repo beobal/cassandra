@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -40,6 +41,8 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+
+import javax.annotation.concurrent.GuardedBy;
 
 import com.google.common.collect.Sets;
 import org.slf4j.Logger;
@@ -66,6 +69,7 @@ import org.apache.cassandra.distributed.api.LogAction;
 import org.apache.cassandra.distributed.api.NodeToolResult;
 import org.apache.cassandra.distributed.api.TokenSupplier;
 import org.apache.cassandra.distributed.shared.InstanceClassLoader;
+import org.apache.cassandra.distributed.shared.Isolated;
 import org.apache.cassandra.distributed.shared.MessageFilters;
 import org.apache.cassandra.distributed.shared.NetworkTopology;
 import org.apache.cassandra.distributed.shared.Shared;
@@ -115,10 +119,15 @@ public abstract class AbstractCluster<I extends IInstance> implements ICluster<I
 
     // include byteman so tests can use
     private static final Set<String> SHARED_CLASSES = findClassesMarkedForSharedClassLoader();
-    private static final Predicate<String> SHARED_PREDICATE = s ->
-                                                              SHARED_CLASSES.contains(s) ||
-                                                              InstanceClassLoader.getDefaultLoadSharedFilter().test(s) ||
-                                                              s.startsWith("org.jboss.byteman");
+    private static final Set<String> ISOLATED_CLASSES = findClassesMarkedForInstanceClassLoader();
+    private static final Predicate<String> SHARED_PREDICATE = s -> {
+        if (ISOLATED_CLASSES.contains(s))
+            return false;
+
+        return SHARED_CLASSES.contains(s) ||
+               InstanceClassLoader.getDefaultLoadSharedFilter().test(s) ||
+               s.startsWith("org.jboss.byteman");
+    };
 
     private final UUID clusterId = UUID.randomUUID();
     private final File root;
@@ -171,6 +180,8 @@ public abstract class AbstractCluster<I extends IInstance> implements ICluster<I
         private volatile IInvokableInstance delegate;
         private volatile Versions.Version version;
         private volatile boolean isShutdown = true;
+        @GuardedBy("this")
+        private InetSocketAddress broadcastAddress;
 
         protected IInvokableInstance delegate()
         {
@@ -193,6 +204,7 @@ public abstract class AbstractCluster<I extends IInstance> implements ICluster<I
             this.version = version;
             // we ensure there is always a non-null delegate, so that the executor may be used while the node is offline
             this.delegate = newInstance(generation);
+            this.broadcastAddress = config.broadcastAddress();
         }
 
         private IInvokableInstance newInstance(int generation)
@@ -225,9 +237,18 @@ public abstract class AbstractCluster<I extends IInstance> implements ICluster<I
             if (cluster != AbstractCluster.this)
                 throw new IllegalArgumentException("Only the owning cluster can be used for startup");
             if (!isShutdown)
-                throw new IllegalStateException();
+                throw new IllegalStateException("Can not start a instance that is already running");
+            isShutdown = false; // if startup fails, still mark it as running
+            if (!broadcastAddress.equals(config.broadcastAddress()))
+            {
+                // previous address != desired address, so cleanup
+                InetSocketAddress previous = broadcastAddress;
+                InetSocketAddress newAddress = config.broadcastAddress();
+                instanceMap.put(newAddress, (I) this); // if the broadcast address changes, update
+                instanceMap.remove(previous);
+                broadcastAddress = newAddress;
+            }
             delegateForStartup().startup(cluster);
-            isShutdown = false;
             updateMessagingVersions();
         }
 
@@ -241,7 +262,7 @@ public abstract class AbstractCluster<I extends IInstance> implements ICluster<I
         public synchronized Future<Void> shutdown(boolean graceful)
         {
             if (isShutdown)
-                throw new IllegalStateException();
+                throw new IllegalStateException("Instance is not running, so can not be shutdown");
             isShutdown = true;
             Future<Void> future = delegate.shutdown(graceful);
             delegate = null;
@@ -305,6 +326,7 @@ public abstract class AbstractCluster<I extends IInstance> implements ICluster<I
             }
         }
 
+        @Override
         public void uncaughtException(Thread thread, Throwable throwable)
         {
             IInvokableInstance delegate = this.delegate;
@@ -312,6 +334,13 @@ public abstract class AbstractCluster<I extends IInstance> implements ICluster<I
                 delegate.uncaughtException(thread, throwable);
             else
                 logger.error("uncaught exception in thread {}", thread, throwable);
+        }
+
+        @Override
+        public String toString()
+        {
+            IInvokableInstance delegate = this.delegate;
+            return delegate != null ? delegate.toString() : "node" + config.num();
         }
     }
 
@@ -326,7 +355,7 @@ public abstract class AbstractCluster<I extends IInstance> implements ICluster<I
         this.broadcastPort = builder.getBroadcastPort();
         this.nodeProvisionStrategy = builder.nodeProvisionStrategy;
         this.instances = new ArrayList<>();
-        this.instanceMap = new HashMap<>();
+        this.instanceMap = new ConcurrentHashMap<>();
         this.initialVersion = builder.getVersion();
         this.filters = new MessageFilters();
         this.instanceInitializer = builder.getInstanceInitializer();
@@ -847,6 +876,13 @@ public abstract class AbstractCluster<I extends IInstance> implements ICluster<I
         return new Reflections("org.apache.cassandra").getTypesAnnotatedWith(Shared.class).stream()
                                 .map(Class::getName)
                                 .collect(Collectors.toSet());
+    }
+
+    private static Set<String> findClassesMarkedForInstanceClassLoader()
+    {
+        return new Reflections("org.apache.cassandra").getTypesAnnotatedWith(Isolated.class).stream()
+                                                      .map(Class::getName)
+                                                      .collect(Collectors.toSet());
     }
 }
 

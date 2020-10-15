@@ -251,7 +251,9 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
     {
         MessagingService.instance().outboundSink.add((message, to) -> {
             InetSocketAddress toAddr = fromCassandraInetAddressAndPort(to);
-            cluster.get(toAddr).receiveMessage(serializeMessage(message.from(), to, message));
+            IInstance toInstance = cluster.get(toAddr);
+            if (toInstance != null)
+                toInstance.receiveMessage(serializeMessage(message.from(), to, message));
             return false;
         });
     }
@@ -262,7 +264,10 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
             if (isShutdown())
                 return false;
             IMessage serialized = serializeMessage(message.from(), toCassandraInetAddressAndPort(broadcastAddress()), message);
-            int fromNum = cluster.get(serialized.from()).config().num();
+            IInstance from = cluster.get(serialized.from());
+            if (from == null)
+                return false;
+            int fromNum = from.config().num();
             int toNum = config.num(); // since this instance is reciving the message, to will always be this instance
             return cluster.filters().permitInbound(fromNum, toNum, serialized);
         });
@@ -275,7 +280,10 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
                 return false;
             IMessage serialzied = serializeMessage(message.from(), to, message);
             int fromNum = config.num(); // since this instance is sending the message, from will always be this instance
-            int toNum = cluster.get(fromCassandraInetAddressAndPort(to)).config().num();
+            IInstance toInstance = cluster.get(fromCassandraInetAddressAndPort(to));
+            if (toInstance == null)
+                return false;
+            int toNum = toInstance.config().num();
             return cluster.filters().permitOutbound(fromNum, toNum, serialzied);
         });
     }
@@ -449,6 +457,9 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
                     throw new RuntimeException(e);
                 }
 
+                // Re-populate token metadata after commit log recover (new peers might be loaded onto system keyspace #10293)
+                StorageService.instance.populateTokenMetadata();
+
                 Verb.REQUEST_RSP.unsafeSetSerializer(() -> ReadResponse.serializer);
 
                 if (config.has(NETWORK))
@@ -610,6 +621,7 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
         }).call();
     }
 
+    @Override
     public NodeToolResult nodetoolResult(boolean withNotifications, String... commandAndArgs)
     {
         return sync(() -> {
@@ -652,6 +664,12 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
                                           output.getErrString());
             }
         }).call();
+    }
+
+    @Override
+    public String toString()
+    {
+        return "node" + config.num();
     }
 
     private static class CapturingOutput implements Closeable
