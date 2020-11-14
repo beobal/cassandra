@@ -29,11 +29,9 @@ import org.slf4j.LoggerFactory;
 import org.apache.cassandra.distributed.Cluster;
 import org.apache.cassandra.distributed.api.ConsistencyLevel;
 import org.apache.cassandra.distributed.api.Feature;
-import org.apache.cassandra.distributed.api.ICoordinator;
 import org.apache.cassandra.distributed.api.IInvokableInstance;
 import org.apache.cassandra.distributed.api.SimpleQueryResult;
 import org.apache.cassandra.distributed.api.TokenSupplier;
-import org.apache.cassandra.distributed.shared.AssertUtils;
 import org.apache.cassandra.distributed.test.TestBaseImpl;
 import org.assertj.core.api.Assertions;
 
@@ -47,6 +45,8 @@ import static org.apache.cassandra.distributed.shared.ClusterUtils.awaitJoinRing
 import static org.apache.cassandra.distributed.shared.ClusterUtils.getTokenMetadataTokens;
 import static org.apache.cassandra.distributed.shared.ClusterUtils.replaceHostAndStart;
 import static org.apache.cassandra.distributed.shared.ClusterUtils.stopAll;
+import static org.apache.cassandra.distributed.test.hostreplacement.HostReplacementTest.setupCluster;
+import static org.apache.cassandra.distributed.test.hostreplacement.HostReplacementTest.validateRows;
 
 public class HostReplacementOfDowedClusterTest extends TestBaseImpl
 {
@@ -180,79 +180,5 @@ public class HostReplacementOfDowedClusterTest extends TestBaseImpl
             validateRows(seed.coordinator(), expectedState);
             validateRows(replacingNode.coordinator(), expectedState);
         }
-    }
-
-    /**
-     * If the operator attempts to assassinate the node before replacing it, this will cause the node to fail to start
-     * as the status is non-normal.
-     */
-    @Test
-    public void hostReplacementOfAssassinatedNodeFails() throws IOException
-    {
-        // start with 2 nodes, stop both nodes, start the seed, host replace the down node)
-        TokenSupplier even = TokenSupplier.evenlyDistributedTokens(2);
-        try (Cluster cluster = Cluster.build(2)
-                                      .withConfig(c -> c.with(Feature.GOSSIP, Feature.NETWORK))
-                                      .withTokenSupplier(node -> even.token(node == 3 ? 2 : node))
-                                      .start())
-        {
-            IInvokableInstance seed = cluster.get(1);
-            IInvokableInstance nodeToRemove = cluster.get(2);
-            InetSocketAddress addressToReplace = nodeToRemove.broadcastAddress();
-
-            setupCluster(cluster);
-
-            // collect rows/tokens to detect issues later on if the state doesn't match
-            SimpleQueryResult expectedState = nodeToRemove.coordinator().executeWithResult("SELECT * FROM " + KEYSPACE + ".tbl", ConsistencyLevel.ALL);
-            List<String> beforeCrashTokens = getTokenMetadataTokens(seed);
-
-            // now stop all nodes
-            stopAll(cluster);
-
-            // with all nodes down, now start the seed (should be first node)
-            seed.startup();
-
-            // at this point node2 should be known in gossip, but with generation/version of 0
-            assertGossipInfo(seed, addressToReplace, 0, -1);
-
-            // make sure node1 still has node2's tokens
-            List<String> currentTokens = getTokenMetadataTokens(seed);
-            Assertions.assertThat(currentTokens)
-                      .as("Tokens no longer match after restarting")
-                      .isEqualTo(beforeCrashTokens);
-
-            seed.nodetoolResult("assassinate", nodeToRemove.config().broadcastAddress().getAddress().getHostAddress()).asserts().success();
-
-            // now create a new node to replace the other node
-            Assertions.assertThatThrownBy(() -> replaceHostAndStart(cluster, nodeToRemove))
-                      .hasMessage("Cannot replace_address /127.0.0.2:7012 because it's status is not in [NORMAL, shutdown], status is LEFT");
-        }
-    }
-
-    private void setupCluster(Cluster cluster)
-    {
-        fixDistributedSchemas(cluster);
-        init(cluster);
-
-        populate(cluster);
-        cluster.forEach(i -> i.flush(KEYSPACE));
-    }
-
-    void populate(Cluster cluster)
-    {
-        cluster.schemaChange("CREATE TABLE IF NOT EXISTS " + KEYSPACE + ".tbl (pk int PRIMARY KEY)");
-        for (int i = 0; i < 10; i++)
-        {
-            cluster.coordinator(1).execute("INSERT INTO " + KEYSPACE + ".tbl (pk) VALUES (?)",
-                                           ConsistencyLevel.ALL,
-                                           i);
-        }
-    }
-
-    void validateRows(ICoordinator coordinator, SimpleQueryResult expected)
-    {
-        expected.reset();
-        SimpleQueryResult rows = coordinator.executeWithResult("SELECT * FROM " + KEYSPACE + ".tbl", ConsistencyLevel.QUORUM);
-        AssertUtils.assertRows(rows, expected);
     }
 }

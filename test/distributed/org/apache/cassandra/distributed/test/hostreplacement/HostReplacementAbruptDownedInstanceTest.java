@@ -24,18 +24,15 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.junit.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.distributed.Cluster;
 import org.apache.cassandra.distributed.api.ConsistencyLevel;
 import org.apache.cassandra.distributed.api.Feature;
-import org.apache.cassandra.distributed.api.ICoordinator;
 import org.apache.cassandra.distributed.api.IInvokableInstance;
 import org.apache.cassandra.distributed.api.SimpleQueryResult;
 import org.apache.cassandra.distributed.api.TokenSupplier;
-import org.apache.cassandra.distributed.shared.AssertUtils;
 import org.apache.cassandra.distributed.test.TestBaseImpl;
 
 import static org.apache.cassandra.config.CassandraRelevantProperties.BOOTSTRAP_SKIP_SCHEMA_CHECK;
@@ -44,11 +41,13 @@ import static org.apache.cassandra.distributed.shared.ClusterUtils.assertRingSta
 import static org.apache.cassandra.distributed.shared.ClusterUtils.awaitHealthyRing;
 import static org.apache.cassandra.distributed.shared.ClusterUtils.awaitJoinRing;
 import static org.apache.cassandra.distributed.shared.ClusterUtils.replaceHostAndStart;
-import static org.apache.cassandra.distributed.shared.ClusterUtils.stopUnchecked;
+import static org.apache.cassandra.distributed.shared.ClusterUtils.stopAbrupt;
+import static org.apache.cassandra.distributed.test.hostreplacement.HostReplacementTest.setupCluster;
+import static org.apache.cassandra.distributed.test.hostreplacement.HostReplacementTest.validateRows;
 
-public class HostReplaceAbruptTest extends TestBaseImpl
+public class HostReplacementAbruptDownedInstanceTest extends TestBaseImpl
 {
-    private static final Logger logger = LoggerFactory.getLogger(HostReplaceAbruptTest.class);
+    private static final Logger logger = LoggerFactory.getLogger(HostReplacementAbruptDownedInstanceTest.class);
 
     /**
      * Can we maybe also test with an abrupt shutdown, that is when the shutdown state is not broadcast and the node to be replaced is on NORMAL state?
@@ -73,10 +72,7 @@ public class HostReplaceAbruptTest extends TestBaseImpl
             // collect rows/tokens to detect issues later on if the state doesn't match
             SimpleQueryResult expectedState = nodeToRemove.coordinator().executeWithResult("SELECT * FROM " + KEYSPACE + ".tbl", ConsistencyLevel.ALL);
 
-            // block all messages to/from the node going down to make sure a clean shutdown doesn't happen
-            cluster.filters().allVerbs().to(nodeToRemove.config().num()).drop();
-            cluster.filters().allVerbs().from(nodeToRemove.config().num()).drop();
-            stopUnchecked(nodeToRemove);
+            stopAbrupt(cluster, nodeToRemove);
 
             // at this point node 2 should still be NORMAL on all other nodes
             peers.forEach(p -> assertRingState(p, nodeToRemove, "Normal"));
@@ -104,33 +100,5 @@ public class HostReplaceAbruptTest extends TestBaseImpl
 
             expectedRing.forEach(p -> validateRows(p.coordinator(), expectedState));
         }
-    }
-
-    //TODO don't copy/paste
-    private void setupCluster(Cluster cluster)
-    {
-        fixDistributedSchemas(cluster);
-        init(cluster);
-
-        populate(cluster);
-        cluster.forEach(i -> i.flush(KEYSPACE));
-    }
-
-    void populate(Cluster cluster)
-    {
-        cluster.schemaChange("CREATE TABLE IF NOT EXISTS " + KEYSPACE + ".tbl (pk int PRIMARY KEY)");
-        for (int i = 0; i < 10; i++)
-        {
-            cluster.coordinator(1).execute("INSERT INTO " + KEYSPACE + ".tbl (pk) VALUES (?)",
-                                           ConsistencyLevel.ALL,
-                                           i);
-        }
-    }
-
-    void validateRows(ICoordinator coordinator, SimpleQueryResult expected)
-    {
-        expected.reset();
-        SimpleQueryResult rows = coordinator.executeWithResult("SELECT * FROM " + KEYSPACE + ".tbl", ConsistencyLevel.QUORUM);
-        AssertUtils.assertRows(rows, expected);
     }
 }

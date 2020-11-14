@@ -19,8 +19,12 @@
 package org.apache.cassandra.distributed.shared;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+
+import com.google.common.base.Joiner;
 
 import org.apache.cassandra.config.CassandraRelevantProperties;
 
@@ -54,6 +58,16 @@ public final class WithProperties implements AutoCloseable
     public void set(CassandraRelevantProperties prop, String value)
     {
         with(prop.getKey(), value);
+    }
+
+    public void set(CassandraRelevantProperties prop, String... values)
+    {
+        set(prop, Arrays.asList(values));
+    }
+
+    public void set(CassandraRelevantProperties prop, Collection<String> values)
+    {
+        set(prop, Joiner.on(",").join(values));
     }
 
     public void set(CassandraRelevantProperties prop, boolean value)

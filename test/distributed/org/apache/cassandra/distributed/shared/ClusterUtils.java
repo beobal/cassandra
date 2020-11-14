@@ -43,6 +43,7 @@ import org.apache.cassandra.distributed.api.ICluster;
 import org.apache.cassandra.distributed.api.IInstance;
 import org.apache.cassandra.distributed.api.IInstanceConfig;
 import org.apache.cassandra.distributed.api.IInvokableInstance;
+import org.apache.cassandra.distributed.api.IMessageFilters;
 import org.apache.cassandra.distributed.api.NodeToolResult;
 import org.apache.cassandra.distributed.impl.AbstractCluster;
 import org.apache.cassandra.distributed.impl.InstanceConfig;
@@ -92,6 +93,32 @@ public class ClusterUtils
     public static void stopUnchecked(IInstance i)
     {
         Futures.getUnchecked(i.shutdown());
+    }
+
+    /**
+     * Stops an instance abruptly.  This is done by blocking all messages to/from so all other instances are unable
+     * to communicate, then stopping the instance gracefully.
+     *
+     * The assumption is that hard stopping inbound and outbound messages will apear to the cluster as if the instance
+     * was stopped via kill -9; this does not hold true if the instance is restarted as it knows it was properly shutdown.
+     *
+     * @param cluster to filter messages to
+     * @param inst to shut down
+     */
+    public static <I extends IInstance> void stopAbrupt(ICluster<I> cluster, I inst)
+    {
+        // block all messages to/from the node going down to make sure a clean shutdown doesn't happen
+        IMessageFilters.Filter to = cluster.filters().allVerbs().to(inst.config().num()).drop();
+        IMessageFilters.Filter from = cluster.filters().allVerbs().from(inst.config().num()).drop();
+        try
+        {
+            stopUnchecked(inst);
+        }
+        finally
+        {
+            from.off();
+            to.off();
+        }
     }
 
     /**
@@ -450,6 +477,23 @@ public class ClusterUtils
         }
 
         return table;
+    }
+
+    /**
+     * Get the tokens assigned to the instance via config.  This method does not work if the instance has learned
+     * or generated its tokens.
+     *
+     * @param instance to get tokens from
+     * @return non-empty list of tokens
+     */
+    public static List<String> getTokens(IInstance instance)
+    {
+        IInstanceConfig conf = instance.config();
+        int numTokens = conf.getInt("num_tokens");
+        Assert.assertEquals("Only single token is supported", 1, numTokens);
+        String token = conf.getString("initial_token");
+        Assert.assertNotNull("initial_token was not found", token);
+        return Arrays.asList(token);
     }
 
     /**

@@ -152,7 +152,7 @@ public class TestBaseImpl extends DistributedTestBase
         throw new IllegalArgumentException("Unsupported value type (value is " + value + ')');
     }
 
-    public void fixDistributedSchemas(Cluster cluster)
+    public static void fixDistributedSchemas(Cluster cluster)
     {
         // These keyspaces are under replicated by default, so must be updated when doing a mulit-node cluster;
         // else bootstrap will fail with 'Unable to find sufficient sources for streaming range <range> in keyspace <name>'

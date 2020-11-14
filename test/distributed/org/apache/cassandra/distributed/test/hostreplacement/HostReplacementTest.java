@@ -247,7 +247,7 @@ public class HostReplacementTest extends TestBaseImpl
         }
     }
 
-    private void setupCluster(Cluster cluster)
+    static void setupCluster(Cluster cluster)
     {
         fixDistributedSchemas(cluster);
         init(cluster);
@@ -256,7 +256,7 @@ public class HostReplacementTest extends TestBaseImpl
         cluster.forEach(i -> i.flush(KEYSPACE));
     }
 
-    void populate(Cluster cluster)
+    static void populate(Cluster cluster)
     {
         cluster.schemaChange("CREATE TABLE IF NOT EXISTS " + KEYSPACE + ".tbl (pk int PRIMARY KEY)");
         for (int i = 0; i < 10; i++)
@@ -267,7 +267,7 @@ public class HostReplacementTest extends TestBaseImpl
         }
     }
 
-    void validateRows(ICoordinator coordinator, SimpleQueryResult expected)
+    static void validateRows(ICoordinator coordinator, SimpleQueryResult expected)
     {
         expected.reset();
         SimpleQueryResult rows = coordinator.executeWithResult("SELECT * FROM " + KEYSPACE + ".tbl", ConsistencyLevel.ALL);
