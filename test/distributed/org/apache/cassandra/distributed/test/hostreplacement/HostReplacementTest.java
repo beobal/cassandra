@@ -21,7 +21,6 @@ package org.apache.cassandra.distributed.test.hostreplacement;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -39,15 +38,14 @@ import org.apache.cassandra.distributed.shared.WithProperties;
 import org.apache.cassandra.distributed.test.TestBaseImpl;
 import org.assertj.core.api.Assertions;
 
-import static org.apache.cassandra.config.CassandraRelevantProperties.BOOTSTRAP_SCHEMA_DELAY_MS;
 import static org.apache.cassandra.config.CassandraRelevantProperties.BOOTSTRAP_SKIP_SCHEMA_CHECK;
 import static org.apache.cassandra.config.CassandraRelevantProperties.GOSSIPER_QUARANTINE_DELAY;
 import static org.apache.cassandra.config.CassandraRelevantProperties.REPLACEMENT_ALLOWED_GOSSIP_STATUSES;
 import static org.apache.cassandra.config.CassandraRelevantProperties.REPLACEMENT_ALLOW_EMPTY;
 import static org.apache.cassandra.distributed.shared.ClusterUtils.assertInRing;
 import static org.apache.cassandra.distributed.shared.ClusterUtils.assertRingIs;
-import static org.apache.cassandra.distributed.shared.ClusterUtils.awaitHealthyRing;
-import static org.apache.cassandra.distributed.shared.ClusterUtils.awaitJoinRing;
+import static org.apache.cassandra.distributed.shared.ClusterUtils.awaitRingHealthy;
+import static org.apache.cassandra.distributed.shared.ClusterUtils.awaitRingJoin;
 import static org.apache.cassandra.distributed.shared.ClusterUtils.getTokenMetadataTokens;
 import static org.apache.cassandra.distributed.shared.ClusterUtils.replaceHostAndStart;
 import static org.apache.cassandra.distributed.shared.ClusterUtils.stopAll;
@@ -97,11 +95,11 @@ public class HostReplacementTest extends TestBaseImpl
             });
 
             // wait till the replacing node is in the ring
-            awaitJoinRing(seed, replacingNode);
-            awaitJoinRing(replacingNode, seed);
+            awaitRingJoin(seed, replacingNode);
+            awaitRingJoin(replacingNode, seed);
 
             // make sure all nodes are healthy
-            awaitHealthyRing(seed);
+            awaitRingHealthy(seed);
 
             assertRingIs(seed, seed, replacingNode);
             logger.info("Current ring is {}", assertRingIs(replacingNode, seed, replacingNode));
@@ -139,7 +137,7 @@ public class HostReplacementTest extends TestBaseImpl
                       .isInstanceOf(UnsupportedOperationException.class);
 
             // make sure all nodes are healthy
-            awaitHealthyRing(seed);
+            awaitRingHealthy(seed);
 
             assertRingIs(seed, seed, nodeToRemove);
             logger.info("Current ring is {}", assertRingIs(nodeToRemove, seed, nodeToRemove));
@@ -195,12 +193,12 @@ public class HostReplacementTest extends TestBaseImpl
             List<IInvokableInstance> expectedRing = Arrays.asList(seed, replacingNode, nodeToStayAlive);
 
             // wait till the replacing node is in the ring
-            awaitJoinRing(seed, replacingNode);
-            awaitJoinRing(replacingNode, seed);
-            awaitJoinRing(nodeToStayAlive, replacingNode);
+            awaitRingJoin(seed, replacingNode);
+            awaitRingJoin(replacingNode, seed);
+            awaitRingJoin(nodeToStayAlive, replacingNode);
 
             // make sure all nodes are healthy
-            logger.info("Current ring is {}", awaitHealthyRing(seed));
+            logger.info("Current ring is {}", awaitRingHealthy(seed));
 
             expectedRing.forEach(i -> assertRingIs(i, expectedRing));
 

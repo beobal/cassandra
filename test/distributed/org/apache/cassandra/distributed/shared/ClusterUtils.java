@@ -22,6 +22,7 @@ import java.io.File;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -30,6 +31,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -51,6 +53,7 @@ import org.apache.cassandra.service.StorageService;
 
 import static com.google.common.util.concurrent.Uninterruptibles.sleepUninterruptibly;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.in;
 
 /**
  * Utilities for working with jvm-dtest clusters.
@@ -296,6 +299,60 @@ public class ClusterUtils
         return ring;
     }
 
+    private static Map<String, Map<String, String>> awaitGossip(IInstance src, String errorMessage, Predicate<Map<String, Map<String, String>>> fn)
+    {
+        Map<String, Map<String, String>> gossip = null;
+        for (int i = 0; i < 100; i++)
+        {
+            gossip = gossipInfo(src);
+            if (fn.test(gossip))
+            {
+                return gossip;
+            }
+            sleepUninterruptibly(1, TimeUnit.SECONDS);
+        }
+        throw new AssertionError(errorMessage + "\n" + gossip);
+    }
+
+    /**
+     * Wait for the target instance to have the desired status. Target status is checked via string contains so works
+     * with 'NORMAL' but also can check tokens or full state.
+     *
+     * @param src instance to check on
+     * @param target instance to wait for
+     * @param targetStatus for the instance
+     * @return gossip info
+     */
+    public static Map<String, Map<String, String>> awaitGossipStatus(IInstance src, IInstance target, String targetStatus)
+    {
+        return awaitGossip(src, "Node " + target + " did not match state " + targetStatus, gossip -> {
+            Map<String, String> state = gossip.get(target.config().broadcastAddress().getAddress().toString());
+            if (state == null)
+                return false;
+            String status = state.get("STATUS_WITH_PORT");
+            if (status == null)
+                status = state.get("STATUS");
+            if (status == null)
+                return targetStatus == null;
+            return status.contains(targetStatus);
+        });
+    }
+
+    private static List<RingInstanceDetails> awaitRing(IInstance src, String errorMessage, Predicate<List<RingInstanceDetails>> fn)
+    {
+        List<RingInstanceDetails> ring = null;
+        for (int i = 0; i < 100; i++)
+        {
+            ring = ring(src);
+            if (fn.test(ring))
+            {
+                return ring;
+            }
+            sleepUninterruptibly(1, TimeUnit.SECONDS);
+        }
+        throw new AssertionError(errorMessage + "\n" + ring);
+    }
+
     /**
      * Wait for the target to be in the ring as seen by the source instance.
      *
@@ -303,9 +360,9 @@ public class ClusterUtils
      * @param target instance to wait for
      * @return the ring
      */
-    public static List<RingInstanceDetails> awaitJoinRing(IInstance src, IInstance target)
+    public static List<RingInstanceDetails> awaitRingJoin(IInstance src, IInstance target)
     {
-        return awaitJoinRing(src, target.broadcastAddress().getAddress().getHostAddress());
+        return awaitRingJoin(src, target.broadcastAddress().getAddress().getHostAddress());
     }
 
     /**
@@ -315,21 +372,17 @@ public class ClusterUtils
      * @param targetAddress instance address to wait for
      * @return the ring
      */
-    public static List<RingInstanceDetails> awaitJoinRing(IInstance src, String targetAddress)
+    public static List<RingInstanceDetails> awaitRingJoin(IInstance src, String targetAddress)
     {
-        for (int i = 0; i < 100; i++)
-        {
-            List<RingInstanceDetails> ring = ring(src);
+        return awaitRing(src, "Node " + targetAddress + " did not join the ring...", ring -> {
             Optional<RingInstanceDetails> match = ring.stream().filter(d -> d.address.equals(targetAddress)).findFirst();
             if (match.isPresent())
             {
                 RingInstanceDetails details = match.get();
-                if (details.status.equals("Up") && details.state.equals("Normal"))
-                    return ring;
+                return details.status.equals("Up") && details.state.equals("Normal");
             }
-            sleepUninterruptibly(1, TimeUnit.SECONDS);
-        }
-        throw new AssertionError("Node " + targetAddress + " did not join the ring...");
+            return false;
+        });
     }
 
     /**
@@ -338,19 +391,29 @@ public class ClusterUtils
      * @param src instance to check on
      * @return the ring
      */
-    public static List<RingInstanceDetails> awaitHealthyRing(IInstance src)
+    public static List<RingInstanceDetails> awaitRingHealthy(IInstance src)
     {
-        for (int i = 0; i < 100; i++)
-        {
-            List<RingInstanceDetails> ring = ring(src);
-            if (ring.stream().allMatch(ClusterUtils::isRingInstanceDetailsHealthy))
-            {
-                // all nodes are healthy
-                return ring;
-            }
-            sleepUninterruptibly(1, TimeUnit.SECONDS);
-        }
-        throw new AssertionError("Timeout waiting for ring to become healthy");
+        return awaitRing(src, "Timeout waiting for ring to become healthy",
+                         ring ->
+                         ring.stream().allMatch(ClusterUtils::isRingInstanceDetailsHealthy));
+    }
+
+    /**
+     * Wait for the ring to have the target instance with the provided state.
+     *
+     * @param src instance to check on
+     * @param target to look for
+     * @param state expected
+     * @return the ring
+     */
+    public static List<RingInstanceDetails> awaitRingState(IInstance src, IInstance target, String state)
+    {
+        return awaitRing(src, "Timeout waiting for " + target + " to have state " + state,
+                         ring ->
+                         ring.stream()
+                             .filter(d -> d.address.equals(target.config().broadcastAddress().getAddress().getHostAddress()))
+                             .filter(d -> d.state.equals(state))
+                             .findAny().isPresent());
     }
 
     /**
@@ -430,7 +493,7 @@ public class ClusterUtils
      * @param inst to check on
      * @return gossip info
      */
-    public static Table<String, String, String> gossipInfo(IInstance inst)
+    public static Map<String, Map<String, String>> gossipInfo(IInstance inst)
     {
         NodeToolResult results = inst.nodetoolResult("gossipinfo");
         results.asserts().success();
@@ -449,17 +512,17 @@ public class ClusterUtils
                                         InetSocketAddress target, int expectedGeneration, int expectedHeartbeat)
     {
         String targetAddress = target.getAddress().toString();
-        Table<String, String, String> gossipInfo = gossipInfo(inst);
-        Map<String, String> gossipState = gossipInfo.rowMap().get(targetAddress);
+        Map<String, Map<String, String>> gossipInfo = gossipInfo(inst);
+        Map<String, String> gossipState = gossipInfo.get(targetAddress);
         if (gossipState == null)
             throw new NullPointerException("Unable to find gossip info for " + targetAddress + "; gossip info = " + gossipInfo);
         Assert.assertEquals(Long.toString(expectedGeneration), gossipState.get("generation"));
         Assert.assertEquals(Long.toString(expectedHeartbeat), gossipState.get("heartbeat")); //TODO do we really mix these two?
     }
 
-    private static Table<String, String, String> parseGossipInfo(String str)
+    private static Map<String, Map<String, String>> parseGossipInfo(String str)
     {
-        Table<String, String, String> table = HashBasedTable.create();
+        Map<String, Map<String, String>> map = new HashMap<>();
         String[] lines = str.split("\n");
         String currentInstance = null;
         for (String line : lines)
@@ -473,10 +536,11 @@ public class ClusterUtils
             Objects.requireNonNull(currentInstance);
             String[] kv = line.trim().split(":", 2);
             assert kv.length == 2 : "When splitting line " + line + " expected 2 parts but not true";
-            table.put(currentInstance, kv[0], kv[1]);
+            Map<String, String> state = map.computeIfAbsent(currentInstance, ignore -> new HashMap<>());
+            state.put(kv[0], kv[1]);
         }
 
-        return table;
+        return map;
     }
 
     /**

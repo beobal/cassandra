@@ -40,8 +40,8 @@ import static org.apache.cassandra.config.CassandraRelevantProperties.REPLACEMEN
 import static org.apache.cassandra.distributed.shared.ClusterUtils.assertGossipInfo;
 import static org.apache.cassandra.distributed.shared.ClusterUtils.assertNotInRing;
 import static org.apache.cassandra.distributed.shared.ClusterUtils.assertRingIs;
-import static org.apache.cassandra.distributed.shared.ClusterUtils.awaitHealthyRing;
-import static org.apache.cassandra.distributed.shared.ClusterUtils.awaitJoinRing;
+import static org.apache.cassandra.distributed.shared.ClusterUtils.awaitRingHealthy;
+import static org.apache.cassandra.distributed.shared.ClusterUtils.awaitRingJoin;
 import static org.apache.cassandra.distributed.shared.ClusterUtils.getTokenMetadataTokens;
 import static org.apache.cassandra.distributed.shared.ClusterUtils.replaceHostAndStart;
 import static org.apache.cassandra.distributed.shared.ClusterUtils.stopAll;
@@ -106,8 +106,8 @@ public class HostReplacementOfDowedClusterTest extends TestBaseImpl
             // now create a new node to replace the other node
             IInvokableInstance replacingNode = replaceHostAndStart(cluster, nodeToRemove);
 
-            awaitJoinRing(seed, replacingNode);
-            awaitJoinRing(replacingNode, seed);
+            awaitRingJoin(seed, replacingNode);
+            awaitRingJoin(replacingNode, seed);
             assertNotInRing(seed, nodeToRemove);
             logger.info("Current ring is {}", assertNotInRing(replacingNode, nodeToRemove));
 
@@ -161,17 +161,17 @@ public class HostReplacementOfDowedClusterTest extends TestBaseImpl
             IInvokableInstance replacingNode = replaceHostAndStart(cluster, nodeToRemove);
 
             // wait till the replacing node is in the ring
-            awaitJoinRing(seed, replacingNode);
-            awaitJoinRing(replacingNode, seed);
+            awaitRingJoin(seed, replacingNode);
+            awaitRingJoin(replacingNode, seed);
 
             // we see that the replaced node is properly in the ring, now lets add the other node back
             nodeToStartAfterReplace.startup();
 
-            awaitJoinRing(seed, nodeToStartAfterReplace);
-            awaitJoinRing(replacingNode, nodeToStartAfterReplace);
+            awaitRingJoin(seed, nodeToStartAfterReplace);
+            awaitRingJoin(replacingNode, nodeToStartAfterReplace);
 
             // make sure all nodes are healthy
-            awaitHealthyRing(seed);
+            awaitRingHealthy(seed);
 
             assertRingIs(seed, seed, replacingNode, nodeToStartAfterReplace);
             assertRingIs(replacingNode, seed, replacingNode, nodeToStartAfterReplace);

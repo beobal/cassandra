@@ -28,12 +28,13 @@ import org.junit.Test;
 import org.apache.cassandra.distributed.Cluster;
 import org.apache.cassandra.distributed.api.Feature;
 import org.apache.cassandra.distributed.api.IInvokableInstance;
+import org.apache.cassandra.distributed.shared.ClusterUtils;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.tools.ToolRunner;
 import org.assertj.core.api.Assertions;
 
 import static org.apache.cassandra.distributed.shared.ClusterUtils.assertRingIs;
-import static org.apache.cassandra.distributed.shared.ClusterUtils.awaitJoinRing;
+import static org.apache.cassandra.distributed.shared.ClusterUtils.awaitRingJoin;
 import static org.apache.cassandra.distributed.shared.ClusterUtils.getDirectories;
 import static org.apache.cassandra.distributed.shared.ClusterUtils.stopUnchecked;
 import static org.apache.cassandra.distributed.shared.ClusterUtils.updateAddress;
@@ -91,8 +92,8 @@ public class IPMembershipTest extends TestBaseImpl
             nodeToReplace.startup();
 
             // gossip takes some time, wait for the other nodes to see this one updated
-            awaitJoinRing(cluster.get(1), "127.0.0.4");
-            awaitJoinRing(cluster.get(2), "127.0.0.4");
+            ClusterUtils.awaitRingJoin(cluster.get(1), "127.0.0.4");
+            ClusterUtils.awaitRingJoin(cluster.get(2), "127.0.0.4");
 
             Set<String> expected = ImmutableSet.of("127.0.0.1", "127.0.0.2", "127.0.0.4");
             cluster.forEach(i -> assertRingIs(i, expected));

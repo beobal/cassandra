@@ -38,8 +38,8 @@ import org.apache.cassandra.distributed.test.TestBaseImpl;
 import static org.apache.cassandra.config.CassandraRelevantProperties.BOOTSTRAP_SKIP_SCHEMA_CHECK;
 import static org.apache.cassandra.distributed.shared.ClusterUtils.assertRingIs;
 import static org.apache.cassandra.distributed.shared.ClusterUtils.assertRingState;
-import static org.apache.cassandra.distributed.shared.ClusterUtils.awaitHealthyRing;
-import static org.apache.cassandra.distributed.shared.ClusterUtils.awaitJoinRing;
+import static org.apache.cassandra.distributed.shared.ClusterUtils.awaitRingHealthy;
+import static org.apache.cassandra.distributed.shared.ClusterUtils.awaitRingJoin;
 import static org.apache.cassandra.distributed.shared.ClusterUtils.replaceHostAndStart;
 import static org.apache.cassandra.distributed.shared.ClusterUtils.stopAbrupt;
 import static org.apache.cassandra.distributed.test.hostreplacement.HostReplacementTest.setupCluster;
@@ -90,10 +90,10 @@ public class HostReplacementAbruptDownedInstanceTest extends TestBaseImpl
                 properties.set(BOOTSTRAP_SKIP_SCHEMA_CHECK, true);
             });
             logger.info("Host replacement of {} with {} took {}", nodeToRemove, replacingNode, Duration.ofNanos(System.nanoTime() - startNanos));
-            peers.forEach(p -> awaitJoinRing(p, replacingNode));
+            peers.forEach(p -> awaitRingJoin(p, replacingNode));
 
             // make sure all nodes are healthy
-            awaitHealthyRing(seed);
+            awaitRingHealthy(seed);
 
             List<IInvokableInstance> expectedRing = Arrays.asList(seed, peer, replacingNode);
             expectedRing.forEach(p -> assertRingIs(p, expectedRing));
