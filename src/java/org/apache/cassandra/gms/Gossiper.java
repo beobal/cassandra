@@ -1487,12 +1487,14 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
     */
     void examineGossiper(List<GossipDigest> gDigestList, List<GossipDigest> deltaGossipDigestList, Map<InetAddressAndPort, EndpointState> deltaEpStateMap)
     {
+        boolean isShadowRoundResponse = false;
         if (gDigestList.size() == 0)
         {
            /* we've been sent a *completely* empty syn, which should normally never happen since an endpoint will at least send a syn with itself.
               If this is happening then the node is attempting shadow gossip, and we should respond with everything we know.
             */
             logger.debug("Shadow request received, adding all states");
+            isShadowRoundResponse = true;
             for (Map.Entry<InetAddressAndPort, EndpointState> entry : endpointStateMap.entrySet())
             {
                 gDigestList.add(new GossipDigest(entry.getKey(), 0, 0));
@@ -1515,7 +1517,46 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
                 /* get the max version of all keys in the state associated with this endpoint */
                 int maxLocalVersion = getMaxEndpointStateVersion(epStatePtr);
                 if (remoteGeneration == localGeneration && maxRemoteVersion == maxLocalVersion)
+                {
+                    if (isShadowRoundResponse && remoteGeneration == 0 && maxRemoteVersion == 0)
+                    {
+                        // We have no app states loaded for this endpoint, but we may well have
+                        // some state persisted in the system keyspace. This can happen in the case
+                        // of a full cluster bounce where one or more nodes fail to come up. As
+                        // gossip state is transient, the peers which do successfully start will be
+                        // aware of the failed nodes thanks to StorageService::initServer calling
+                        // Gossiper.instance::addSavedEndpoint with every endpoint in TokenMetadata,
+                        // which itself is populated from the system tables at startup.
+                        // Here we know that a peer which is starting up and attempting to perform
+                        // a shadow round of gossip. This peer is in one of two states:
+                        // * it is replacing a down node, in which case it needs to learn the tokens
+                        //   of the down node and optionally its host id.
+                        // * it needs to check that no other instance is already associated with its
+                        //   endpoint address and port.
+                        // To support both of these cases, we can add the tokens and host id from
+                        // the system table, if they exist. These are only ever persisted to the system
+                        // table when the actual node to which they apply enters the UP/NORMAL state.
+                        // This invariant will be preserved as nodes never persist or propagate the
+                        // results of a shadow round, so this communication will be strictly limited
+                        // to this node and the node performing the shadow round.
+                        EndpointState newState = new EndpointState(epStatePtr.getHeartBeatState());
+                        UUID hostId = SystemKeyspace.loadHostIds().get(gDigest.endpoint);
+                        if (null != hostId)
+                        {
+                            newState.addApplicationState(ApplicationState.HOST_ID,
+                                                         StorageService.instance.valueFactory.hostId(hostId));
+                        }
+                        Set<Token> tokens = SystemKeyspace.loadTokens().get(gDigest.endpoint);
+                        if (null != tokens && !tokens.isEmpty())
+                        {
+                            newState.addApplicationState(ApplicationState.TOKENS,
+                                                         StorageService.instance.valueFactory.tokens(tokens));
+                        }
+                        deltaEpStateMap.put(gDigest.endpoint, newState);
+                    }
+
                     continue;
+                }
 
                 if (remoteGeneration > localGeneration)
                 {
@@ -1894,6 +1935,19 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
     protected boolean isInShadowRound()
     {
         return inShadowRound;
+    }
+
+    public void initializeUnreachableNodeUnsafe(InetAddressAndPort addr)
+    {
+        EndpointState state = new EndpointState(new HeartBeatState(0));
+        state.markDead();
+        EndpointState oldState = endpointStateMap.putIfAbsent(addr, state);
+        if(null != oldState)
+        {
+            throw new RuntimeException("Attempted to initialize endpoint state for unreachable node, " +
+                                       "but found existing endpoint state for it. This should only " +
+                                       "happen during a replacement");
+        }
     }
 
     @VisibleForTesting

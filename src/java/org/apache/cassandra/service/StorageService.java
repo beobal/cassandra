@@ -534,6 +534,53 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
                 throw new RuntimeException(String.format("Could not find tokens for %s to replace", replaceAddress));
 
             bootstrapTokens = TokenSerializer.deserialize(tokenMetadata.partitioner, new DataInputStream(new ByteArrayInputStream(tokensVersionedValue.toBytes())));
+            if (!tokenMetadata.getAllEndpoints().contains(replaceAddress))
+            {
+                Map<Token, InetAddressAndPort> conflicts = new HashMap<>();
+                for (Token token : bootstrapTokens)
+                {
+                    InetAddressAndPort conflict = tokenMetadata.getEndpoint(token);
+                    if (null != conflict && !conflict.equals(replaceAddress))
+                        conflicts.put(token, tokenMetadata.getEndpoint(token));
+                }
+
+                if (!conflicts.isEmpty())
+                {
+                    String error = String.format("Conflicting token ownership information detected between " +
+                                                 "gossip and current ring view during proposed replacement " +
+                                                 "of %s. Some tokens identified in gossip for the node being " +
+                                                 "replaced are currently owned by other peers: %s",
+                                                 replaceAddress,
+                                                 conflicts.entrySet()
+                                                          .stream()
+                                                          .map(e -> e.getKey() + "(" + e.getValue() + ")" )
+                                                          .collect(Collectors.joining(",")));
+                    throw new RuntimeException(error);
+
+                }
+                // When replacing a node, we take ownership of all its tokens.
+                // If that node is currently down and not present in the gossip info
+                // of any other live peers, then we will not be able to take ownership
+                // of its tokens during bootstrap as they have no way of being propagated
+                // to this node's TokenMetadata. TM is loaded at startup (in which case
+                // it will be/ empty for a new replacement node) and only updated with
+                // tokens for an endpoint during normal state propagation (which will not
+                // occur if no peers have gossip state for it).
+                // However, the presence of host id and tokens in the system tables implies
+                // that the nodel managed to complete bootstrap at some point in the past.
+                // Peers may include this information loaded directly from system tables
+                // in a GossipDigestAck *only if* the GossipDigestSyn was sent as part of a
+                // shadow round (otherwise, a GossipDigestAck contains only state about peers
+                // learned via gossip).
+                // It is safe to do this here as since we completed a shadow round we know
+                // that :
+                // * replaceAddress successfully bootstrapped at some point and owned these
+                //   tokens
+                // * we know that no other node currently owns these tokens
+                // * we are going to completely take over replaceAddress's ownership of
+                //   these tokens.
+                tokenMetadata.updateNormalTokens(bootstrapTokens, replaceAddress);
+            }
         }
         catch (IOException e)
         {
@@ -1572,9 +1619,28 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
                     InetAddressAndPort existing = tokenMetadata.getEndpoint(token);
                     if (existing != null)
                     {
-                        long nanoDelay = schemaDelay * 1000000L;
-                        if (Gossiper.instance.getEndpointStateForEndpoint(existing).getUpdateTimestamp() > (System.nanoTime() - nanoDelay))
-                            throw new UnsupportedOperationException("Cannot replace a live node... ");
+                        EndpointState epState = Gossiper.instance.getEndpointStateForEndpoint(existing);
+                        // If we were only able to learn about the node being replaced through the
+                        // shadow gossip round (i.e. there is no state in gossip across the cluster
+                        // about it, perhaps because the entire cluster has been bounced since it went
+                        // down), then we're safe to proceed with the replacement. In this case, there
+                        // will be no local endpoint state as we discard the results of the shadow
+                        // round after preparing replacement info. We inject a minimal EndpointState
+                        // to keep FailureDetector::isAlive and Gossiper::compareEndpointStartup from
+                        // failing later in the replacement, as they both expect the replaced node to
+                        // be fully present in gossip.
+                        // Otherwise, if the replaced node is present in gossip, we need check that
+                        // it is not in fact live.
+                        if (null == epState)
+                        {
+                            Gossiper.instance.initializeUnreachableNodeUnsafe(existing);
+                        }
+                        else
+                        {
+                            long nanoDelay = schemaDelay * 1000000L;
+                            if (epState.getUpdateTimestamp() > (System.nanoTime() - nanoDelay))
+                                throw new UnsupportedOperationException("Cannot replace a live node... ");
+                        }
                         collisions.add(existing);
                     }
                     else
