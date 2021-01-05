@@ -159,9 +159,9 @@ Table of Contents
   Note: OPTIONS requests may be sent by the client at any time in the connection
   lifecycle, both before and after the STARTUP exchange. As mentioned, those
   transmitted before STARTUP, as well as the SUPPORTED responses the server returns
-  are must be unframed. Any OPTIONS/SUPPORTED exchanges after the STARTUP handshake
-  are formatted according to the negotiated protocol version, so for v5 these must
-  be framed.
+  are unframed. Any OPTIONS/SUPPORTED exchanges after the STARTUP handshake are
+  formatted according to the negotiated protocol version, so for v5 these must be
+  framed.
 
   2.3.2 Compression
 
@@ -218,9 +218,9 @@ Table of Contents
   of the version field from previous protocol versions. This was always to some extent
   redundant as the version is set and enforced at the connection level. It was also
   previously possible to enable compression for an individual envelope. This is no
-  longer an possible, as the framing format is responsible for compression, which is
-  set for the lifetime of a connection and applies to all messages transmitted throughout
-  it (see Section 2.2.1 for caveats). The compression flag is therefore deprecated and
+  longer possible, as the framing format is responsible for compression, which is set for
+  the lifetime of a connection and applies to all messages transmitted throughout it
+  (see Section 2.2.1 for caveats). The compression flag is therefore deprecated and
   ignored in protocol v5.
 
 2.4.1.1. unused

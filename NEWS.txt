@@ -116,7 +116,7 @@ New features
 
 Upgrading
 ---------
-    - Native protocol v5 is promoted from beta in this release. The wire format ha changed 
+    - Native protocol v5 is promoted from beta in this release. The wire format has changed
       significantly and users should take care to ensure client drivers are upgraded to a version
       with support for the final v5 format, if currently connecting over v5-beta. (CASSANDRA-15299)
 
