@@ -200,7 +200,7 @@ public class SimpleClient implements Closeable
         responseHandler.eventHandler = eventHandler;
     }
 
-    protected void establishConnection() throws IOException
+    public void establishConnection() throws IOException
     {
         // Configure the client.
         bootstrap = new Bootstrap()
