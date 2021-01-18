@@ -141,12 +141,13 @@ import static org.apache.cassandra.distributed.api.Feature.NETWORK;
 import static org.apache.cassandra.distributed.impl.DistributedTestSnitch.fromCassandraInetAddressAndPort;
 import static org.apache.cassandra.distributed.impl.DistributedTestSnitch.toCassandraInetAddressAndPort;
 import static org.apache.cassandra.net.Verb.BATCH_STORE_REQ;
+import static org.apache.cassandra.utils.Clock.Global.nanoTime;
 
 public class Instance extends IsolatedExecutor implements IInvokableInstance
 {
     public final IInstanceConfig config;
     private volatile boolean initialized = false;
-    private final long startedAt = System.nanoTime();
+    private final long startedAt = nanoTime();
 
     // should never be invoked directly, so that it is instantiated on other class loader;
     // only visible for inheritance
@@ -544,7 +545,7 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
                 StorageService.instance.registerDaemon(CassandraDaemon.getInstanceForTesting());
                 if (config.has(GOSSIP))
                 {
-                    MigrationManager.setUptimeFn(() -> TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt));
+                    MigrationManager.setUptimeFn(() -> TimeUnit.NANOSECONDS.toMillis(nanoTime() - startedAt));
                     StorageService.instance.initServer();
                     StorageService.instance.removeShutdownHook();
                     Gossiper.waitToSettle();
