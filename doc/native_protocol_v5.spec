@@ -184,7 +184,7 @@ Table of Contents
 
       0         8        16        24        32         40
       +---------+---------+---------+---------+---------+
-      | unused  |  flags  |      stream       | opcode  |
+      | version |  flags  |      stream       | opcode  |
       +---------+---------+---------+---------+---------+
       |                length                 |
       +---------+---------+---------+---------+
@@ -223,10 +223,26 @@ Table of Contents
   (see Section 2.2.1 for caveats). The compression flag is therefore deprecated and
   ignored in protocol v5.
 
-2.4.1.1. unused
+2.4.1.1. version
 
-  A single byte, this is padding to emulate the version field from earlier versions which
-  is deprecated and ignored in protocol v5.
+  The version is a single byte that indicates both the direction of the message
+  (request or response) and the version of the protocol in use. The most
+  significant bit of version is used to define the direction of the message:
+  0 indicates a request, 1 indicates a response. This can be useful for protocol
+  analyzers to distinguish the nature of the packet from the direction in which
+  it is moving. The rest of that byte is the protocol version (5 for the protocol
+  defined in this document). In other words, for this version of the protocol,
+  version will be one of:
+    0x05    Request frame for this protocol version
+    0x85    Response frame for this protocol version
+
+  Please note that while every message ships with the version, only one version
+  of messages is accepted on a given connection. In other words, the first message
+  exchanged (STARTUP) sets the version for the connection for the lifetime of this
+  connection.
+
+  This document describes version 5 of the protocol. For the changes made since
+  version 4, see Section 10.
 
 2.4.1.2. flags
 
