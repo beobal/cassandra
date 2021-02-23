@@ -2493,56 +2493,56 @@ workflows:
         requires:
         - start_j11_cqlsh_tests-no-vnodes
         - j8_build
-  java11_build_and_run_tests:
-    jobs:
-    - j11_build
-    - start_j11_unit_tests:
-        type: approval
-    - j11_unit_tests:
-        requires:
-        - start_j11_unit_tests
-        - j11_build
-    - j11_jvm_dtests:
-        requires:
-        - j11_build
-    - j11_cqlshlib_tests:
-        requires:
-        - j11_build
-    - start_j11_dtests:
-        type: approval
-    - j11_dtests-with-vnodes:
-        requires:
-        - start_j11_dtests
-        - j11_build
-    - j11_dtests-no-vnodes:
-        requires:
-        - start_j11_dtests
-        - j11_build
-    - start_j11_cqlsh_tests-with-vnodes:
-        type: approval
-    - j11_cqlsh-dtests-py2-with-vnodes:
-        requires:
-        - start_j11_cqlsh_tests-with-vnodes
-        - j11_build
-    - j11_cqlsh-dtests-py3-with-vnodes:
-        requires:
-        - start_j11_cqlsh_tests-with-vnodes
-        - j11_build
-    - j11_cqlsh-dtests-py38-with-vnodes:
-        requires:
-        - start_j11_cqlsh_tests-with-vnodes
-        - j11_build
-    - start_j11_cqlsh_tests-no-vnodes:
-        type: approval
-    - j11_cqlsh-dtests-py2-no-vnodes:
-        requires:
-        - start_j11_cqlsh_tests-no-vnodes
-        - j11_build
-    - j11_cqlsh-dtests-py3-no-vnodes:
-        requires:
-        - start_j11_cqlsh_tests-no-vnodes
-        - j11_build
-    - j11_cqlsh-dtests-py38-no-vnodes:
-        requires:
-        - start_j11_cqlsh_tests-no-vnodes
-        - j11_build
+#  java11_build_and_run_tests:
+#    jobs:
+#    - j11_build
+#    - start_j11_unit_tests:
+#        type: approval
+#    - j11_unit_tests:
+#        requires:
+#        - start_j11_unit_tests
+#        - j11_build
+#    - j11_jvm_dtests:
+#        requires:
+#        - j11_build
+#    - j11_cqlshlib_tests:
+#        requires:
+#        - j11_build
+#    - start_j11_dtests:
+#        type: approval
+#    - j11_dtests-with-vnodes:
+#        requires:
+#        - start_j11_dtests
+#        - j11_build
+#    - j11_dtests-no-vnodes:
+#        requires:
+#        - start_j11_dtests
+#        - j11_build
+#    - start_j11_cqlsh_tests-with-vnodes:
+#        type: approval
+#    - j11_cqlsh-dtests-py2-with-vnodes:
+#        requires:
+#        - start_j11_cqlsh_tests-with-vnodes
+#        - j11_build
+#    - j11_cqlsh-dtests-py3-with-vnodes:
+#        requires:
+#        - start_j11_cqlsh_tests-with-vnodes
+#        - j11_build
+#    - j11_cqlsh-dtests-py38-with-vnodes:
+#        requires:
+#        - start_j11_cqlsh_tests-with-vnodes
+#        - j11_build
+#    - start_j11_cqlsh_tests-no-vnodes:
+#        type: approval
+#    - j11_cqlsh-dtests-py2-no-vnodes:
+#        requires:
+#        - start_j11_cqlsh_tests-no-vnodes
+#        - j11_build
+#    - j11_cqlsh-dtests-py3-no-vnodes:
+#        requires:
+#        - start_j11_cqlsh_tests-no-vnodes
+#        - j11_build
+#    - j11_cqlsh-dtests-py38-no-vnodes:
+#        requires:
+#        - start_j11_cqlsh_tests-no-vnodes
+#        - j11_build
