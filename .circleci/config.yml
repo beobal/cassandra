@@ -2357,8 +2357,11 @@ workflows:
     - j8_unit_tests:
         requires:
         - j8_build
+    - start_j8_jvm_dtests:
+        type: approval
     - j8_jvm_dtests:
         requires:
+        - start_j8_jvm_dtests
         - j8_build
     - start_j11_unit_tests:
         type: approval
