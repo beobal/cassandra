@@ -19,13 +19,17 @@
 package org.apache.cassandra.distributed.test;
 
 import java.io.Closeable;
+import java.net.InetAddress;
 import java.util.Collection;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
+import java.util.stream.Collectors;
 
+import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.Uninterruptibles;
 import org.junit.Assert;
 import org.junit.Test;
@@ -35,7 +39,12 @@ import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
 import net.bytebuddy.implementation.MethodDelegation;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.distributed.Cluster;
+import org.apache.cassandra.gms.ApplicationState;
+import org.apache.cassandra.gms.EndpointState;
+import org.apache.cassandra.gms.Gossiper;
 import org.apache.cassandra.service.StorageService;
+import org.apache.cassandra.utils.FBUtilities;
+import org.apache.cassandra.locator.InetAddressAndPort;
 
 import static net.bytebuddy.matcher.ElementMatchers.named;
 import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
@@ -44,6 +53,76 @@ import static org.apache.cassandra.distributed.api.Feature.NETWORK;
 
 public class GossipTest extends TestBaseImpl
 {
+    @Test
+    public void nodeDownDuringMove() throws Throwable
+    {
+        int liveCount = 1;
+        System.setProperty("cassandra.ring_delay_ms", "5000"); // down from 30s default
+        System.setProperty("cassandra.consistent.rangemovement", "false");
+        System.setProperty("cassandra.consistent.simultaneousmoves.allow", "true");
+        try (Cluster cluster = Cluster.build(2 + liveCount)
+                                      .withConfig(config -> config.with(NETWORK).with(GOSSIP))
+                                      .createWithoutStarting())
+        {
+            int fail = liveCount + 1;
+            int late = fail + 1;
+            for (int i = 1 ; i <= liveCount ; ++i)
+                cluster.get(i).startup();
+            cluster.get(fail).startup();
+            Collection<String> expectTokens = cluster.get(fail).callsOnInstance(() ->
+                                                                                StorageService.instance.getTokenMetadata().getTokens(FBUtilities.getBroadcastAddressAndPort())
+                                                                                                       .stream().map(Object::toString).collect(Collectors.toList())
+            ).call();
+
+            InetAddressAndPort failAddress = InetAddressAndPort.getByAddress(cluster.get(fail).broadcastAddress().getAddress());
+            // wait for NORMAL state
+            for (int i = 1 ; i <= liveCount ; ++i)
+            {
+                cluster.get(i).acceptsOnInstance((InetAddressAndPort endpoint) -> {
+                    EndpointState ep;
+                    while (null == (ep = Gossiper.instance.getEndpointStateForEndpoint(endpoint))
+                           || ep.getApplicationState(ApplicationState.STATUS) == null
+                           || !ep.getApplicationState(ApplicationState.STATUS).value.startsWith("NORMAL"))
+                        LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(10L));
+                }).accept(failAddress);
+            }
+
+            // set ourselves to MOVING, and wait for it to propagate
+            cluster.get(fail).runOnInstance(() -> {
+
+                Token token = Iterables.getFirst(StorageService.instance.getTokenMetadata().getTokens(FBUtilities.getBroadcastAddressAndPort()), null);
+                Gossiper.instance.addLocalApplicationState(ApplicationState.STATUS, StorageService.instance.valueFactory.moving(token));
+            });
+
+            for (int i = 1 ; i <= liveCount ; ++i)
+            {
+                cluster.get(i).acceptsOnInstance((InetAddressAndPort endpoint) -> {
+                    EndpointState ep;
+                    while (null == (ep = Gossiper.instance.getEndpointStateForEndpoint(endpoint))
+                           || (ep.getApplicationState(ApplicationState.STATUS) == null
+                               || !ep.getApplicationState(ApplicationState.STATUS).value.startsWith("MOVING")))
+                        LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(10L));
+                }).accept(failAddress);
+            }
+
+            cluster.get(fail).shutdown(false).get();
+            cluster.get(late).startup();
+            cluster.get(late).acceptsOnInstance((InetAddressAndPort endpoint) -> {
+                EndpointState ep;
+                while (null == (ep = Gossiper.instance.getEndpointStateForEndpoint(endpoint))
+                       || !ep.getApplicationState(ApplicationState.STATUS).value.startsWith("MOVING"))
+                    LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(10L));
+            }).accept(failAddress);
+
+            Collection<String> tokens = cluster.get(late).appliesOnInstance((InetAddress endpoint) ->
+                                                                            StorageService.instance.getTokenMetadata().getTokens(failAddress)
+                                                                                                   .stream().map(Object::toString).collect(Collectors.toList())
+            ).apply(failAddress.address);
+
+            Assert.assertEquals(expectTokens, tokens);
+        }
+    }
+
     public static class BBBootstrapInterceptor
     {
         final static CountDownLatch bootstrapReady = new CountDownLatch(1);
