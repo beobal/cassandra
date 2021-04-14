@@ -1969,12 +1969,27 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
         return (scheduledGossipTask != null) && (!scheduledGossipTask.isCancelled());
     }
 
+    public boolean isShadowRoundStateMap(Map<InetAddressAndPort, EndpointState> epStateMap)
+    {
+        // it is possible for a previously queued ack to be sent to us when we come back up in shadow
+        EndpointState localState = epStateMap.get(FBUtilities.getBroadcastAddressAndPort());
+        if (localState != null && epStateMap.size() == 1) // response only contains our IP
+        {
+            logger.debug("Not exiting shadow round because received bogus ACK {} -> {}", FBUtilities.getBroadcastAddressAndPort(), localState);
+            return false;
+        }
+        return true;
+    }
+
     protected void maybeFinishShadowRound(InetAddressAndPort respondent, boolean isInShadowRound, Map<InetAddressAndPort, EndpointState> epStateMap)
     {
         if (inShadowRound)
         {
             if (!isInShadowRound)
             {
+                if (!isShadowRoundStateMap(epStateMap))
+                    return;
+
                 if (!seeds.contains(respondent))
                     logger.warn("Received an ack from {}, who isn't a seed. Ensure your seed list includes a live node. Exiting shadow round",
                                 respondent);
