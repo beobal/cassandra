@@ -20,10 +20,13 @@ package org.apache.cassandra.transport;
 
 import java.io.IOException;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.util.concurrent.Uninterruptibles;
 
+import org.apache.commons.httpclient.protocol.Protocol;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,6 +37,7 @@ import io.netty.channel.ChannelPromise;
 import org.apache.cassandra.net.FrameEncoder;
 import org.apache.cassandra.transport.messages.ErrorMessage;
 import org.apache.cassandra.utils.JVMStabilityInspector;
+import org.apache.cassandra.utils.Throwables;
 
 public class ExceptionHandlers
 {
@@ -73,8 +77,9 @@ public class ExceptionHandlers
                     payload.finish();
                     ChannelPromise promise = ctx.newPromise();
                     // On protocol exception, close the channel as soon as the message has been sent
-                    if (cause instanceof ProtocolException)
+                    if (isFatal(cause))
                         promise.addListener(future -> ctx.close());
+
                     ctx.writeAndFlush(payload, promise);
                 }
                 finally
@@ -83,6 +88,12 @@ public class ExceptionHandlers
                     JVMStabilityInspector.inspectThrowable(cause);
                 }
             }
+        }
+
+        private boolean isFatal(Throwable cause)
+        {
+            return Throwables.anyCauseMatches(cause, t -> t instanceof ProtocolException
+                                                          && ((ProtocolException)t).isFatal());
         }
     }
 

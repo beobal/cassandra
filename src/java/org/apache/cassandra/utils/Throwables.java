@@ -41,6 +41,16 @@ public final class Throwables
         void perform() throws E;
     }
 
+    public static boolean anyCauseMatches(Throwable t, Predicate<Throwable> cause)
+    {
+        do
+        {
+            if (cause.test(t))
+                return true;
+        } while ((t = t.getCause()) != null);
+        return false;
+    }
+
     public static boolean isCausedBy(Throwable t, Predicate<Throwable> cause)
     {
         return cause.test(t) || (t.getCause() != null && cause.test(t.getCause()));
