@@ -1969,16 +1969,12 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
         return (scheduledGossipTask != null) && (!scheduledGossipTask.isCancelled());
     }
 
-    public boolean isShadowRoundStateMap(Map<InetAddressAndPort, EndpointState> epStateMap)
+    public boolean sufficientForStartupSafetyCheck(Map<InetAddressAndPort, EndpointState> epStateMap)
     {
         // it is possible for a previously queued ack to be sent to us when we come back up in shadow
         EndpointState localState = epStateMap.get(FBUtilities.getBroadcastAddressAndPort());
-        if (localState != null && epStateMap.size() == 1) // response only contains our IP
-        {
-            logger.debug("Not exiting shadow round because received bogus ACK {} -> {}", FBUtilities.getBroadcastAddressAndPort(), localState);
-            return false;
-        }
-        return true;
+        // return false if response doesn't contain state necessary for safety check
+        return localState != null && localState.containsApplicationState(ApplicationState.HOST_ID);
     }
 
     protected void maybeFinishShadowRound(InetAddressAndPort respondent, boolean isInShadowRound, Map<InetAddressAndPort, EndpointState> epStateMap)
@@ -1987,8 +1983,12 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
         {
             if (!isInShadowRound)
             {
-                if (!isShadowRoundStateMap(epStateMap))
+                if (!sufficientForStartupSafetyCheck(epStateMap))
+                {
+                    logger.debug("Not exiting shadow round because received ACK with insufficient states {} -> {}",
+                                 FBUtilities.getBroadcastAddressAndPort(), epStateMap.get(FBUtilities.getBroadcastAddressAndPort()));
                     return;
+                }
 
                 if (!seeds.contains(respondent))
                     logger.warn("Received an ack from {}, who isn't a seed. Ensure your seed list includes a live node. Exiting shadow round",
