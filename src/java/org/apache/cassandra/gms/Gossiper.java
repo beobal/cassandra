@@ -1974,7 +1974,7 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
         // it is possible for a previously queued ack to be sent to us when we come back up in shadow
         EndpointState localState = epStateMap.get(FBUtilities.getBroadcastAddressAndPort());
         // return false if response doesn't contain state necessary for safety check
-        return localState != null && localState.containsApplicationState(ApplicationState.HOST_ID);
+        return localState == null || localState.containsApplicationState(ApplicationState.HOST_ID);
     }
 
     protected void maybeFinishShadowRound(InetAddressAndPort respondent, boolean isInShadowRound, Map<InetAddressAndPort, EndpointState> epStateMap)
