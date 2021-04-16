@@ -256,7 +256,7 @@ public class CQLConnectionTest
         // Envelopes processed as normal.
 
         // every other message should error while extracting the Envelope header
-        final IntPredicate shouldError = i -> i % 2 == 0;
+        IntPredicate shouldError = i -> i % 2 == 0;
         testEnvelopeDecodingErrors(10, shouldError, Codec.crc(alloc));
         testEnvelopeDecodingErrors(10, shouldError, Codec.lz4(alloc));
 
@@ -304,6 +304,21 @@ public class CQLConnectionTest
         IntFunction<Envelope> envelopeProvider = mutatedEnvelopeProvider(firstTen, b -> b.put(4, (byte)99));
 
         Predicate<ErrorMessage> errorCheck = error -> error.error.getMessage().contains("Unknown opcode 99");
+        testFrameCorruption(100, Codec.crc(alloc), envelopeProvider, Function.identity(), 0, errorCheck);
+    }
+
+    @Test
+    public void testNegativeEnvelopeBodySize()
+    {
+        // A negative value for the body length of an envelope is essentially a
+        // fatal exception as the stream of bytes is unrecoverable
+
+        // every other message should error while extracting the Envelope header
+        IntPredicate shouldError = i -> i % 2 == 0;
+        // set the bodyLength byte to a negative value
+        IntFunction<Envelope> envelopeProvider = mutatedEnvelopeProvider(shouldError, b -> b.putInt(5, -10));
+        Predicate<ErrorMessage> errorCheck = error ->
+            error.error.getMessage().contains("Invalid value for envelope header body length field: -10");
         testFrameCorruption(100, Codec.crc(alloc), envelopeProvider, Function.identity(), 0, errorCheck);
     }
 

@@ -200,8 +200,17 @@ public class CQLMessageHandler<M extends Message> extends AbstractMessageHandler
                                             int streamId,
                                             long expectedMessageLength)
     {
-        // hard fail if we hit a run of errors in the same frame
-        if (++consecutiveMessageErrors > consecutiveMessageErrorsThreshold)
+        // hard fail if either :
+        //  * the expectedMessageLength is < 0 as we're unable to  skip the remainder
+        //    of the Envelope and attempt to read the next one
+        //  * we hit a run of errors in the same frame. Some errors are recoverable
+        //    as they have no effect on subsequent Envelopes, in which case we attempt
+        //    to continue processing. If we start seeing consecutive errors we assume
+        //    that this is not the case and that the entire remaining frame is garbage.
+        //    It's possible here that we fail hard when we could potentially not do
+        //    (e.g. every Envelope has an invalid opcode, but is otherwise semantically
+        //    intact), but this is a trade off.
+        if (expectedMessageLength < 0 || ++consecutiveMessageErrors > consecutiveMessageErrorsThreshold)
         {
             // transform the exception to a fatal one so the exception handler closes the channel
             if (!exception.isFatal())

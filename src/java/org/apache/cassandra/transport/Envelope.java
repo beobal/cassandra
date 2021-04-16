@@ -205,6 +205,11 @@ public class Envelope
             int opcode = buffer.get(idx++);
             long bodyLength = buffer.getInt(idx);
 
+            // if a negative length is read, return error but report length as 0 so we don't attempt to skip
+            if (bodyLength < 0)
+                return new HeaderExtractionResult.Error(new ProtocolException("Invalid value for envelope header body length field: " + bodyLength),
+                                                        streamId, bodyLength);
+
             Message.Direction direction = Message.Direction.extractFromVersion(firstByte);
             Message.Type type;
             ProtocolVersion version;
