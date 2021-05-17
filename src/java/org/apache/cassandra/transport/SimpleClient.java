@@ -484,10 +484,11 @@ public class SimpleClient implements Closeable
                                         errorHandler,
                                         ctx.channel().attr(Connection.attributeKey).get().isThrowOnOverload())
                 {
-                    protected void processRequest(Envelope request)
+                    protected boolean processRequest(Envelope request)
                     {
-                        super.processRequest(request);
+                        boolean continueProcessing = super.processRequest(request);
                         releaseCapacity(Ints.checkedCast(request.header.bodySizeInBytes));
+                        return continueProcessing;
                     }
                 };
 
@@ -498,6 +499,11 @@ public class SimpleClient implements Closeable
 
                 public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception
                 {
+                    if (!(msg instanceof List))
+                    {
+                        ctx.write(msg, promise);
+                        return;
+                    }
                     Connection connection = ctx.channel().attr(Connection.attributeKey).get();
                     // The only case the connection can be null is when we send the initial STARTUP message (client side thus)
                     ProtocolVersion version = connection == null ? ProtocolVersion.CURRENT : connection.getVersion();
@@ -601,7 +607,7 @@ public class SimpleClient implements Closeable
     }
 
     @ChannelHandler.Sharable
-    private static class ResponseHandler extends SimpleChannelInboundHandler<Message.Response>
+    static class ResponseHandler extends SimpleChannelInboundHandler<Message.Response>
     {
         public final BlockingQueue<Message.Response> responses = new SynchronousQueue<>(true);
         public EventHandler eventHandler;
@@ -634,11 +640,17 @@ public class SimpleClient implements Closeable
             }
         }
 
+        @Override
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception
         {
             if (this == ctx.pipeline().last())
+            {
                 logger.error("Exception in response", cause);
-            ctx.fireExceptionCaught(cause);
+            }
+            else
+            {
+                ctx.fireExceptionCaught(cause);
+            }
         }
     }
 
