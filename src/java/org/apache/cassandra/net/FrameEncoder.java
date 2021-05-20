@@ -128,10 +128,7 @@ public abstract class FrameEncoder extends ChannelOutboundHandlerAdapter
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception
     {
         if (!(msg instanceof Payload))
-        {
-            ctx.write(msg, promise);
-            return;
-        }
+            throw new IllegalStateException("Unexpected type: " + msg);
 
         Payload payload = (Payload) msg;
         ByteBuf write = encode(payload.isSelfContained, payload.buffer);
