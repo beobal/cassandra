@@ -222,7 +222,7 @@ public class CQLMessageHandler<M extends Message> extends AbstractMessageHandler
             // exception should not be a fatal error or the exception handler will close the channel
             handleError(exception, streamId);
             // skip body
-            buf.position(buf.position() + Envelope.Header.LENGTH + Ints.checkedCast(expectedMessageLength));
+            buf.position(Math.min(buf.limit(), buf.position() + Envelope.Header.LENGTH + Ints.checkedCast(expectedMessageLength)));
             // continue processing frame
             return true;
         }

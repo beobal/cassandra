@@ -17,10 +17,6 @@
  */
 package org.apache.cassandra.transport;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelFutureListener;
-import org.apache.cassandra.config.EncryptionOptions;
 import org.apache.cassandra.exceptions.ExceptionCode;
 import org.apache.cassandra.transport.messages.ErrorMessage;
 
@@ -29,24 +25,9 @@ import org.apache.cassandra.transport.messages.ErrorMessage;
  */
 public class WrappedSimpleClient extends SimpleClient
 {
-    public WrappedSimpleClient(String host, int port, ProtocolVersion version, EncryptionOptions encryptionOptions)
-    {
-        super(host, port, version, encryptionOptions);
-    }
-
-    public WrappedSimpleClient(String host, int port, EncryptionOptions encryptionOptions)
-    {
-        super(host, port, encryptionOptions);
-    }
-
     public WrappedSimpleClient(String host, int port, ProtocolVersion version)
     {
         super(host, port, version);
-    }
-
-    public WrappedSimpleClient(String host, int port, ProtocolVersion version, boolean useBeta, EncryptionOptions encryptionOptions)
-    {
-        super(host, port, version, useBeta, encryptionOptions);
     }
 
     public WrappedSimpleClient(String host, int port)
@@ -54,15 +35,15 @@ public class WrappedSimpleClient extends SimpleClient
         super(host, port);
     }
 
-    public Message.Response write(ByteBuf buffer) throws InterruptedException
+    public Message.Response write(Message.Request message) throws InterruptedException
     {
-        return write(buffer, true);
+        return write(message, true);
     }
 
-    public Message.Response write(ByteBuf buffer, boolean awaitCloseOnProtocolError) throws InterruptedException
+    public Message.Response write(Message.Request message, boolean awaitCloseOnProtocolError) throws InterruptedException
     {
-        lastWriteFuture = channel.writeAndFlush(buffer);
-        Message.Response response = responseHandler.responses.take();
+        // don't throw RuntimeException when an ErrorMessage response is received
+        Message.Response response = execute(message, false);
         if (awaitCloseOnProtocolError
             && response instanceof ErrorMessage && ((ErrorMessage) response).error.code() == ExceptionCode.PROTOCOL_ERROR)
         {

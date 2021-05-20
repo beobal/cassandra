@@ -85,6 +85,28 @@ public class Envelope
         return new Envelope(header, body);
     }
 
+    // used by V4 and earlier in Encoder.encode
+    public ByteBuf encodeHeader()
+    {
+        ByteBuf buf = CBUtil.allocator.buffer(Header.LENGTH);
+
+        Message.Type type = header.type;
+        buf.writeByte(type.direction.addToVersion(header.version.asInt()));
+        buf.writeByte(Header.Flag.serialize(header.flags));
+
+        // Continue to support writing pre-v3 headers so that we can give proper error messages to drivers that
+        // connect with the v1/v2 protocol. See CASSANDRA-11464.
+        if (header.version.isGreaterOrEqualTo(ProtocolVersion.V3))
+            buf.writeShort(header.streamId);
+        else
+            buf.writeByte(header.streamId);
+
+        buf.writeByte(type.opcode);
+        buf.writeInt(body.readableBytes());
+        return buf;
+    }
+
+    // Used by V5 and later
     public void encodeHeaderInto(ByteBuffer buf)
     {
         buf.put((byte) header.type.direction.addToVersion(header.version.asInt()));
@@ -99,6 +121,7 @@ public class Envelope
         buf.putInt(body.readableBytes());
     }
 
+    // Used by V5 and later
     public void encodeInto(ByteBuffer buf)
     {
         encodeHeaderInto(buf);
@@ -432,33 +455,13 @@ public class Envelope
 
         public void encode(ChannelHandlerContext ctx, Envelope source, List<Object> results)
         {
-            ByteBuf serializedHeader = encodeHeader(source);
+            ByteBuf serializedHeader = source.encodeHeader();
             int messageSize = serializedHeader.readableBytes() + source.body.readableBytes();
             ClientMessageSizeMetrics.bytesSent.inc(messageSize);
             ClientMessageSizeMetrics.bytesSentPerResponse.update(messageSize);
 
             results.add(serializedHeader);
             results.add(source.body);
-        }
-
-        public ByteBuf encodeHeader(Envelope source)
-        {
-            ByteBuf buf = CBUtil.allocator.buffer(Header.LENGTH);
-
-            Message.Type type = source.header.type;
-            buf.writeByte(type.direction.addToVersion(source.header.version.asInt()));
-            buf.writeByte(Header.Flag.serialize(source.header.flags));
-
-            // Continue to support writing pre-v3 headers so that we can give proper error messages to drivers that
-            // connect with the v1/v2 protocol. See CASSANDRA-11464.
-            if (source.header.version.isGreaterOrEqualTo(ProtocolVersion.V3))
-                buf.writeShort(source.header.streamId);
-            else
-                buf.writeByte(source.header.streamId);
-
-            buf.writeByte(type.opcode);
-            buf.writeInt(source.body.readableBytes());
-            return buf;
         }
     }
 

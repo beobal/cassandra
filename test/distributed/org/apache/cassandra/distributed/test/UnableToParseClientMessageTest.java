@@ -18,13 +18,14 @@
 package org.apache.cassandra.distributed.test;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
 import java.util.List;
 
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import org.apache.cassandra.Util;
 import org.apache.cassandra.config.DatabaseDescriptor;
@@ -32,8 +33,11 @@ import org.apache.cassandra.distributed.Cluster;
 import org.apache.cassandra.distributed.api.Feature;
 import org.apache.cassandra.distributed.api.IInvokableInstance;
 import org.apache.cassandra.metrics.CassandraMetricsRegistry;
+import org.apache.cassandra.transport.Envelope;
+import org.apache.cassandra.transport.Message;
 import org.apache.cassandra.transport.ProtocolVersion;
 import org.apache.cassandra.transport.WrappedSimpleClient;
+import org.apache.cassandra.transport.messages.OptionsMessage;
 
 /**
  * If a client sends a message that can not be parsed by the server then we need to detect this and update metrics
@@ -45,6 +49,9 @@ import org.apache.cassandra.transport.WrappedSimpleClient;
  */
 public class UnableToParseClientMessageTest extends TestBaseImpl
 {
+    static final String ERROR = "Invalid or unsupported protocol version (84)";
+    CorruptMessage request = new CorruptMessage();
+
     @BeforeClass
     public static void setup()
     {
@@ -56,7 +63,6 @@ public class UnableToParseClientMessageTest extends TestBaseImpl
     {
         try (Cluster cluster = init(Cluster.build(1).withConfig(c -> c.with(Feature.values())).start()))
         {
-            // write gibberish to the native protocol
             IInvokableInstance node = cluster.get(1);
             // make sure everything is fine at the start
             node.runOnInstance(() -> {
@@ -71,13 +77,10 @@ public class UnableToParseClientMessageTest extends TestBaseImpl
             try (WrappedSimpleClient client = new WrappedSimpleClient("127.0.0.1", 9042, ProtocolVersion.V4))
             {
                 client.connect(false, true);
-
                 // this should return a failed response
                 // in pre-v5 the connection isn't closed, so use `false` to avoid waiting
-                String response = client.write(Unpooled.wrappedBuffer("This is just a test".getBytes(StandardCharsets.UTF_8)), false).toString();
-                Assert.assertTrue("Resposne '" + response + "' expected to contain 'Invalid or unsupported protocol version (84); the lowest supported version is 3 and the greatest is 4'",
-                                  response.contains("Invalid or unsupported protocol version (84)"));
-
+                Message.Response response = client.write(request, false);
+                assertResponse(response);
                 node.runOnInstance(() -> {
                     // channelRead throws then channelInactive throws after trying to read remaining bytes
                     // using spinAssertEquals as the metric is updated AFTER replying back to the client
@@ -102,10 +105,8 @@ public class UnableToParseClientMessageTest extends TestBaseImpl
     @Test
     public void badMessageCausesProtocolExceptionLatest() throws IOException, InterruptedException
     {
-        // v5 checksums before parsing, so the checksum will fail, so the expected exception won't match v4 and before
         try (Cluster cluster = init(Cluster.build(1).withConfig(c -> c.with(Feature.values())).start()))
         {
-            // write gibberish to the native protocol
             IInvokableInstance node = cluster.get(1);
             // make sure everything is fine at the start
             node.runOnInstance(() -> {
@@ -122,10 +123,8 @@ public class UnableToParseClientMessageTest extends TestBaseImpl
                 client.connect(false, true);
 
                 // this should return a failed response
-                String response = client.write(Unpooled.wrappedBuffer("This is just a test".getBytes(StandardCharsets.UTF_8))).toString();
-                Assert.assertTrue("Resposne '" + response + "' expected to contain 'unrecoverable CRC mismatch detected in frame header. Read 6889587, Computed 13255497'",
-                                  response.contains("unrecoverable CRC mismatch detected in frame header. Read 6889587, Computed 13255497"));
-
+                Message.Response response = client.write(request, false);
+                assertResponse(response);
                 node.runOnInstance(() -> {
                     // using spinAssertEquals as the metric is updated AFTER replying back to the client
                     // so there is a race where we check the metric before it gets updated
@@ -139,9 +138,51 @@ public class UnableToParseClientMessageTest extends TestBaseImpl
                                                                            .getCount());
                 });
                 List<String> results = node.logs().grep("Protocol exception with client networking").getResult();
-                results.forEach(s -> Assert.assertTrue("Expected logs '" + s + "' to contain: unrecoverable CRC mismatch detected in frame header. Read 6889587, Computed 13255497",
-                                                       s.contains("unrecoverable CRC mismatch detected in frame header. Read 6889587, Computed 13255497")));
+                results.forEach(s -> Assert.assertTrue("Expected logs '" + s + "' to contain '" + ERROR + "'",
+                                                       s.contains(ERROR)));
                 Assert.assertEquals(1, results.size()); // this logs less offtan than metrics as the log has a nospamlogger wrapper
+            }
+        }
+    }
+
+    private void assertResponse(Message.Response response)
+    {
+        Assert.assertEquals(Message.Type.ERROR, response.type);
+        Assert.assertTrue(response.toString().contains(ERROR));
+    }
+
+    static class CorruptMessage extends OptionsMessage
+    {
+        final ByteBuf encodedForm = Unpooled.wrappedBuffer(new byte[] {84, 104, 105, 115, 32, 105, 115, 32, 106 });
+
+        @Override
+        public Envelope encode(ProtocolVersion version)
+        {
+            Envelope base = super.encode(version);
+            return new CorruptEnvelope(base.header, base.body, encodedForm);
+        }
+
+        static class CorruptEnvelope extends Envelope
+        {
+            final ByteBuf encoded;
+            public CorruptEnvelope(Header header, ByteBuf body, ByteBuf encoded)
+            {
+                super(header, body);
+                this.encoded = encoded;
+            }
+
+            // for V4 and below
+            @Override
+            public ByteBuf encodeHeader()
+            {
+                return encoded;
+            }
+
+            // for V5 and above
+            @Override
+            public void encodeInto(ByteBuffer buf)
+            {
+                buf.put(encoded.nioBuffer());
             }
         }
     }

@@ -272,6 +272,11 @@ public class SimpleClient implements Closeable
 
     public Message.Response execute(Message.Request request)
     {
+        return execute(request, false);
+    }
+
+    public Message.Response execute(Message.Request request, boolean throwOnErrorResponse)
+    {
         try
         {
             request.attach(connection);
@@ -279,7 +284,7 @@ public class SimpleClient implements Closeable
             Message.Response msg = responseHandler.responses.poll(10, TimeUnit.SECONDS);
             if (msg == null)
                 throw new RuntimeException("timeout");
-            if (msg instanceof ErrorMessage)
+            if (throwOnErrorResponse && msg instanceof ErrorMessage)
                 throw new RuntimeException((Throwable)((ErrorMessage)msg).error);
             return msg;
         }
