@@ -18,6 +18,8 @@
 
 package org.apache.cassandra.distributed.test;
 
+import java.util.Arrays;
+
 import org.junit.After;
 import org.junit.BeforeClass;
 
@@ -42,5 +44,18 @@ public class TestBaseImpl extends DistributedTestBase
         // This is definitely not the smartest solution, but given the complexity of the alternatives and low risk, we can just rely on the
         // fact that this code is going to work accross _all_ versions.
         return Cluster.build();
+    }
+
+    public static void fixDistributedSchemas(Cluster cluster)
+    {
+        // These keyspaces are under replicated by default, so must be updated when doing a mulit-node cluster;
+        // else bootstrap will fail with 'Unable to find sufficient sources for streaming range <range> in keyspace <name>'
+        for (String ks : Arrays.asList("system_auth", "system_traces"))
+        {
+            cluster.schemaChange("ALTER KEYSPACE " + ks + " WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': " + Math.min(cluster.size(), 3) + "}");
+        }
+
+        // in real live repair is needed in this case, but in the test case it doesn't matter if the tables loose
+        // anything, so ignoring repair to speed up the tests.
     }
 }
