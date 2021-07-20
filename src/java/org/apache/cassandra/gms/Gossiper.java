@@ -549,6 +549,7 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
         GossiperDiagnostics.markedAsShutdown(this, endpoint);
         for (IEndpointStateChangeSubscriber subscriber : subscribers)
             subscriber.onChange(endpoint, ApplicationState.STATUS_WITH_PORT, shutdown);
+        logger.debug("Marked {} as shutdown", endpoint);
     }
 
     /**
