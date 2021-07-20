@@ -443,6 +443,7 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
         FailureDetector.instance.forceConviction(endpoint);
         for (IEndpointStateChangeSubscriber subscriber : subscribers)
             subscriber.onChange(endpoint, ApplicationState.STATUS, shutdown);
+        logger.debug("Marked {} as shutdown", endpoint);
     }
 
     /**

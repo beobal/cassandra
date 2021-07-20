@@ -43,6 +43,7 @@ import org.apache.cassandra.distributed.api.*;
 import org.apache.cassandra.gms.ApplicationState;
 import org.apache.cassandra.gms.EndpointState;
 import org.apache.cassandra.gms.Gossiper;
+import org.apache.cassandra.service.PendingRangeCalculatorService;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.streaming.StreamPlan;
 import org.apache.cassandra.streaming.StreamResultFuture;
@@ -239,6 +240,7 @@ public class GossipTest extends TestBaseImpl
         {
             init(cluster, 2);
             populate(cluster);
+            IInvokableInstance node1 = cluster.get(1);
             IInvokableInstance node2 = cluster.get(2);
             IInvokableInstance node3 = cluster.get(3);
 
@@ -249,9 +251,9 @@ public class GossipTest extends TestBaseImpl
             long t3 = Long.parseLong(getLocalToken(node3));
             long moveTo = t2 + ((t3 - t2)/2);
             String logMsg = "Node " + node2.broadcastAddress().getAddress() + " state moving, new token " + moveTo;
-            runAndWaitForLogs(cluster,
-                              () -> node2.nodetoolResult("move", "--", Long.toString(moveTo)).asserts().failure(),
-                              logMsg);
+            runAndWaitForLogs(() -> node2.nodetoolResult("move", "--", Long.toString(moveTo)).asserts().failure(),
+                              logMsg,
+                              cluster);
 
             InetAddress movingAddress = node2.broadcastAddress().getAddress();
             // node1 & node3 should now consider some ranges pending for node2
@@ -260,8 +262,10 @@ public class GossipTest extends TestBaseImpl
             // A controlled shutdown causes peers to replace the MOVING status to be with SHUTDOWN, but prior to
             // CASSANDRA-16796 this doesn't update TokenMetadata, so they maintain pending ranges for the down node
             // indefinitely, even after it has been removed from the ring.
-            Futures.getUnchecked(node2.shutdown());
-
+            logMsg = "Marked " + node2.broadcastAddress().getAddress() + " as shutdown";
+            runAndWaitForLogs(() -> Futures.getUnchecked(node2.shutdown()),
+                              logMsg,
+                              node1, node3);
             // node1 & node3 should not consider any ranges as still pending for node2
             assertPendingRangesForPeer(false, movingAddress, cluster);
         }
@@ -272,6 +276,9 @@ public class GossipTest extends TestBaseImpl
         for (IInvokableInstance inst : new IInvokableInstance[]{ cluster.get(1), cluster.get(3)})
         {
             boolean hasPending = inst.appliesOnInstance((InetAddress peer) -> {
+
+                PendingRangeCalculatorService.instance.blockUntilFinished();
+
                 boolean isMoving = StorageService.instance.getTokenMetadata()
                                                           .getMovingEndpoints()
                                                           .stream()
@@ -302,14 +309,19 @@ public class GossipTest extends TestBaseImpl
         });
     }
 
-    public static void runAndWaitForLogs(Cluster cluster, Runnable r, String waitString) throws TimeoutException
+    public static void runAndWaitForLogs(Runnable r, String waitString, Cluster cluster) throws TimeoutException
     {
-        long [] marks = new long[cluster.size()];
-        for (int i = 0; i < cluster.size(); i++)
-            marks[i] = cluster.get(i + 1).logs().mark();
+        runAndWaitForLogs(r, waitString, cluster.stream().toArray(IInstance[]::new));
+    }
+
+    public static void runAndWaitForLogs(Runnable r, String waitString, IInstance...instances) throws TimeoutException
+    {
+        long [] marks = new long[instances.length];
+        for (int i = 0; i < instances.length; i++)
+            marks[i] = instances[i].logs().mark();
         r.run();
-        for (int i = 0; i < cluster.size(); i++)
-            cluster.get(i + 1).logs().watchFor(marks[i], waitString);
+        for (int i = 0; i < instances.length; i++)
+            instances[i].logs().watchFor(marks[i], waitString);
     }
 
     static void populate(Cluster cluster)
