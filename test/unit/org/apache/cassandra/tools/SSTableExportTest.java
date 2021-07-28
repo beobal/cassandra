@@ -250,7 +250,7 @@ public class SSTableExportTest extends OfflineToolUtils
      */
     private void assertPostTestEnv(boolean maybeLoadsSchema)
     {
-        assertNoUnexpectedThreadsStarted(null, OPTIONAL_THREADS_WITH_SCHEMA);
+        assertNoUnexpectedThreadsStarted(OPTIONAL_THREADS_WITH_SCHEMA);
         // schema loading seems to depend on the JVM version,
         // so we only verify the cases where we are sure it's not loaded
         if (!maybeLoadsSchema)
