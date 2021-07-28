@@ -34,22 +34,27 @@ import org.junit.Test;
 import io.netty.channel.ChannelPromise;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.net.MessagingService;
 import org.apache.cassandra.net.TestChannel;
 import org.apache.cassandra.net.TestScheduledFuture;
 import org.apache.cassandra.streaming.PreviewKind;
 import org.apache.cassandra.streaming.StreamOperation;
 import org.apache.cassandra.streaming.StreamResultFuture;
 import org.apache.cassandra.streaming.StreamSession;
+import org.apache.cassandra.streaming.StreamingChannel;
 import org.apache.cassandra.streaming.messages.CompleteMessage;
 
-public class NettyStreamingMessageSenderTest
+import static org.apache.cassandra.net.MessagingService.current_version;
+
+public class StreamingMultiplexedChannelTest
 {
     private static final InetAddressAndPort REMOTE_ADDR = InetAddressAndPort.getByAddressOverrideDefaults(InetAddresses.forString("127.0.0.2"), 0);
 
+    private NettyStreamingChannel streamingChannel;
     private TestChannel channel;
     private StreamSession session;
-    private NettyStreamingMessageSender sender;
-    private NettyStreamingMessageSender.FileStreamTask fileStreamTask;
+    private StreamingMultiplexedChannel sender;
+    private StreamingMultiplexedChannel.FileStreamTask fileStreamTask;
 
     @BeforeClass
     public static void before()
@@ -61,15 +66,15 @@ public class NettyStreamingMessageSenderTest
     public void setUp()
     {
         channel = new TestChannel(Integer.MAX_VALUE);
-        channel.attr(NettyStreamingMessageSender.TRANSFERRING_FILE_ATTR).set(Boolean.FALSE);
+        streamingChannel = new NettyStreamingChannel(current_version, channel, StreamingChannel.Kind.CONTROL);
         UUID pendingRepair = UUID.randomUUID();
-        session = new StreamSession(StreamOperation.BOOTSTRAP, REMOTE_ADDR, (template, messagingVersion) -> null, true, 0, pendingRepair, PreviewKind.ALL);
-        StreamResultFuture future = StreamResultFuture.createFollower(0, UUID.randomUUID(), StreamOperation.REPAIR, REMOTE_ADDR, channel, pendingRepair, session.getPreviewKind());
+        session = new StreamSession(StreamOperation.BOOTSTRAP, REMOTE_ADDR, new NettyStreamingConnectionFactory(), streamingChannel, current_version, true, 0, pendingRepair, PreviewKind.ALL);
+        StreamResultFuture future = StreamResultFuture.createFollower(0, UUID.randomUUID(), StreamOperation.REPAIR, REMOTE_ADDR, streamingChannel, current_version, pendingRepair, session.getPreviewKind());
         session.init(future);
-        session.attachOutbound(channel);
+        session.attachOutbound(streamingChannel);
 
-        sender = session.getMessageSender();
-        sender.setControlMessageChannel(channel);
+        sender = (StreamingMultiplexedChannel) session.getChannel();
+        sender.setControlChannel(streamingChannel);
     }
 
     @After
@@ -83,7 +88,7 @@ public class NettyStreamingMessageSenderTest
     public void KeepAliveTask_normalSend()
     {
         Assert.assertTrue(channel.isOpen());
-        NettyStreamingMessageSender.KeepAliveTask task = sender.new KeepAliveTask(channel, session);
+        StreamingMultiplexedChannel.KeepAliveTask task = sender.new KeepAliveTask();
         task.run();
         Assert.assertTrue(channel.releaseOutbound());
     }
@@ -94,7 +99,7 @@ public class NettyStreamingMessageSenderTest
         channel.close();
         Assert.assertFalse(channel.isOpen());
         channel.releaseOutbound();
-        NettyStreamingMessageSender.KeepAliveTask task = sender.new KeepAliveTask(channel, session);
+        StreamingMultiplexedChannel.KeepAliveTask task = sender.new KeepAliveTask();
         task.future = new TestScheduledFuture();
         Assert.assertFalse(task.future.isCancelled());
         task.run();
@@ -106,7 +111,7 @@ public class NettyStreamingMessageSenderTest
     public void KeepAliveTask_closed()
     {
         Assert.assertTrue(channel.isOpen());
-        NettyStreamingMessageSender.KeepAliveTask task = sender.new KeepAliveTask(channel, session);
+        StreamingMultiplexedChannel.KeepAliveTask task = sender.new KeepAliveTask();
         task.future = new TestScheduledFuture();
         Assert.assertFalse(task.future.isCancelled());
 
@@ -121,8 +126,8 @@ public class NettyStreamingMessageSenderTest
     public void KeepAliveTask_CurrentlyStreaming()
     {
         Assert.assertTrue(channel.isOpen());
-        channel.attr(NettyStreamingMessageSender.TRANSFERRING_FILE_ATTR).set(Boolean.TRUE);
-        NettyStreamingMessageSender.KeepAliveTask task = sender.new KeepAliveTask(channel, session);
+        channel.attr(NettyStreamingChannel.TRANSFERRING_FILE_ATTR).set(Boolean.TRUE);
+        StreamingMultiplexedChannel.KeepAliveTask task = sender.new KeepAliveTask();
         task.future = new TestScheduledFuture();
         Assert.assertFalse(task.future.isCancelled());
 
@@ -153,9 +158,9 @@ public class NettyStreamingMessageSenderTest
     public void FileStreamTask_BadChannelAttr()
     {
         int permits = sender.semaphoreAvailablePermits();
-        channel.attr(NettyStreamingMessageSender.TRANSFERRING_FILE_ATTR).set(Boolean.TRUE);
+        channel.attr(NettyStreamingChannel.TRANSFERRING_FILE_ATTR).set(Boolean.TRUE);
         fileStreamTask = sender.new FileStreamTask(null);
-        fileStreamTask.injectChannel(channel);
+        fileStreamTask.injectChannel(streamingChannel);
         fileStreamTask.run();
         Assert.assertEquals(StreamSession.State.FAILED, session.state());
         Assert.assertTrue(channel.releaseOutbound()); // when the session fails, it will send a SessionFailed msg
@@ -167,7 +172,7 @@ public class NettyStreamingMessageSenderTest
     {
         int permits = sender.semaphoreAvailablePermits();
         fileStreamTask = sender.new FileStreamTask(new CompleteMessage());
-        fileStreamTask.injectChannel(channel);
+        fileStreamTask.injectChannel(streamingChannel);
         fileStreamTask.run();
         Assert.assertNotEquals(StreamSession.State.FAILED, session.state());
         Assert.assertTrue(channel.releaseOutbound());

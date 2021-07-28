@@ -51,7 +51,8 @@ import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.net.OutboundConnectionSettings.Framing;
 import org.apache.cassandra.security.SSLFactory;
-import org.apache.cassandra.streaming.async.StreamingInboundHandler;
+import org.apache.cassandra.streaming.StreamingChannel;
+import org.apache.cassandra.streaming.async.NettyStreamingChannel;
 import org.apache.cassandra.utils.memory.BufferPools;
 
 import static java.lang.Math.*;
@@ -412,7 +413,7 @@ public class InboundConnectionInitiator
             }
 
             BufferPools.forNetworking().setRecycleWhenFreeForCurrentThread(false);
-            pipeline.replace(this, "streamInbound", new StreamingInboundHandler(from, current_version, null));
+            pipeline.replace(this, "streamInbound", new NettyStreamingChannel(current_version, channel, StreamingChannel.Kind.CONTROL));
 
             logger.info("{} streaming connection established, version = {}, framing = {}, encryption = {}",
                         SocketFactory.channelId(from,
