@@ -55,12 +55,13 @@ import org.apache.cassandra.service.NativeTransportService;
 import org.apache.cassandra.transport.CQLMessageHandler.MessageConsumer;
 import org.apache.cassandra.transport.messages.*;
 import org.apache.cassandra.utils.FBUtilities;
-import org.apache.cassandra.utils.concurrent.SimpleCondition;
 import org.apache.cassandra.utils.concurrent.NonBlockingRateLimiter;
+import org.apache.cassandra.utils.concurrent.Condition;
 
 import static org.apache.cassandra.config.EncryptionOptions.TlsEncryptionPolicy.UNENCRYPTED;
 import static org.apache.cassandra.net.FramingTest.randomishBytes;
 import static org.apache.cassandra.transport.Flusher.MAX_FRAMED_PAYLOAD_SIZE;
+import static org.apache.cassandra.utils.concurrent.Condition.newOneTimeCondition;
 import static org.apache.cassandra.utils.concurrent.NonBlockingRateLimiter.NO_OP_LIMITER;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -647,7 +648,7 @@ public class CQLConnectionTest
 
     static class ServerConfigurator extends PipelineConfigurator
     {
-        private final SimpleCondition pipelineReady = new SimpleCondition();
+        private final Condition pipelineReady = newOneTimeCondition();
         private final MessageConsumer<Message.Request> consumer;
         private final AllocationObserver allocationObserver;
         private final Message.Decoder<Message.Request> decoder;

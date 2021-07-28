@@ -19,7 +19,6 @@ package org.apache.cassandra.cache;
 
 import java.io.*;
 import java.util.*;
-import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledFuture;
@@ -46,14 +45,11 @@ import org.apache.cassandra.db.compaction.OperationType;
 import org.apache.cassandra.db.compaction.CompactionInfo.Unit;
 import org.apache.cassandra.io.FSWriteError;
 import org.apache.cassandra.io.util.*;
-import org.apache.cassandra.io.util.CorruptFileException;
 import org.apache.cassandra.io.util.DataInputPlus.DataInputStreamPlus;
 import org.apache.cassandra.service.CacheService;
 import org.apache.cassandra.utils.JVMStabilityInspector;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.UUIDGen;
-
-import static org.apache.cassandra.utils.Clock.Global.nanoTime;
 
 public class AutoSavingCache<K extends CacheKey, V> extends InstrumentingCache<K, V>
 {
@@ -160,28 +156,16 @@ public class AutoSavingCache<K extends CacheKey, V> extends InstrumentingCache<K
     public ListenableFuture<Integer> loadSavedAsync()
     {
         final ListeningExecutorService es = MoreExecutors.listeningDecorator(Executors.newSingleThreadExecutor());
-        final long start = nanoTime();
+        final long start = System.nanoTime();
 
-        ListenableFuture<Integer> cacheLoad = es.submit(new Callable<Integer>()
-        {
-            @Override
-            public Integer call()
-            {
-                return loadSaved();
-            }
-        });
-        cacheLoad.addListener(new Runnable()
-        {
-            @Override
-            public void run()
-            {
-                if (size() > 0)
-                    logger.info("Completed loading ({} ms; {} keys) {} cache",
-                            TimeUnit.NANOSECONDS.toMillis(nanoTime() - start),
-                            CacheService.instance.keyCache.size(),
-                            cacheType);
-                es.shutdown();
-            }
+        ListenableFuture<Integer> cacheLoad = es.submit(this::loadSaved);
+        cacheLoad.addListener(() -> {
+            if (size() > 0)
+                logger.info("Completed loading ({} ms; {} keys) {} cache",
+                        TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start),
+                        CacheService.instance.keyCache.size(),
+                        cacheType);
+            es.shutdown();
         }, MoreExecutors.directExecutor());
 
         return cacheLoad;
@@ -190,7 +174,7 @@ public class AutoSavingCache<K extends CacheKey, V> extends InstrumentingCache<K
     public int loadSaved()
     {
         int count = 0;
-        long start = nanoTime();
+        long start = System.nanoTime();
 
         // modern format, allows both key and value (so key cache load can be purely sequential)
         File dataPath = getCacheDataPath(CURRENT_VERSION);
@@ -278,7 +262,7 @@ public class AutoSavingCache<K extends CacheKey, V> extends InstrumentingCache<K
         }
         if (logger.isTraceEnabled())
             logger.trace("completed reading ({} ms; {} keys) saved cache {}",
-                    TimeUnit.NANOSECONDS.toMillis(nanoTime() - start), count, dataPath);
+                    TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start), count, dataPath);
         return count;
     }
 
@@ -349,7 +333,7 @@ public class AutoSavingCache<K extends CacheKey, V> extends InstrumentingCache<K
                 return;
             }
 
-            long start = nanoTime();
+            long start = System.nanoTime();
 
             Pair<File, File> cacheFilePaths = tempCacheFiles();
             try (WrappedDataOutputStreamPlus writer = new WrappedDataOutputStreamPlus(streamFactory.getOutputStream(cacheFilePaths.left, cacheFilePaths.right)))
@@ -403,7 +387,7 @@ public class AutoSavingCache<K extends CacheKey, V> extends InstrumentingCache<K
             if (!cacheFilePaths.right.renameTo(crcFile))
                 logger.error("Unable to rename {} to {}", cacheFilePaths.right, crcFile);
 
-            logger.info("Saved {} ({} items) in {} ms", cacheType, keysWritten, TimeUnit.NANOSECONDS.toMillis(nanoTime() - start));
+            logger.info("Saved {} ({} items) in {} ms", cacheType, keysWritten, TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start));
         }
 
         private Pair<File, File> tempCacheFiles()
