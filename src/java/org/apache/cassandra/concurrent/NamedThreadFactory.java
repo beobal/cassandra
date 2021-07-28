@@ -21,8 +21,9 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.google.common.annotations.VisibleForTesting;
-
+import io.netty.util.concurrent.FastThreadLocal;
 import io.netty.util.concurrent.FastThreadLocalThread;
+import org.apache.cassandra.utils.JVMStabilityInspector;
 
 /**
  * This class is an implementation of the <i>ThreadFactory</i> interface. This
@@ -33,17 +34,47 @@ import io.netty.util.concurrent.FastThreadLocalThread;
 public class NamedThreadFactory implements ThreadFactory
 {
     private static volatile String globalPrefix;
+    public static String globalPrefix() { return globalPrefix;}
     public static void setGlobalPrefix(String prefix) { globalPrefix = prefix; }
-    public static String globalPrefix() {
-        String prefix = globalPrefix;
-        return prefix == null ? "" : prefix;
+
+    public static class MetaFactory
+    {
+        protected ClassLoader contextClassLoader;
+        protected ThreadGroup threadGroup;
+        protected Thread.UncaughtExceptionHandler uncaughtExceptionHandler;
+
+        public MetaFactory(ClassLoader contextClassLoader, ThreadGroup threadGroup, Thread.UncaughtExceptionHandler uncaughtExceptionHandler)
+        {
+            this.contextClassLoader = contextClassLoader;
+            if (threadGroup == null)
+            {
+                threadGroup = Thread.currentThread().getThreadGroup();
+                while (threadGroup.getParent() != null)
+                    threadGroup = threadGroup.getParent();
+            }
+            this.threadGroup = threadGroup;
+            this.uncaughtExceptionHandler = uncaughtExceptionHandler;
+        }
+
+        NamedThreadFactory newThreadFactory(String name)
+        {
+            return newThreadFactory(name, Thread.NORM_PRIORITY);
+        }
+
+        NamedThreadFactory newThreadFactory(String name, int threadPriority)
+        {
+            // We create a unique thread group for each factory, so that e.g. executors can determine which threads are members of the executor
+            ThreadGroup threadGroup = new ThreadGroup(this.threadGroup, name);
+            return new NamedThreadFactory(name, threadPriority, contextClassLoader, threadGroup, uncaughtExceptionHandler);
+        }
     }
 
     public final String id;
     private final int priority;
     private final ClassLoader contextClassLoader;
-    private final ThreadGroup threadGroup;
+    public final ThreadGroup threadGroup;
     protected final AtomicInteger n = new AtomicInteger(1);
+    private final Thread.UncaughtExceptionHandler uncaughtExceptionHandler;
 
     public NamedThreadFactory(String id)
     {
@@ -52,25 +83,44 @@ public class NamedThreadFactory implements ThreadFactory
 
     public NamedThreadFactory(String id, int priority)
     {
-        this(id, priority, null, null);
+        this(id, priority, null, null, JVMStabilityInspector::uncaughtException);
+    }
+
+    public NamedThreadFactory(String id, ClassLoader contextClassLoader, ThreadGroup threadGroup)
+    {
+        this(id, Thread.NORM_PRIORITY, contextClassLoader, threadGroup, JVMStabilityInspector::uncaughtException);
     }
 
     public NamedThreadFactory(String id, int priority, ClassLoader contextClassLoader, ThreadGroup threadGroup)
+    {
+        this(id, priority, contextClassLoader, threadGroup, JVMStabilityInspector::uncaughtException);
+    }
+    public NamedThreadFactory(String id, int priority, ClassLoader contextClassLoader, ThreadGroup threadGroup, Thread.UncaughtExceptionHandler uncaughtExceptionHandler)
     {
         this.id = id;
         this.priority = priority;
         this.contextClassLoader = contextClassLoader;
         this.threadGroup = threadGroup;
+        this.uncaughtExceptionHandler = uncaughtExceptionHandler;
     }
 
+    @Override
     public Thread newThread(Runnable runnable)
     {
         String name = id + ':' + n.getAndIncrement();
-        Thread thread = createThread(threadGroup, runnable, name, true);
+        String prefix = globalPrefix;
+        Thread thread = newThreadRaw(threadGroup, runnable, prefix != null ? prefix + name : name);
         thread.setPriority(priority);
         if (contextClassLoader != null)
             thread.setContextClassLoader(contextClassLoader);
+        if (uncaughtExceptionHandler != null)
+            thread.setUncaughtExceptionHandler(uncaughtExceptionHandler);
         return thread;
+    }
+
+    protected Thread newThreadRaw(ThreadGroup threadGroup, Runnable runnable, String name)
+    {
+        return createThread(threadGroup, runnable, name, true);
     }
 
     private static final AtomicInteger threadCounter = new AtomicInteger();
@@ -96,11 +146,17 @@ public class NamedThreadFactory implements ThreadFactory
         return createThread(threadGroup, runnable, name, false);
     }
 
-    public static Thread createThread(ThreadGroup threadGroup, Runnable runnable, String name, boolean daemon)
+    private static Thread createThread(ThreadGroup threadGroup, Runnable runnable, String name, boolean daemon)
     {
         String prefix = globalPrefix;
         Thread thread = new FastThreadLocalThread(threadGroup, runnable, prefix != null ? prefix + name : name);
         thread.setDaemon(daemon);
         return thread;
+    }
+
+    @Override
+    public String toString()
+    {
+        return id;
     }
 }

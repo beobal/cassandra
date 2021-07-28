@@ -60,11 +60,6 @@ public class MemtableCleanerThreadTest
     private void startThread()
     {
         cleanerThread = new MemtableCleanerThread<>(pool, cleaner);
-        assertNotNull(cleanerThread);
-        cleanerThread.start();
-
-        for (int i = 0; i < TIMEOUT_MILLIS && !cleanerThread.isAlive(); i++)
-            FBUtilities.sleepQuietly(1);
     }
 
     private void stopThread() throws InterruptedException
