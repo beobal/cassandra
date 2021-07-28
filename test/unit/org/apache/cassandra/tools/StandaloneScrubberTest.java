@@ -50,7 +50,7 @@ public class StandaloneScrubberTest extends OfflineToolUtils
         assertThat(tool.getStdout(), CoreMatchers.containsStringIgnoringCase("usage:"));
         assertThat(tool.getCleanedStderr(), CoreMatchers.containsStringIgnoringCase("Missing arguments"));
         assertEquals(1, tool.getExitCode());
-        assertNoUnexpectedThreadsStarted(null, null);
+        assertNoUnexpectedThreadsStarted(null);
         assertSchemaNotLoaded();
         assertCLSMNotLoaded();
         assertSystemKSNotLoaded();

@@ -58,7 +58,7 @@ public class SSTableMetadataViewerTest extends OfflineToolUtils
             assertThat(tool.getCleanedStderr(), CoreMatchers.containsStringIgnoringCase("Options:"));
             assertEquals(1, tool.getExitCode());
         }
-        assertNoUnexpectedThreadsStarted(null, null);
+        assertNoUnexpectedThreadsStarted(null);
         assertSchemaNotLoaded();
         assertCLSMNotLoaded();
         assertSystemKSNotLoaded();
@@ -221,7 +221,7 @@ public class SSTableMetadataViewerTest extends OfflineToolUtils
 
     private void assertGoodEnvPostTest()
     {
-        assertNoUnexpectedThreadsStarted(null, OPTIONAL_THREADS_WITH_SCHEMA);
+        assertNoUnexpectedThreadsStarted(OPTIONAL_THREADS_WITH_SCHEMA);
         assertSchemaNotLoaded();
         assertCLSMNotLoaded();
         assertSystemKSNotLoaded();
