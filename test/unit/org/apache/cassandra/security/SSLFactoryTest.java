@@ -39,8 +39,6 @@ import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.config.EncryptionOptions;
 import org.apache.cassandra.config.EncryptionOptions.ServerEncryptionOptions;
 
-import static org.junit.Assert.assertArrayEquals;
-
 public class SSLFactoryTest
 {
     private static final Logger logger = LoggerFactory.getLogger(SSLFactoryTest.class);
