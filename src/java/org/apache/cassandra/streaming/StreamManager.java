@@ -29,7 +29,6 @@ import javax.management.openmbean.CompositeData;
 import com.google.common.base.Function;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.RateLimiter;
 
 import org.cliffc.high_scale_lib.NonBlockingHashMap;
@@ -124,13 +123,7 @@ public class StreamManager implements StreamManagerMBean
     {
         result.addEventListener(notifier);
         // Make sure we remove the stream on completion (whether successful or not)
-        result.addListener(new Runnable()
-        {
-            public void run()
-            {
-                initiatorStreams.remove(result.planId);
-            }
-        }, MoreExecutors.directExecutor());
+        result.addListener(() -> initiatorStreams.remove(result.planId));
 
         initiatorStreams.put(result.planId, result);
     }
@@ -139,13 +132,7 @@ public class StreamManager implements StreamManagerMBean
     {
         result.addEventListener(notifier);
         // Make sure we remove the stream on completion (whether successful or not)
-        result.addListener(new Runnable()
-        {
-            public void run()
-            {
-                followerStreams.remove(result.planId);
-            }
-        }, MoreExecutors.directExecutor());
+        result.addListener(() -> followerStreams.remove(result.planId));
 
         StreamResultFuture previous = followerStreams.putIfAbsent(result.planId, result);
         return previous ==  null ? result : previous;
