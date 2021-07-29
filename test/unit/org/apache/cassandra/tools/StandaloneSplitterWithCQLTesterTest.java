@@ -18,7 +18,6 @@
 
 package org.apache.cassandra.tools;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -28,6 +27,7 @@ import java.util.stream.Collectors;
 
 import com.google.common.io.Files;
 
+import org.apache.cassandra.io.util.File;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -79,10 +79,10 @@ public class StandaloneSplitterWithCQLTesterTest extends CQLTester
         restoreOrigSstables();
 
         ToolResult tool  = ToolRunner.invokeClass(StandaloneSplitter.class, "-s", "1", sstableFileName);
-        List<File> splitFiles = Arrays.asList(sstablesDir.listFiles());
+        List<File> splitFiles = Arrays.asList(sstablesDir.tryList());
         splitFiles.stream().forEach(f -> {
-            if (f.getName().endsWith("Data.db") && !origSstables.contains(f))
-                assertTrue(f.getName() + " is way bigger than 1MB: [" + f.length() + "] bytes",
+            if (f.name().endsWith("Data.db") && !origSstables.contains(f))
+                assertTrue(f.name() + " is way bigger than 1MB: [" + f.length() + "] bytes",
                            f.length() <= 1024 * 1024 * 1.2); //give a 20% margin on size check
         });
         assertTrue(origSstables.size() < splitFiles.size());
@@ -97,16 +97,16 @@ public class StandaloneSplitterWithCQLTesterTest extends CQLTester
         restoreOrigSstables();
         ArrayList<String> args = new ArrayList<>(Arrays.asList("-s", "1"));
 
-        args.addAll(Arrays.asList(sstablesDir.listFiles())
+        args.addAll(Arrays.asList(sstablesDir.tryList())
                           .stream()
-                          .map(f -> f.getAbsolutePath())
+                          .map(f -> f.absolutePath())
                           .collect(Collectors.toList()));
 
         ToolResult tool  = ToolRunner.invokeClass(StandaloneSplitter.class, args.toArray(new String[args.size()]));
-        List<File> splitFiles = Arrays.asList(sstablesDir.listFiles());
+        List<File> splitFiles = Arrays.asList(sstablesDir.tryList());
         splitFiles.stream().forEach(f -> {
-            if (f.getName().endsWith("Data.db") && !origSstables.contains(f))
-                assertTrue(f.getName() + " is way bigger than 1MB: [" + f.length() + "] bytes",
+            if (f.name().endsWith("Data.db") && !origSstables.contains(f))
+                assertTrue(f.name() + " is way bigger than 1MB: [" + f.length() + "] bytes",
                            f.length() <= 1024 * 1024 * 1.2); //give a 20% margin on size check
         });
         assertTrue(origSstables.size() < splitFiles.size());
@@ -119,7 +119,7 @@ public class StandaloneSplitterWithCQLTesterTest extends CQLTester
     {
         restoreOrigSstables();
         ToolResult tool  = ToolRunner.invokeClass(StandaloneSplitter.class, "-s", "1", "--no-snapshot", sstableFileName);
-        assertTrue(origSstables.size() < Arrays.asList(sstablesDir.listFiles()).size());
+        assertTrue(origSstables.size() < Arrays.asList(sstablesDir.tryList()).size());
         assertTrue(tool.getStdout(), tool.getStdout().isEmpty());
         assertTrue(tool.getCleanedStderr(), tool.getCleanedStderr().isEmpty());
         assertEquals(0, tool.getExitCode());
@@ -144,17 +144,17 @@ public class StandaloneSplitterWithCQLTesterTest extends CQLTester
         Set<SSTableReader> sstables = cfs.getLiveSSTables();
         sstableFileName = sstables.iterator().next().getFilename();
         assertTrue("Generated sstable must be at least 1MB", (new File(sstableFileName)).length() > 1024*1024);
-        sstablesDir = new File(sstableFileName).getParentFile();
-        sstablesBackupDir = new File(sstablesDir.getAbsolutePath() + "/testbackup");
-        sstablesBackupDir.mkdir();
-        origSstables = Arrays.asList(sstablesDir.listFiles());
+        sstablesDir = new File(sstableFileName).parent();
+        sstablesBackupDir = new File(sstablesDir.absolutePath() + "/testbackup");
+        sstablesBackupDir.tryCreateDirectory();
+        origSstables = Arrays.asList(sstablesDir.tryList());
 
         // Back up orig sstables
         origSstables.stream().forEach(f -> {
             if (f.isFile())
                 try
                 {
-                    Files.copy(f, new File(sstablesBackupDir.getAbsolutePath() + "/" + f.getName()));
+                    Files.copy(f.toJavaIOFile(), new File(sstablesBackupDir.absolutePath() + "/" + f.name()).toJavaIOFile());
                 }
                 catch(IOException e)
                 {
@@ -167,15 +167,15 @@ public class StandaloneSplitterWithCQLTesterTest extends CQLTester
 
     private void restoreOrigSstables()
     {
-        Arrays.asList(sstablesDir.listFiles()).stream().forEach(f -> {
+        Arrays.asList(sstablesDir.tryList()).stream().forEach(f -> {
             if (f.isFile())
-                f.delete();
+                f.tryDelete();
         });
-        Arrays.asList(sstablesBackupDir.listFiles()).stream().forEach(f -> {
+        Arrays.asList(sstablesBackupDir.tryList()).stream().forEach(f -> {
             if (f.isFile())
                 try
                 {
-                    Files.copy(f, new File(sstablesDir.getAbsolutePath() + "/" + f.getName()));
+                    Files.copy(f.toJavaIOFile(), new File(sstablesDir.absolutePath() + "/" + f.name()).toJavaIOFile());
                 }
                 catch(IOException e)
                 {

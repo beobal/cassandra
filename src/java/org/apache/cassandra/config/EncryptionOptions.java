@@ -17,13 +17,13 @@
  */
 package org.apache.cassandra.config;
 
-import java.io.File;
 import java.util.List;
 import java.util.Objects;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
+import org.apache.cassandra.io.util.File;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
