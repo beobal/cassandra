@@ -17,9 +17,11 @@
  */
 package org.apache.cassandra.io.sstable.format;
 
-import java.io.*;
+
+import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
+import java.nio.file.NoSuchFileException;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -30,6 +32,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Ordering;
 import com.google.common.primitives.Longs;
 import com.google.common.util.concurrent.RateLimiter;
+import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.concurrent.ExecutorPlus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -615,7 +618,7 @@ public abstract class SSTableReader extends SSTable implements SelfRefCounted<SS
                 if (expectedComponents.contains(Component.COMPRESSION_INFO) && !actualComponents.contains(Component.COMPRESSION_INFO))
                 {
                     String compressionInfoFileName = descriptor.filenameFor(Component.COMPRESSION_INFO);
-                    throw new CorruptSSTableException(new FileNotFoundException(compressionInfoFileName), compressionInfoFileName);
+                    throw new CorruptSSTableException(new NoSuchFileException(compressionInfoFileName), compressionInfoFileName);
                 }
             }
             catch (IOException e)
@@ -721,7 +724,7 @@ public abstract class SSTableReader extends SSTable implements SelfRefCounted<SS
         if (summariesFile.exists())
             FileUtils.deleteWithConfirm(summariesFile);
 
-        try (DataOutputStreamPlus oStream = new BufferedDataOutputStreamPlus(new FileOutputStream(summariesFile)))
+        try (DataOutputStreamPlus oStream = new FileOutputStreamPlus(summariesFile))
         {
             IndexSummary.serializer.serialize(summary, oStream);
             ByteBufferUtil.writeWithLength(first.getKey(), oStream);
@@ -740,7 +743,7 @@ public abstract class SSTableReader extends SSTable implements SelfRefCounted<SS
     public static void saveBloomFilter(Descriptor descriptor, IFilter filter)
     {
         File filterFile = new File(descriptor.filenameFor(Component.FILTER));
-        try (DataOutputStreamPlus stream = new BufferedDataOutputStreamPlus(new FileOutputStream(filterFile)))
+        try (DataOutputStreamPlus stream = new FileOutputStreamPlus(filterFile))
         {
             BloomFilterSerializer.serialize((BloomFilter) filter, stream);
             stream.flush();
@@ -1610,7 +1613,7 @@ public abstract class SSTableReader extends SSTable implements SelfRefCounted<SS
             File sourceFile = new File(descriptor.filenameFor(component));
             if (!sourceFile.exists())
                 continue;
-            File targetLink = new File(snapshotDirectoryPath, sourceFile.getName());
+            File targetLink = new File(snapshotDirectoryPath, sourceFile.name());
             FileUtils.createHardLink(sourceFile, targetLink);
         }
     }
