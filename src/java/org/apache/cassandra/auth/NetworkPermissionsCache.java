@@ -19,6 +19,7 @@
 package org.apache.cassandra.auth;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.utils.MBeanWrapper;
 
 public class NetworkPermissionsCache extends AuthCache<RoleResource, DCPermissions> implements NetworkPermissionsCacheMBean
 {
@@ -33,10 +34,19 @@ public class NetworkPermissionsCache extends AuthCache<RoleResource, DCPermissio
               DatabaseDescriptor::getRolesCacheMaxEntries,
               authorizer::authorize,
               () -> DatabaseDescriptor.getAuthenticator().requireAuthentication());
+
+        MBeanWrapper.instance.registerMBean(this, MBEAN_NAME_BASE + DEPRECATED_CACHE_NAME);
     }
 
     public void invalidateNetworkPermissions(String roleName)
     {
         invalidate(RoleResource.role(roleName));
+    }
+
+    @Override
+    protected void unregisterMBean()
+    {
+        super.unregisterMBean();
+        MBeanWrapper.instance.unregisterMBean(MBEAN_NAME_BASE + DEPRECATED_CACHE_NAME, MBeanWrapper.OnException.LOG);
     }
 }

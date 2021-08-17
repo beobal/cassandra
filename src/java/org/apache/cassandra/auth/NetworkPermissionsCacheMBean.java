@@ -21,6 +21,8 @@ package org.apache.cassandra.auth;
 public interface NetworkPermissionsCacheMBean extends AuthCacheMBean
 {
     public static final String CACHE_NAME = "NetworkPermissionsCache";
+    @Deprecated
+    public static final String DEPRECATED_CACHE_NAME = "NetworkAuthCache";
 
     public void invalidateNetworkPermissions(String roleName);
 }

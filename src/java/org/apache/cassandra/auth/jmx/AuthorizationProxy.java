@@ -40,6 +40,7 @@ import org.slf4j.LoggerFactory;
 import org.apache.cassandra.auth.*;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.service.StorageService;
+import org.apache.cassandra.utils.MBeanWrapper;
 
 /**
  * Provides a proxy interface to the platform's MBeanServer instance to perform
@@ -490,17 +491,28 @@ public class AuthorizationProxy implements InvocationHandler
                   DatabaseDescriptor::getPermissionsCacheMaxEntries,
                   AuthorizationProxy::loadPermissions,
                   () -> true);
+
+            MBeanWrapper.instance.registerMBean(this, MBEAN_NAME_BASE + DEPRECATED_CACHE_NAME);
         }
 
         public void invalidatePermissions(String roleName)
         {
             invalidate(RoleResource.role(roleName));
         }
+
+        @Override
+        protected void unregisterMBean()
+        {
+            super.unregisterMBean();
+            MBeanWrapper.instance.unregisterMBean(MBEAN_NAME_BASE + DEPRECATED_CACHE_NAME, MBeanWrapper.OnException.LOG);
+        }
     }
 
     public static interface JmxPermissionsCacheMBean extends AuthCacheMBean
     {
         public static final String CACHE_NAME = "JMXPermissionsCache";
+        @Deprecated
+        public static final String DEPRECATED_CACHE_NAME = "JmxPermissionsCache";
 
         public void invalidatePermissions(String roleName);
     }
