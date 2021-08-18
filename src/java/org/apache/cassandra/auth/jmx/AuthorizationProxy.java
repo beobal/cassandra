@@ -510,9 +510,9 @@ public class AuthorizationProxy implements InvocationHandler
 
     public static interface JmxPermissionsCacheMBean extends AuthCacheMBean
     {
-        public static final String CACHE_NAME = "JMXPermissionsCache";
+        public static final String CACHE_NAME = "JmxPermissionsCache";
         @Deprecated
-        public static final String DEPRECATED_CACHE_NAME = "JmxPermissionsCache";
+        public static final String DEPRECATED_CACHE_NAME = "JMXPermissionsCache";
 
         public void invalidatePermissions(String roleName);
     }
