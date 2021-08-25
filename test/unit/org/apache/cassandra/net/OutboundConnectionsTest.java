@@ -102,12 +102,12 @@ public class OutboundConnectionsTest
     @Test
     public void getConnection_Gossip_Oversized() throws NoSuchFieldException, IllegalAccessException
     {
-        IVersionedAsymmetricSerializer restore = Verb.GOSSIP_DIGEST_ACK.serializer();
+        IVersionedAsymmetricSerializer<?,?> restore = Verb.GOSSIP_DIGEST_ACK.serializer();
         try
         {
             Verb.GOSSIP_DIGEST_ACK.unsafeSetSerializer(() -> SERIALIZER);
             Message message = Message.out(Verb.GOSSIP_DIGEST_ACK, "payload");
-            Assert.assertTrue(message.serializedSize(current_version) >= LARGE_MESSAGE_THRESHOLD);
+            Assert.assertTrue(message.serializedSize(current_version) > LARGE_MESSAGE_THRESHOLD);
             Assert.assertEquals(ConnectionType.LARGE_MESSAGES, connections.connectionFor(message).type());
         }
         finally
