@@ -33,10 +33,10 @@ import org.slf4j.LoggerFactory;
  */
 public interface Clock
 {
+    static final Logger logger = LoggerFactory.getLogger(Clock.class);
+
     public static class Global
     {
-        private static final Logger logger = LoggerFactory.getLogger(Clock.class);
-
         /**
          * Static singleton object that will be instantiated by default with a system clock
          * implementation. Set <code>cassandra.clock</code> system property to a FQCN to use a
