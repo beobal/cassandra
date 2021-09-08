@@ -259,7 +259,7 @@ public interface Awaitable
     abstract class AsyncAwaitable extends AbstractAwaitable
     {
         /**
-         * Maintain an internal variable containing a lazily-initialized one-use wait queue (that is nulled on completion)
+         * Maintain an internal variable containing a lazily-initialized wait queue
          * @return null if is done
          */
         @Inline
@@ -286,7 +286,6 @@ public interface Awaitable
             if (!isDone.test(awaitable))
                 return s;
 
-            waitingUpdater.lazySet(awaitable, null);
             s.cancel();
             return null;
         }
@@ -304,8 +303,6 @@ public interface Awaitable
         static <A extends Awaitable> boolean awaitUntil(AtomicReferenceFieldUpdater<A, WaitQueue> waitingUpdater, Predicate<A> isDone, A awaitable, long nanoTimeDeadline) throws InterruptedException
         {
             WaitQueue.Signal s = register(waitingUpdater, isDone, awaitable);
-            if (s != null)
-                s.await();
             return s == null || s.awaitUntil(nanoTimeDeadline) || isDone.test(awaitable);
         }
 
