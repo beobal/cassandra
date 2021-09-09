@@ -30,8 +30,6 @@ import org.apache.cassandra.config.Duration;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import org.apache.cassandra.io.util.File;
-import org.apache.cassandra.io.util.FileInputStreamPlus;
-import org.apache.cassandra.io.util.FileOutputStreamPlus;
 
 // Only serialize fields
 @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY,
@@ -86,12 +84,12 @@ public class SnapshotManifest
 
     public void serializeToJsonFile(File outputFile) throws IOException
     {
-        mapper.writeValue((OutputStream) new FileOutputStreamPlus(outputFile), this);
+        mapper.writeValue(outputFile.toJavaIOFile(), this);
     }
 
     public static SnapshotManifest deserializeFromJsonFile(File file) throws IOException
     {
-        return mapper.readValue((InputStream) new FileInputStreamPlus(file), SnapshotManifest.class);
+        return mapper.readValue(file.toJavaIOFile(), SnapshotManifest.class);
     }
 
     @Override
