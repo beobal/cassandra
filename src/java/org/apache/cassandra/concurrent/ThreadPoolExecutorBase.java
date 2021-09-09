@@ -88,6 +88,10 @@ public class ThreadPoolExecutorBase extends ThreadPoolExecutor implements Resiza
     {
         super(threads, threads, keepAlive, keepAliveUnits, queue, threadFactory);
         allowCoreThreadTimeOut(true);
+        // core threads are started (if necessary) when tasks are submitted, so if
+        // initialised with a non-empty task queue they need to be started manually
+        if (!queue.isEmpty())
+            prestartAllCoreThreads();
     }
 
     public void onShutdown(Runnable onShutdown)
