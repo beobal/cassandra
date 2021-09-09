@@ -279,6 +279,9 @@ public class RepairJobTest
                 break;
         }
 
+        // TODO this is failing, though the executor has keepAlive set correctly and I can see that the
+        // worker threads are timing out as expected. The measured size of session *before* running the
+        // tree -> sync task seems to be a lot bigger when compared to pre-CASSANDRA-16925
         assertThat(millisUntilFreed).isLessThan(TEST_TIMEOUT_S * 1000);
 
         List<SyncStat> results = syncResults.get(TEST_TIMEOUT_S, TimeUnit.SECONDS);
