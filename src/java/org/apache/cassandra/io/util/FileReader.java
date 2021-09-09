@@ -24,10 +24,13 @@ import java.io.OutputStreamWriter;
 
 public class FileReader extends InputStreamReader
 {
+    @SuppressWarnings("resource") // FISP is closed by ISR::close
     public FileReader(String file) throws IOException
     {
         super(new FileInputStreamPlus(file));
     }
+
+    @SuppressWarnings("resource") // FISP is closed by ISR::close
     public FileReader(File file) throws IOException
     {
         super(new FileInputStreamPlus(file));
