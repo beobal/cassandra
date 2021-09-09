@@ -25,12 +25,14 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 import org.junit.Assert;
+import org.junit.Ignore;
 
 import org.apache.cassandra.utils.Closeable;
 import org.apache.cassandra.utils.WithResources;
 import org.apache.cassandra.utils.concurrent.Future;
 import org.apache.cassandra.utils.concurrent.Semaphore;
 
+@Ignore
 public abstract class AbstractExecutorPlusTest
 {
     interface Verify<V>
