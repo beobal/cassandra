@@ -87,6 +87,7 @@ public class ThreadPoolExecutorBase extends ThreadPoolExecutor implements Resiza
     public ThreadPoolExecutorBase(int threads, int keepAlive, TimeUnit keepAliveUnits, BlockingQueue<Runnable> queue, NamedThreadFactory threadFactory)
     {
         super(threads, threads, keepAlive, keepAliveUnits, queue, threadFactory);
+        assert queue.isEmpty() : "Executor initialized with non-empty task queue";
         allowCoreThreadTimeOut(true);
     }
 
