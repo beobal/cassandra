@@ -18,6 +18,8 @@
 
 package org.apache.cassandra.concurrent;
 
+import java.util.function.Consumer;
+
 import org.apache.cassandra.utils.JVMStabilityInspector;
 
 import static java.lang.Thread.*;
@@ -105,6 +107,18 @@ public interface ExecutorFactory extends ExecutorBuilderFactory.Jmxable<Executor
      * @return the new thread
      */
     Interruptible infiniteLoop(String name, Interruptible.Task task, boolean simulatorSafe);
+
+    /**
+     * Create and start a new InfiniteLoopExecutor to repeatedly invoke {@code runnable}.
+     * On shutdown, the executing thread will be interrupted; to support clean shutdown
+     * {@code runnable} should propagate {@link InterruptedException}
+     *
+     * @param name the name of the thread used to invoke the task repeatedly
+     * @param task the task to execute repeatedly
+     * @param interruptHandler perform specific processing of interrupts of the task execution thread
+     * @return the new thread
+     */
+    Interruptible infiniteLoop(String name, Interruptible.Task task, boolean simulatorSafe, Consumer<Thread> interruptHandler);
 
     /**
      * Create and start a new InfiniteLoopExecutor to repeatedly invoke {@code runnable}.
@@ -233,6 +247,12 @@ public interface ExecutorFactory extends ExecutorBuilderFactory.Jmxable<Executor
         public Interruptible infiniteLoop(String name, Interruptible.Task task, boolean simulatorSafe)
         {
             return new InfiniteLoopExecutor(this, name, task);
+        }
+
+        @Override
+        public Interruptible infiniteLoop(String name, Interruptible.Task task, boolean simulatorSafe, Consumer<Thread> interruptHandler)
+        {
+            return new InfiniteLoopExecutor(this, name, task, interruptHandler);
         }
 
         @Override
