@@ -26,6 +26,7 @@ import java.util.concurrent.TimeUnit;
 import com.google.common.annotations.VisibleForTesting;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 
 import org.apache.cassandra.utils.concurrent.UncheckedInterruptedException;
 
@@ -44,22 +45,30 @@ public class InfiniteLoopExecutor implements Interruptible
     private final Thread thread;
     private final Task task;
     private volatile Object state = NORMAL;
+    private final Consumer<Thread> interruptHandler;
 
     public InfiniteLoopExecutor(String name, Task task)
     {
-        this(ExecutorFactory.Global.executorFactory(), name, task);
+        this(ExecutorFactory.Global.executorFactory(), name, task, Thread::interrupt);
     }
 
     public InfiniteLoopExecutor(ExecutorFactory factory, String name, Task task)
     {
-        this.task = task;
-        this.thread = factory.startThread(name, this::loop);
+        this(factory, name, task, Thread::interrupt);
     }
 
-    public InfiniteLoopExecutor(BiFunction<String, Runnable, Thread> threadStarter, String name, Task task)
+    public InfiniteLoopExecutor(ExecutorFactory factory, String name, Task task, Consumer<Thread> interruptHandler)
+    {
+        this.task = task;
+        this.thread = factory.startThread(name, this::loop);
+        this.interruptHandler = interruptHandler;
+    }
+
+    public InfiniteLoopExecutor(BiFunction<String, Runnable, Thread> threadStarter, String name, Task task, Consumer<Thread> interruptHandler)
     {
         this.task = task;
         this.thread = threadStarter.apply(name, this::loop);
+        this.interruptHandler = interruptHandler;
     }
 
     private void loop()
@@ -96,19 +105,19 @@ public class InfiniteLoopExecutor implements Interruptible
 
     public void interrupt()
     {
-        thread.interrupt();
+        interruptHandler.accept(thread);
     }
 
     public void shutdown()
     {
         stateUpdater.updateAndGet(this, cur -> cur != TERMINATED ? SHUTTING_DOWN : TERMINATED);
-        thread.interrupt();
+        interruptHandler.accept(thread);
     }
 
     public Object shutdownNow()
     {
         state = TERMINATED;
-        thread.interrupt();
+        interruptHandler.accept(thread);
         return null;
     }
 

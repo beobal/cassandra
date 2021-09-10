@@ -24,6 +24,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 
 import com.google.common.annotations.VisibleForTesting;
 import org.slf4j.Logger;
@@ -103,10 +104,15 @@ public abstract class AbstractCommitLogSegmentManager
         this.storageDirectory = storageDirectory;
     }
 
+    private volatile boolean creatingSegment = false;
     void start()
     {
+        final BooleanSupplier taskInterruptCondition = () -> !creatingSegment;
+        final WaitQueue taskInterruptWaitQueue = newWaitQueue();
+
         // The run loop for the manager thread
         Interruptible.Task runnable = state -> {
+
             try
             {
                 switch (state)
@@ -121,6 +127,7 @@ public abstract class AbstractCommitLogSegmentManager
                         assert availableSegment == null;
 
                         logger.trace("No segments in reserve; creating a fresh one");
+                        creatingSegment = true;
                         availableSegment = createSegment();
 
                         segmentPrepared.signalAll();
@@ -133,6 +140,7 @@ public abstract class AbstractCommitLogSegmentManager
                         // Writing threads are not waiting for new segments, we can spend time on other tasks.
                         // flush old Cfs if we're full
                         maybeFlushToReclaim();
+                        creatingSegment = false;
                 }
             }
             catch (Throwable t)
@@ -147,7 +155,7 @@ public abstract class AbstractCommitLogSegmentManager
                 // There could be a new segment in next not offered, but only on failure to discard it while
                 // shutting down-- nothing more can or needs to be done in that case.
             }
-
+            taskInterruptWaitQueue.signalAll();
             WaitQueue.waitOnCondition(managerThreadWaitCondition, managerThreadWaitQueue);
         };
 
@@ -161,10 +169,24 @@ public abstract class AbstractCommitLogSegmentManager
                                                      DatabaseDescriptor.getCommitLogSegmentSize(),
                                                      bufferType);
 
-        executor = executorFactory().infiniteLoop("COMMIT-LOG-ALLOCATOR", runnable, true);
+        Consumer<Thread> interruptHandler = thread -> safelyInterrupt(thread, taskInterruptCondition, taskInterruptWaitQueue);
+        executor = executorFactory().infiniteLoop("COMMIT-LOG-ALLOCATOR", runnable, true, interruptHandler);
 
         // for simplicity, ensure the first segment is allocated before continuing
         advanceAllocatingFrom(null);
+    }
+
+    private void safelyInterrupt(Thread thread, BooleanSupplier condition, WaitQueue waitQueue)
+    {
+        try
+        {
+            WaitQueue.waitOnCondition(condition, waitQueue);
+        }
+        catch (InterruptedException e)
+        {
+            throw new UncheckedInterruptedException(e);
+        }
+        thread.interrupt();
     }
 
     private boolean atSegmentBufferLimit()
