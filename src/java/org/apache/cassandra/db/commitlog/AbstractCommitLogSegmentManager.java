@@ -24,6 +24,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 
 import com.google.common.annotations.VisibleForTesting;
 import org.slf4j.Logger;
@@ -105,8 +106,11 @@ public abstract class AbstractCommitLogSegmentManager
 
     void start()
     {
+        // used for synchronization to prevent thread interrupts while performing IO operations
+        final Object monitor = new Object();
         // The run loop for the manager thread
         Interruptible.Task runnable = state -> {
+
             try
             {
                 switch (state)
@@ -120,19 +124,22 @@ public abstract class AbstractCommitLogSegmentManager
                     case NORMAL:
                         assert availableSegment == null;
 
-                        logger.trace("No segments in reserve; creating a fresh one");
-                        availableSegment = createSegment();
+                        synchronized (monitor)
+                        {
+                            logger.trace("No segments in reserve; creating a fresh one");
+                            availableSegment = createSegment();
 
-                        segmentPrepared.signalAll();
-                        Thread.yield();
+                            segmentPrepared.signalAll();
+                            Thread.yield();
 
-                        if (availableSegment == null && !atSegmentBufferLimit())
-                            // Writing threads need another segment now.
-                            return;
+                            if (availableSegment == null && !atSegmentBufferLimit())
+                                // Writing threads need another segment now.
+                                return;
 
-                        // Writing threads are not waiting for new segments, we can spend time on other tasks.
-                        // flush old Cfs if we're full
-                        maybeFlushToReclaim();
+                            // Writing threads are not waiting for new segments, we can spend time on other tasks.
+                            // flush old Cfs if we're full
+                            maybeFlushToReclaim();
+                        }
                 }
             }
             catch (Throwable t)
@@ -147,7 +154,6 @@ public abstract class AbstractCommitLogSegmentManager
                 // There could be a new segment in next not offered, but only on failure to discard it while
                 // shutting down-- nothing more can or needs to be done in that case.
             }
-
             WaitQueue.waitOnCondition(managerThreadWaitCondition, managerThreadWaitQueue);
         };
 
@@ -161,10 +167,21 @@ public abstract class AbstractCommitLogSegmentManager
                                                      DatabaseDescriptor.getCommitLogSegmentSize(),
                                                      bufferType);
 
-        executor = executorFactory().infiniteLoop("COMMIT-LOG-ALLOCATOR", runnable, true);
+        Consumer<Thread> interruptHandler = interruptHandler(monitor);
+        executor = executorFactory().infiniteLoop("COMMIT-LOG-ALLOCATOR", runnable, true, interruptHandler);
 
         // for simplicity, ensure the first segment is allocated before continuing
         advanceAllocatingFrom(null);
+    }
+
+    private Consumer<Thread> interruptHandler(final Object monitor)
+    {
+        return thread -> {
+            synchronized (monitor)
+            {
+                thread.interrupt();
+            }
+        };
     }
 
     private boolean atSegmentBufferLimit()
