@@ -206,7 +206,7 @@ class MonitoringTask
         OperationsQueue(int maxOperations)
         {
             this.maxOperations = maxOperations;
-            this.queue = newBlockingQueue(maxOperations);
+            this.queue = newBlockingQueue(maxOperations < 0 ? Integer.MAX_VALUE : maxOperations);
             this.numDroppedOperations = new AtomicLong();
         }
 
