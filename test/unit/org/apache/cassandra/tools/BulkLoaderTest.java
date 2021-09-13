@@ -61,7 +61,7 @@ public class BulkLoaderTest extends OfflineToolUtils
         if (!(tool.getException().getCause().getCause() instanceof NoHostAvailableException))
             throw tool.getException();
 
-        assertNoUnexpectedThreadsStarted(new String[]{ "globalEventExecutor-1-1", "globalEventExecutor-1-2"});
+        assertNoUnexpectedThreadsStarted(new String[]{"globalEventExecutor-[1-9]-[1-9]", "globalEventExecutor-[1-9]-[1-9]"});
         assertSchemaNotLoaded();
         assertCLSMNotLoaded();
         assertSystemKSNotLoaded();
@@ -85,7 +85,7 @@ public class BulkLoaderTest extends OfflineToolUtils
         if (!(tool.getException().getCause().getCause() instanceof NoHostAvailableException))
             throw tool.getException();
 
-        assertNoUnexpectedThreadsStarted(new String[] { "globalEventExecutor-1-1", "globalEventExecutor-1-2" });
+        assertNoUnexpectedThreadsStarted(new String[]{"globalEventExecutor-[1-9]-[1-9]", "globalEventExecutor-[1-9]-[1-9]"});
         assertSchemaNotLoaded();
         assertCLSMNotLoaded();
         assertSystemKSNotLoaded();
@@ -109,7 +109,7 @@ public class BulkLoaderTest extends OfflineToolUtils
         if (!(tool.getException().getCause().getCause() instanceof NoHostAvailableException))
             throw tool.getException();
 
-        assertNoUnexpectedThreadsStarted(new String[] { "globalEventExecutor-1-1", "globalEventExecutor-1-2" });
+        assertNoUnexpectedThreadsStarted(new String[]{"globalEventExecutor-[1-9]-[1-9]", "globalEventExecutor-[1-9]-[1-9]"});
         assertSchemaNotLoaded();
         assertCLSMNotLoaded();
         assertSystemKSNotLoaded();
