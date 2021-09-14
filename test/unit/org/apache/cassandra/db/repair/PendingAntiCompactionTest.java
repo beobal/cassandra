@@ -102,7 +102,7 @@ public class PendingAntiCompactionTest extends AbstractPendingAntiCompactionTest
 
         Set<TableId> submittedCompactions = new HashSet<>();
 
-        Future<?> submitPendingAntiCompaction(PendingAntiCompaction.AcquireResult result)
+        Future<Void> submitPendingAntiCompaction(PendingAntiCompaction.AcquireResult result)
         {
             submittedCompactions.add(result.cfs.metadata.id);
             result.abort();  // prevent ref leak complaints
@@ -421,7 +421,7 @@ public class PendingAntiCompactionTest extends AbstractPendingAntiCompactionTest
                 return new AcquisitionCallback(prsid, tokenRanges, () -> false)
                 {
                     @Override
-                    Future<?> submitPendingAntiCompaction(AcquireResult result)
+                    Future submitPendingAntiCompaction(AcquireResult result)
                     {
                         Runnable r = new WrappedRunnable()
                         {

@@ -685,12 +685,12 @@ public class CompactionManager implements CompactionManagerMBean
     /**
      * Splits the given token ranges of the given sstables into a pending repair silo
      */
-    public Future<?> submitPendingAntiCompaction(ColumnFamilyStore cfs,
-                                                           RangesAtEndpoint tokenRanges,
-                                                           Refs<SSTableReader> sstables,
-                                                           LifecycleTransaction txn,
-                                                           UUID sessionId,
-                                                           BooleanSupplier isCancelled)
+    public Future<Void> submitPendingAntiCompaction(ColumnFamilyStore cfs,
+                                                    RangesAtEndpoint tokenRanges,
+                                                    Refs<SSTableReader> sstables,
+                                                    LifecycleTransaction txn,
+                                                    UUID sessionId,
+                                                    BooleanSupplier isCancelled)
     {
         Runnable runnable = new WrappedRunnable()
         {
@@ -703,7 +703,7 @@ public class CompactionManager implements CompactionManagerMBean
             }
         };
 
-        Future<?> task = null;
+        Future<Void> task = null;
         try
         {
             task = executor.submitIfRunning(runnable, "pending anticompaction");
@@ -1838,7 +1838,7 @@ public class CompactionManager implements CompactionManagerMBean
                     .withQueueLimit(queueSize).build());
         }
 
-        public Future<?> submitIfRunning(Runnable task, String name)
+        public Future<Void> submitIfRunning(Runnable task, String name)
         {
             return submitIfRunning(callable(name, task), name);
         }

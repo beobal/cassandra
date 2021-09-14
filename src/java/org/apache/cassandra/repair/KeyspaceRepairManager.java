@@ -19,6 +19,7 @@
 package org.apache.cassandra.repair;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.function.BooleanSupplier;
@@ -37,9 +38,9 @@ public interface KeyspaceRepairManager
      * been notified that the repair session has been completed, the data associated with the given session id must
      * not be combined with repaired or unrepaired data, or data from other repair sessions.
      */
-    Future<Void> prepareIncrementalRepair(UUID sessionID,
-                                       Collection<ColumnFamilyStore> tables,
-                                       RangesAtEndpoint tokenRanges,
-                                       ExecutorService executor,
-                                       BooleanSupplier isCancelled);
+    Future<List<Void>> prepareIncrementalRepair(UUID sessionID,
+                                                Collection<ColumnFamilyStore> tables,
+                                                RangesAtEndpoint tokenRanges,
+                                                ExecutorService executor,
+                                                BooleanSupplier isCancelled);
 }

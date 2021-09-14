@@ -256,7 +256,7 @@ public class PendingAntiCompaction
         }
     }
 
-    static class AcquisitionCallback implements Function<List<AcquireResult>, Future<Void>>
+    static class AcquisitionCallback implements Function<List<AcquireResult>, Future<List<Void>>>
     {
         private final UUID parentRepairSession;
         private final RangesAtEndpoint tokenRanges;
@@ -269,7 +269,7 @@ public class PendingAntiCompaction
             this.isCancelled = isCancelled;
         }
 
-        Future<?> submitPendingAntiCompaction(AcquireResult result)
+        Future<Void> submitPendingAntiCompaction(AcquireResult result)
         {
             return CompactionManager.instance.submitPendingAntiCompaction(result.cfs, tokenRanges, result.refs, result.txn, parentRepairSession, isCancelled);
         }
@@ -288,7 +288,7 @@ public class PendingAntiCompaction
             });
         }
 
-        public Future apply(List<AcquireResult> results)
+        public Future<List<Void>> apply(List<AcquireResult> results)
         {
             if (Iterables.any(results, AcquisitionCallback::shouldAbort))
             {
@@ -310,12 +310,12 @@ public class PendingAntiCompaction
             }
             else
             {
-                List<Future<?>> pendingAntiCompactions = new ArrayList<>(results.size());
+                List<Future<Void>> pendingAntiCompactions = new ArrayList<>(results.size());
                 for (AcquireResult result : results)
                 {
                     if (result.txn != null)
                     {
-                        Future<?> future = submitPendingAntiCompaction(result);
+                        Future<Void> future = submitPendingAntiCompaction(result);
                         pendingAntiCompactions.add(future);
                     }
                 }
@@ -360,7 +360,7 @@ public class PendingAntiCompaction
         this.isCancelled = isCancelled;
     }
 
-    public Future<Void> run()
+    public Future<List<Void>> run()
     {
         List<FutureTask<AcquireResult>> tasks = new ArrayList<>(tables.size());
         for (ColumnFamilyStore cfs : tables)
