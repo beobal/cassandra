@@ -737,12 +737,12 @@ public class LocalSessions
     }
 
     @VisibleForTesting
-    Future<Void> prepareSession(KeyspaceRepairManager repairManager,
-                             UUID sessionID,
-                             Collection<ColumnFamilyStore> tables,
-                             RangesAtEndpoint tokenRanges,
-                             ExecutorService executor,
-                             BooleanSupplier isCancelled)
+    Future<List<Void>> prepareSession(KeyspaceRepairManager repairManager,
+                                      UUID sessionID,
+                                      Collection<ColumnFamilyStore> tables,
+                                      RangesAtEndpoint tokenRanges,
+                                      ExecutorService executor,
+                                      BooleanSupplier isCancelled)
     {
         return repairManager.prepareIncrementalRepair(sessionID, tables, tokenRanges, executor, isCancelled);
     }
@@ -804,12 +804,12 @@ public class LocalSessions
 
         KeyspaceRepairManager repairManager = parentSession.getKeyspace().getRepairManager();
         RangesAtEndpoint tokenRanges = filterLocalRanges(parentSession.getKeyspace().getName(), parentSession.getRanges());
-        Future<Void> repairPreparation = prepareSession(repairManager, sessionID, parentSession.getColumnFamilyStores(),
+        Future<List<Void>> repairPreparation = prepareSession(repairManager, sessionID, parentSession.getColumnFamilyStores(),
                                                           tokenRanges, executor, () -> session.getState() != PREPARING);
 
-        repairPreparation.addCallback(new FutureCallback<Void>()
+        repairPreparation.addCallback(new FutureCallback<List<Void>>()
         {
-            public void onSuccess(@Nullable Void result)
+            public void onSuccess(@Nullable List<Void> result)
             {
                 try
                 {

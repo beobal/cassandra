@@ -139,16 +139,16 @@ public class LocalSessionTest extends AbstractRepairTest
             sentMessages.get(destination).add(message.payload);
         }
 
-        AsyncPromise<Void> prepareSessionFuture = null;
+        AsyncPromise<List<Void>> prepareSessionFuture = null;
         boolean prepareSessionCalled = false;
 
         @Override
-        Future<Void> prepareSession(KeyspaceRepairManager repairManager,
-                              UUID sessionID,
-                              Collection<ColumnFamilyStore> tables,
-                              RangesAtEndpoint ranges,
-                              ExecutorService executor,
-                              BooleanSupplier isCancelled)
+        Future<List<Void>> prepareSession(KeyspaceRepairManager repairManager,
+                                          UUID sessionID,
+                                          Collection<ColumnFamilyStore> tables,
+                                          RangesAtEndpoint ranges,
+                                          ExecutorService executor,
+                                          BooleanSupplier isCancelled)
         {
             prepareSessionCalled = true;
             if (prepareSessionFuture != null)
@@ -354,10 +354,10 @@ public class LocalSessionTest extends AbstractRepairTest
     {
         UUID sessionID = registerSession();
         AtomicReference<BooleanSupplier> isCancelledRef = new AtomicReference<>();
-        Promise<Void> future = new AsyncPromise<>();
+        Promise<List<Void>> future = new AsyncPromise<>();
 
         InstrumentedLocalSessions sessions = new InstrumentedLocalSessions() {
-            Future<Void> prepareSession(KeyspaceRepairManager repairManager, UUID sessionID, Collection<ColumnFamilyStore> tables, RangesAtEndpoint ranges, ExecutorService executor, BooleanSupplier isCancelled)
+            Future<List<Void>> prepareSession(KeyspaceRepairManager repairManager, UUID sessionID, Collection<ColumnFamilyStore> tables, RangesAtEndpoint ranges, ExecutorService executor, BooleanSupplier isCancelled)
             {
                 isCancelledRef.set(isCancelled);
                 return future;
