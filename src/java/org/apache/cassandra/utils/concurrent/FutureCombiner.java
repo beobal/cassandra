@@ -242,15 +242,21 @@ public class FutureCombiner<T> extends AsyncFuture<T>
     }
 
     /**
-     * Waits for all futures to complete, returning a list containing only the successful results
+     * Waits for all futures to complete, returning a list containing values of all successful input futures. This
+     * emulates Guava's Futures::successfulAsList in that results will be in the same order as inputs and any
+     * non-success value (e.g. failure or cancellation) will be replaced by null.
      * @param futures futures to wait for completion of
-     * @return a Future containing all successful results of {@code futures}
+     * @return a Future containing all successful results of {@code futures} and nulls for non-successful futures
      */
-    public static <V> Future<List<V>> successfulOf(Collection<? extends io.netty.util.concurrent.Future<V>> futures)
+    public static <V> Future<List<V>> successfulOf(List<? extends io.netty.util.concurrent.Future<V>> futures)
     {
         if (futures.isEmpty())
             return ImmediateFuture.success(Collections.emptyList());
 
-        return new FutureCombiner<>(futures, () -> futures.stream().filter(f -> f.isSuccess()).map(f -> f.getNow()).collect(Collectors.toList()), Listener::new);
+        return new FutureCombiner<>(futures,
+                                    () -> futures.stream()
+                                                 .map(f -> f.isSuccess() ? f.getNow() : null)
+                                                 .collect(Collectors.toList()),
+                                    Listener::new);
     }
 }
