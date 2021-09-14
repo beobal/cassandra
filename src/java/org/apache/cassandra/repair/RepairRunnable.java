@@ -302,7 +302,6 @@ public class RepairRunnable implements Runnable, ProgressEventNotifier
             traceState.addProgressListener(listener);
         Thread queryThread = createQueryThread(sessionId);
         queryThread.setName("RepairTracePolling");
-        queryThread.start();
         return traceState;
     }
 
