@@ -45,7 +45,10 @@ public class PendingRangeCalculatorService
     // to trigger an update only after the most recent state change and not for each update individually
     private final SequentialExecutorPlus executor = executorFactory()
             .withJmxInternal()
-            .sequential("PendingRangeCalculator");
+            .configureSequential("PendingRangeCalculator")
+            .withQueueLimit(1)
+            .withRejectedExecutionHandler((r, e) -> {})  // silently handle rejected tasks, this::update takes care of bookkeeping
+            .build();
 
     private final AtLeastOnceTrigger update = executor.atLeastOnceTrigger(() -> {
         PendingRangeCalculatorServiceDiagnostics.taskStarted(1);
@@ -86,4 +89,5 @@ public class PendingRangeCalculatorService
     {
         ExecutorUtils.shutdownNowAndWait(timeout, unit, executor);
     }
+
 }
