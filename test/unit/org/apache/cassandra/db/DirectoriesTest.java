@@ -137,7 +137,7 @@ public class DirectoriesTest
             allSStables.addAll(createFakeSSTable(backupDir, cfm.name, 1));
 
             File snapshotDir = new File(tableDir, Directories.SNAPSHOT_SUBDIR + File.pathSeparator() + LEGACY_SNAPSHOT_NAME);
-            snapshotDir.tryCreateDirectory();
+            snapshotDir.tryCreateDirectories();
             allSStables.addAll(createFakeSSTable(snapshotDir, cfm.name, 1));
         }
     }
