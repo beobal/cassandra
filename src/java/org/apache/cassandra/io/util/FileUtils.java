@@ -647,18 +647,8 @@ public final class FileUtils
     }
 
     /**
-<<<<<<< HEAD
-     * FileStore decorator used to safely handle large file system.
-     *
-     * <p>Java's FileStore methods (getTotalSpace/getUnallocatedSpace/getUsableSpace) are limited to reporting bytes as
-     * signed long (2^63-1), if the filesystem is any bigger, then the size overflows. {@code SafeFileStore} will
-     * return {@code Long.MAX_VALUE} if the size overflow.</p>
-     *
-     * @see <a href="https://bugs.openjdk.java.net/browse/JDK-8162520">JDK-8162520</a>.
-=======
      * Schedules deletion of all file and subdirectories under "dir" on JVM shutdown.
      * @param dir Directory to be deleted
->>>>>>> rdar://71645599 (4.0 Paxos: Forward port mock filesystem) (#2146)
      */
     @Deprecated
     public static void deleteRecursiveOnExit(File dir)
