@@ -206,7 +206,7 @@ public class HintsReaderTest
         }
         finally
         {
-            directory.delete();
+            directory.deleteRecursive();
         }
     }
 
