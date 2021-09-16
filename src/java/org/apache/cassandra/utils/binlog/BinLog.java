@@ -365,6 +365,7 @@ public class BinLog implements Runnable
         {
             Preconditions.checkNotNull(path, "path was null");
             File pathAsFile = path.toFile();
+            logger.info("XXX {} -> {}", path, pathAsFile);
             //Exists and is a directory or can be created
             Preconditions.checkArgument(!pathAsFile.toString().isEmpty(), "you might have forgotten to specify a directory to save logs");
             Preconditions.checkArgument((pathAsFile.exists() && pathAsFile.isDirectory()) || (!pathAsFile.exists() && pathAsFile.mkdirs()), "path exists and is not a directory or couldn't be created");
