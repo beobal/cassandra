@@ -468,7 +468,7 @@ public final class PathUtils
         if (exists(path))
             return false;
 
-        tryCreateDirectories(path.getParent());
+        tryCreateDirectories(path.toAbsolutePath().getParent());
         return tryCreateDirectory(path);
     }
 
