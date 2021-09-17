@@ -130,6 +130,12 @@ public class NettyStreamingChannel extends ChannelInboundHandlerAdapter implemen
     }
 
     @Override
+    public boolean sending()
+    {
+        return channel.attr(TRANSFERRING_FILE_ATTR).get();
+    }
+
+    @Override
     public ScheduledFuture<?> scheduleKeepAlive(Runnable runnable, long interval, TimeUnit units)
     {
         return channel.eventLoop().scheduleWithFixedDelay(runnable, 0, interval, units);
@@ -173,7 +179,7 @@ public class NettyStreamingChannel extends ChannelInboundHandlerAdapter implemen
             public StreamingDataOutputPlus apply(int size)
             {
                 buf = GlobalBufferPoolAllocator.instance.buffer();
-                buffer = buf.nioBuffer();
+                buffer = buf.nioBuffer(buf.writerIndex(), size);
                 return new StreamingDataOutputPlusFixed(buffer);
             }
         }

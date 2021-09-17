@@ -19,6 +19,7 @@
 package org.apache.cassandra.streaming.async;
 
 import java.io.IOException;
+import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.util.UUID;
 
@@ -39,6 +40,7 @@ import org.apache.cassandra.io.util.DataOutputPlus;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.net.MessagingService;
 import org.apache.cassandra.net.AsyncStreamingInputPlus;
+import org.apache.cassandra.net.TestChannel;
 import org.apache.cassandra.schema.TableId;
 import org.apache.cassandra.streaming.PreviewKind;
 import org.apache.cassandra.streaming.StreamDeserializingTask;
@@ -52,10 +54,11 @@ import org.apache.cassandra.streaming.messages.IncomingStreamMessage;
 import org.apache.cassandra.streaming.messages.StreamInitMessage;
 import org.apache.cassandra.streaming.messages.StreamMessageHeader;
 
+import static org.apache.cassandra.net.TestChannel.REMOTE_ADDR;
+
 public class StreamingInboundHandlerTest
 {
     private static final int VERSION = MessagingService.current_version;
-    private static final InetAddressAndPort REMOTE_ADDR = InetAddressAndPort.getByAddressOverrideDefaults(InetAddresses.forString("127.0.0.2"), 0);
 
     private NettyStreamingChannel streamingChannel;
     private EmbeddedChannel channel;
@@ -70,7 +73,7 @@ public class StreamingInboundHandlerTest
     @Before
     public void setup()
     {
-        channel = new EmbeddedChannel();
+        channel = new TestChannel();
         streamingChannel = new NettyStreamingChannel(VERSION, channel, StreamingChannel.Kind.CONTROL);
         channel.pipeline().addLast("stream", streamingChannel);
     }
@@ -85,20 +88,6 @@ public class StreamingInboundHandlerTest
         }
 
         channel.close();
-    }
-
-    @Test
-    public void channelRead_Closed()
-    {
-        int size = 8;
-        buf = channel.alloc().buffer(size);
-        Assert.assertEquals(1, buf.refCnt());
-        buf.writerIndex(size);
-        streamingChannel.close();
-        channel.writeInbound(buf);
-        Assert.assertEquals(0, streamingChannel.in.unsafeAvailable());
-        Assert.assertEquals(0, buf.refCnt());
-        Assert.assertFalse(channel.releaseInbound());
     }
 
     @Test

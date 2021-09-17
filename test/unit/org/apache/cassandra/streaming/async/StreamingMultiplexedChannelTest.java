@@ -18,13 +18,15 @@
 
 package org.apache.cassandra.streaming.async;
 
+import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import com.google.common.net.InetAddresses;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -33,8 +35,6 @@ import org.junit.Test;
 
 import io.netty.channel.ChannelPromise;
 import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.locator.InetAddressAndPort;
-import org.apache.cassandra.net.MessagingService;
 import org.apache.cassandra.net.TestChannel;
 import org.apache.cassandra.net.TestScheduledFuture;
 import org.apache.cassandra.streaming.PreviewKind;
@@ -42,14 +42,15 @@ import org.apache.cassandra.streaming.StreamOperation;
 import org.apache.cassandra.streaming.StreamResultFuture;
 import org.apache.cassandra.streaming.StreamSession;
 import org.apache.cassandra.streaming.StreamingChannel;
+import org.apache.cassandra.streaming.StreamingDataInputPlus;
+import org.apache.cassandra.streaming.StreamingDataOutputPlus;
 import org.apache.cassandra.streaming.messages.CompleteMessage;
 
 import static org.apache.cassandra.net.MessagingService.current_version;
+import static org.apache.cassandra.net.TestChannel.REMOTE_ADDR;
 
 public class StreamingMultiplexedChannelTest
 {
-    private static final InetAddressAndPort REMOTE_ADDR = InetAddressAndPort.getByAddressOverrideDefaults(InetAddresses.forString("127.0.0.2"), 0);
-
     private NettyStreamingChannel streamingChannel;
     private TestChannel channel;
     private StreamSession session;
@@ -65,7 +66,7 @@ public class StreamingMultiplexedChannelTest
     @Before
     public void setUp()
     {
-        channel = new TestChannel(Integer.MAX_VALUE);
+        channel = new TestChannel();
         streamingChannel = new NettyStreamingChannel(current_version, channel, StreamingChannel.Kind.CONTROL);
         UUID pendingRepair = UUID.randomUUID();
         session = new StreamSession(StreamOperation.BOOTSTRAP, REMOTE_ADDR, new NettyStreamingConnectionFactory(), streamingChannel, current_version, true, 0, pendingRepair, PreviewKind.ALL);
@@ -88,7 +89,7 @@ public class StreamingMultiplexedChannelTest
     public void KeepAliveTask_normalSend()
     {
         Assert.assertTrue(channel.isOpen());
-        StreamingMultiplexedChannel.KeepAliveTask task = sender.new KeepAliveTask();
+        StreamingMultiplexedChannel.KeepAliveTask task = sender.new KeepAliveTask(streamingChannel);
         task.run();
         Assert.assertTrue(channel.releaseOutbound());
     }
@@ -99,7 +100,7 @@ public class StreamingMultiplexedChannelTest
         channel.close();
         Assert.assertFalse(channel.isOpen());
         channel.releaseOutbound();
-        StreamingMultiplexedChannel.KeepAliveTask task = sender.new KeepAliveTask();
+        StreamingMultiplexedChannel.KeepAliveTask task = sender.new KeepAliveTask(streamingChannel);
         task.future = new TestScheduledFuture();
         Assert.assertFalse(task.future.isCancelled());
         task.run();
@@ -111,7 +112,7 @@ public class StreamingMultiplexedChannelTest
     public void KeepAliveTask_closed()
     {
         Assert.assertTrue(channel.isOpen());
-        StreamingMultiplexedChannel.KeepAliveTask task = sender.new KeepAliveTask();
+        StreamingMultiplexedChannel.KeepAliveTask task = sender.new KeepAliveTask(streamingChannel);
         task.future = new TestScheduledFuture();
         Assert.assertFalse(task.future.isCancelled());
 
@@ -127,7 +128,7 @@ public class StreamingMultiplexedChannelTest
     {
         Assert.assertTrue(channel.isOpen());
         channel.attr(NettyStreamingChannel.TRANSFERRING_FILE_ATTR).set(Boolean.TRUE);
-        StreamingMultiplexedChannel.KeepAliveTask task = sender.new KeepAliveTask();
+        StreamingMultiplexedChannel.KeepAliveTask task = sender.new KeepAliveTask(streamingChannel);
         task.future = new TestScheduledFuture();
         Assert.assertFalse(task.future.isCancelled());
 
@@ -186,7 +187,7 @@ public class StreamingMultiplexedChannelTest
         Assert.assertTrue(sender.connected());
         ChannelPromise promise = channel.newPromise();
         promise.setSuccess();
-        Assert.assertNull(sender.onControlMessageComplete(promise, new CompleteMessage()));
+        Assert.assertNull(sender.onMessageComplete(promise, new CompleteMessage()));
         Assert.assertTrue(channel.isOpen());
         Assert.assertTrue(sender.connected());
         Assert.assertNotEquals(StreamSession.State.FAILED, session.state());
@@ -199,7 +200,7 @@ public class StreamingMultiplexedChannelTest
         Assert.assertTrue(sender.connected());
         ChannelPromise promise = channel.newPromise();
         promise.setFailure(new RuntimeException("this is just a testing exception"));
-        Future f = sender.onControlMessageComplete(promise, new CompleteMessage());
+        Future f = sender.onMessageComplete(promise, new CompleteMessage());
 
         f.get(5, TimeUnit.SECONDS);
 

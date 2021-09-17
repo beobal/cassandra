@@ -61,6 +61,7 @@ public interface StreamingChannel
     InetSocketAddress peer();
     InetSocketAddress connectedTo();
     boolean connected();
+    boolean sending();
 
     // may be never run if no keep alive necessary
     ScheduledFuture<?> scheduleKeepAlive(Runnable runnable, long interval, TimeUnit units);

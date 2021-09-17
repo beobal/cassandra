@@ -364,7 +364,7 @@ public class StreamSession implements IEndpointStateChangeSubscriber
                                                               getPendingRepair(),
                                                               getPreviewKind());
 
-            channel.sendMessage(message);
+            channel.sendControlMessage(message);
             onInitializationComplete();
         }
         catch (Exception e)
@@ -626,7 +626,7 @@ public class StreamSession implements IEndpointStateChangeSubscriber
             prepare.summaries.add(task.getSummary());
         }
 
-        channel.sendMessage(prepare);
+        channel.sendControlMessage(prepare);
     }
 
     /**
@@ -659,7 +659,7 @@ public class StreamSession implements IEndpointStateChangeSubscriber
         logError(e);
         // send session failure message
         if (channel.connected())
-            channel.sendMessage(new SessionFailedMessage());
+            channel.sendControlMessage(new SessionFailedMessage());
         // fail session
         return closeSession(State.FAILED);
     }
@@ -718,7 +718,7 @@ public class StreamSession implements IEndpointStateChangeSubscriber
         if (!peer.equals(FBUtilities.getBroadcastAddressAndPort()))
             for (StreamTransferTask task : transfers.values())
                 prepareSynAck.summaries.add(task.getSummary());
-        channel.sendMessage(prepareSynAck);
+        channel.sendControlMessage(prepareSynAck);
 
         streamResult.handleSessionPrepared(this);
 
@@ -737,7 +737,7 @@ public class StreamSession implements IEndpointStateChangeSubscriber
 
             // only send the (final) ACK if we are expecting the peer to send this node (the initiator) some files
             if (!isPreview())
-                channel.sendMessage(new PrepareAckMessage());
+                channel.sendControlMessage(new PrepareAckMessage());
         }
 
         if (isPreview())
@@ -794,7 +794,7 @@ public class StreamSession implements IEndpointStateChangeSubscriber
         StreamingMetrics.totalIncomingBytes.inc(headerSize);
         metrics.incomingBytes.inc(headerSize);
         // send back file received message
-        channel.sendMessage(new ReceivedMessage(message.header.tableId, message.header.sequenceNumber));
+        channel.sendControlMessage(new ReceivedMessage(message.header.tableId, message.header.sequenceNumber));
         StreamHook.instance.reportIncomingStream(message.header.tableId, message.stream, this, message.header.sequenceNumber);
         long receivedStartNanos = nanoTime();
         try
@@ -873,7 +873,7 @@ public class StreamSession implements IEndpointStateChangeSubscriber
         }
         else
         {
-            channel.sendMessage(new CompleteMessage());
+            channel.sendControlMessage(new CompleteMessage());
             closeSession(State.COMPLETE);
         }
 
@@ -985,7 +985,7 @@ public class StreamSession implements IEndpointStateChangeSubscriber
                 {
                     // pass the session planId/index to the OFM (which is only set at init(), after the transfers have already been created)
                     ofm.header.addSessionInfo(this);
-                    channel.sendMessage(ofm);
+                    channel.sendControlMessage(ofm);
                 }
             }
             else

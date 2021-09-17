@@ -90,8 +90,6 @@ public class StreamingMultiplexedChannel
     private static final int DEFAULT_MAX_PARALLEL_TRANSFERS = getAvailableProcessors();
     private static final int MAX_PARALLEL_TRANSFERS = parseInt(getProperty(PROPERTY_PREFIX + "streaming.session.parallelTransfers", Integer.toString(DEFAULT_MAX_PARALLEL_TRANSFERS)));
 
-    private static final long DEFAULT_CLOSE_WAIT_IN_MILLIS = MINUTES.toMillis(5);
-
     // a simple mechansim for allowing a degree of fairness across multiple sessions
     private static final Semaphore fileTransferSemaphore = newFairSemaphore(DEFAULT_MAX_PARALLEL_TRANSFERS);
 
@@ -144,34 +142,6 @@ public class StreamingMultiplexedChannel
         return controlChannel == null ? to : controlChannel.connectedTo();
     }
 
-    private Future<?> sendControlMessage(StreamMessage message)
-    {
-        try
-        {
-            return controlChannel.send(outSupplier -> {
-                // we anticipate that the control messages are rather small, so allocating a ByteBuf shouldn't  blow out of memory.
-                long messageSize = serializedSize(message, messagingVersion);
-                if (messageSize > 1 << 30)
-                {
-                    throw new IllegalStateException(format("%s something is seriously wrong with the calculated stream control message's size: %d bytes, type is %s",
-                                                           createLogTag(session, controlChannel.id()), messageSize, message.type));
-                }
-                try (StreamingDataOutputPlus out = outSupplier.apply((int) messageSize))
-                {
-                    StreamMessage.serialize(message, out, messagingVersion, session);
-                }
-            });
-        }
-        catch (Exception e)
-        {
-            close();
-            session.onError(e);
-            return ImmediateFuture.failure(e);
-        }
-    }
-
-
-
     /**
      * Used by initiator to setup control message channel connecting to follower
      */
@@ -201,12 +171,28 @@ public class StreamingMultiplexedChannel
             session.attachInbound(channel);
         }
         session.attachOutbound(channel);
+        scheduleKeepAliveTask(channel);
 
         logger.debug("Creating {}", channel.description());
         return channel;
     }
 
-    public Future<?> sendMessage(StreamMessage message)
+    public Future<?> sendControlMessage(StreamMessage message)
+    {
+        try
+        {
+            setupControlMessageChannel();
+            return sendMessage(controlChannel, message);
+        }
+        catch (Exception e)
+        {
+            close();
+            session.onError(e);
+            return ImmediateFuture.failure(e);
+        }
+
+    }
+    public Future<?> sendMessage(StreamingChannel channel, StreamMessage message)
     {
         if (closed)
             throw new RuntimeException("stream has been closed, cannot send " + message);
@@ -222,9 +208,21 @@ public class StreamingMultiplexedChannel
 
         try
         {
-            setupControlMessageChannel();
-            return sendControlMessage(message)
-                   .addListener(future -> onControlMessageComplete(future, message));
+            Future<?> promise = channel.send(outSupplier -> {
+                // we anticipate that the control messages are rather small, so allocating a ByteBuf shouldn't  blow out of memory.
+                long messageSize = serializedSize(message, messagingVersion);
+                if (messageSize > 1 << 30)
+                {
+                    throw new IllegalStateException(format("%s something is seriously wrong with the calculated stream control message's size: %d bytes, type is %s",
+                                                           createLogTag(session, controlChannel.id()), messageSize, message.type));
+                }
+                try (StreamingDataOutputPlus out = outSupplier.apply((int) messageSize))
+                {
+                    StreamMessage.serialize(message, out, messagingVersion, session);
+                }
+            });
+            promise.addListener(future -> onMessageComplete(future, message));
+            return promise;
         }
         catch (Exception e)
         {
@@ -242,7 +240,7 @@ public class StreamingMultiplexedChannel
      * @return null if the message was processed sucessfully; else, a {@link java.util.concurrent.Future} to indicate
      * the status of aborting any remaining tasks in the session.
      */
-    Future<?> onControlMessageComplete(Future<?> future, StreamMessage msg)
+    Future<?> onMessageComplete(Future<?> future, StreamMessage msg)
     {
         Throwable cause = future.cause();
         if (cause == null)
@@ -402,7 +400,7 @@ public class StreamingMultiplexedChannel
         if (logger.isDebugEnabled())
             logger.debug("{} Scheduling keep-alive task with {}s period.", createLogTag(session, channel), keepAlivePeriod);
 
-        KeepAliveTask task = new KeepAliveTask();
+        KeepAliveTask task = new KeepAliveTask(channel);
         ScheduledFuture<?> scheduledFuture = channel.scheduleKeepAlive(task, keepAlivePeriod, SECONDS);
         channelKeepAlives.add(scheduledFuture);
         task.future = scheduledFuture;
@@ -415,24 +413,37 @@ public class StreamingMultiplexedChannel
      */
     class KeepAliveTask implements Runnable
     {
+        private final StreamingChannel channel;
         /**
          * A reference to the scheduled task for this instance so that it may be cancelled.
          */
         ScheduledFuture<?> future;
 
+        KeepAliveTask(StreamingChannel channel)
+        {
+            this.channel = channel;
+        }
+
         public void run()
         {
             // if the channel has been closed, cancel the scheduled task and return
-            if (!controlChannel.connected() || closed)
+            if (!channel.connected() || closed)
             {
                 future.cancel(false);
                 return;
             }
 
+            // if the channel is currently processing streaming, skip this execution. As this task executes
+            // on the event loop, even if there is a race with a FileStreamTask which changes the channel attribute
+            // after we check it, the FileStreamTask cannot send out any bytes as this KeepAliveTask is executing
+            // on the event loop (and FileStreamTask publishes it's buffer to the channel, consumed after we're done here).
+            if (channel.sending())
+                return;
+
             if (logger.isTraceEnabled())
                 logger.trace("{} Sending keep-alive to {}.", createLogTag(session, controlChannel), session.peer);
 
-            sendControlMessage(new KeepAliveMessage()).addListener(this::keepAliveListener);
+            sendMessage(channel, new KeepAliveMessage()).addListener(this::keepAliveListener);
         }
 
         private void keepAliveListener(Future<?> future)
