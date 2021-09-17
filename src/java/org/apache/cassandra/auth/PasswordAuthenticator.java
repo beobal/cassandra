@@ -78,6 +78,10 @@ public class PasswordAuthenticator implements IAuthenticator
         return true;
     }
 
+    public CredentialsCache getCredentialsCache() {
+        return cache;
+    }
+
     protected static boolean checkpw(String password, String hash)
     {
         try
@@ -246,7 +250,7 @@ public class PasswordAuthenticator implements IAuthenticator
         }
     }
 
-    private static class CredentialsCache extends AuthCache<String, String> implements CredentialsCacheMBean
+    public static class CredentialsCache extends AuthCache<String, String> implements CredentialsCacheMBean
     {
         private CredentialsCache(PasswordAuthenticator authenticator)
         {

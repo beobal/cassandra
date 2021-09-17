@@ -38,7 +38,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 @Command(name = "invalidatepermissionscache", description = "Invalidate the permissions cache")
 public class InvalidatePermissionsCache extends NodeToolCmd
 {
-    @Arguments(usage = "[<user>]", description = "A specific user for whom permissions need to be invalidated")
+    @Arguments(usage = "[<role>]", description = "A specific role for which permissions need to be invalidated")
     private List<String> args = new ArrayList<>();
 
     // Data Resources
@@ -105,14 +105,14 @@ public class InvalidatePermissionsCache extends NodeToolCmd
                     && !allRoles && StringUtils.isEmpty(role)
                     && !allFunctions && StringUtils.isEmpty(functionsInKeyspace) && StringUtils.isEmpty(function)
                     && !allMBeans && StringUtils.isEmpty(mBean),
-                    "No options allowed without a <user> being specified");
+                    "No options allowed without a <role> being specified");
 
             probe.invalidatePermissionsCache();
         }
         else
         {
             checkArgument(args.size() == 1,
-                    "A single <user> is only supported / you have a typo in the options spelling");
+                    "A single <role> is only supported / you have a typo in the options spelling");
             List<String> resourceNames = new ArrayList<>();
 
             // Data Resources
@@ -155,10 +155,10 @@ public class InvalidatePermissionsCache extends NodeToolCmd
             if (StringUtils.isNotEmpty(mBean))
                 resourceNames.add(JMXResource.mbean(mBean).getName());
 
-            String userName = args.get(0);
+            String roleName = args.get(0);
 
             for (String resourceName : resourceNames)
-                probe.invalidatePermissionsCache(userName, resourceName);
+                probe.invalidatePermissionsCache(roleName, resourceName);
         }
     }
 

@@ -49,6 +49,9 @@ New features
       (track_warnings.local_read_size.warn_threshold_kb and track_warnings.local_read_size.abort_threshold_kb),
       and RowIndexEntry estimated memory size (track_warnings.row_index_size.warn_threshold_kb and
       track_warnings.row_index_size.abort_threshold_kb) are supported; more checks will be added over time.
+    - Information about pending hints is now available through `nodetool listpendinghints` and `pending_hints` virtual
+      table.
+    - Added ability to invalidate auth caches through corresponding `nodetool` commands and virtual tables.
 
 Upgrading
 ---------
@@ -56,8 +59,6 @@ Upgrading
       confirm it is set to value lower than 31 otherwise Cassandra will fail to start. See CASSANDRA-9384
       for further details. You also need to regenerate passwords for users for who the password
       was created while the above property was set to be more than 30 otherwise they will not be able to log in.
-    - Information about pending hints is now available through `nodetool listpendinghints` and `pending_hints` virtual
-      table.
 
 Deprecation
 -----------

@@ -145,7 +145,7 @@ public abstract class AbstractMutableVirtualTable extends AbstractVirtualTable
         throw invalidRequest("Range deletion is not supported by table %s", metadata);
     }
 
-    protected void applyRowDeletion(ColumnValues partitionKey, ColumnValues clusteringColumnValues)
+    protected void applyRowDeletion(ColumnValues partitionKey, ColumnValues clusteringColumns)
     {
         throw invalidRequest("Row deletion is not supported by table %s", metadata);
     }
