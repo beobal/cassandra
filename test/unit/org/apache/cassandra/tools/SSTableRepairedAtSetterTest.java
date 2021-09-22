@@ -21,7 +21,6 @@ package org.apache.cassandra.tools;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Paths;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
