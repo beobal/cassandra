@@ -35,11 +35,13 @@ import static org.apache.cassandra.concurrent.FutureTask.callable;
 public interface TaskFactory
 {
     Runnable toExecute(Runnable runnable);
+    Runnable toExecute(Runnable runnable, boolean propagate);
     <T> RunnableFuture<T> toSubmit(Runnable runnable);
     <T> RunnableFuture<T> toSubmit(Runnable runnable, T result);
     <T> RunnableFuture<T> toSubmit(Callable<T> callable);
 
     Runnable toExecute(WithResources withResources, Runnable runnable);
+    Runnable toExecute(WithResources withResources, Runnable runnable, boolean propagate);
     <T> RunnableFuture<T> toSubmit(WithResources withResources, Runnable runnable);
     <T> RunnableFuture<T> toSubmit(WithResources withResources, Runnable runnable, T result);
     <T> RunnableFuture<T> toSubmit(WithResources withResources, Callable<T> callable);
@@ -55,7 +57,13 @@ public interface TaskFactory
         @Override
         public Runnable toExecute(Runnable runnable)
         {
-            return ExecutionFailure.propagating(runnable);
+            return toExecute(runnable, true);
+        }
+
+        @Override
+        public Runnable toExecute(Runnable runnable, boolean propagate)
+        {
+            return propagate ? ExecutionFailure.propagating(runnable) : ExecutionFailure.suppressing(runnable);
         }
 
         @Override
@@ -79,7 +87,14 @@ public interface TaskFactory
         @Override
         public Runnable toExecute(WithResources withResources, Runnable runnable)
         {
-            return ExecutionFailure.propagating(withResources, runnable);
+            return toExecute(withResources, runnable, true);
+        }
+
+        @Override
+        public Runnable toExecute(WithResources withResources, Runnable runnable, boolean propagate)
+        {
+            return propagate ? ExecutionFailure.propagating(withResources, runnable)
+                             : ExecutionFailure.suppressing(withResources, runnable);
         }
 
         @Override

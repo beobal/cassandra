@@ -227,13 +227,13 @@ public class SEPExecutor implements LocalAwareExecutorPlus, SEPExecutorMBean
     @Override
     public void execute(Runnable run)
     {
-        addTask(taskFactory.toExecute(run));
+        addTask(taskFactory.toExecute(run, false));
     }
 
     @Override
     public void execute(WithResources withResources, Runnable run)
     {
-        addTask(taskFactory.toExecute(withResources, run));
+        addTask(taskFactory.toExecute(withResources, run, false));
     }
 
     @Override
