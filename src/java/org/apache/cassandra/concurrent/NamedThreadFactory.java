@@ -34,8 +34,12 @@ import org.apache.cassandra.utils.JVMStabilityInspector;
 public class NamedThreadFactory implements ThreadFactory
 {
     private static volatile String globalPrefix;
-    public static String globalPrefix() { return globalPrefix;}
     public static void setGlobalPrefix(String prefix) { globalPrefix = prefix; }
+    public static String globalPrefix()
+    {
+        String prefix = globalPrefix;
+        return prefix == null ? "" : prefix;
+    }
 
     public static class MetaFactory
     {
