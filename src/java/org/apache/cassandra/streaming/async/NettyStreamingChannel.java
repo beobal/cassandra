@@ -178,7 +178,7 @@ public class NettyStreamingChannel extends ChannelInboundHandlerAdapter implemen
             @Override
             public StreamingDataOutputPlus apply(int size)
             {
-                buf = GlobalBufferPoolAllocator.instance.buffer();
+                buf = GlobalBufferPoolAllocator.instance.buffer(size);
                 buffer = buf.nioBuffer(buf.writerIndex(), size);
                 return new StreamingDataOutputPlusFixed(buffer);
             }
