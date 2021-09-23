@@ -47,6 +47,7 @@ import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.net.MessagingService;
 import org.apache.cassandra.net.OutboundConnectionSettings;
+import org.apache.cassandra.net.TestChannel;
 import org.apache.cassandra.schema.KeyspaceParams;
 import org.apache.cassandra.schema.TableId;
 import org.apache.cassandra.streaming.async.NettyStreamingChannel;
@@ -69,7 +70,7 @@ public class StreamTransferTaskTest
         @Override
         public NettyStreamingChannel create(InetSocketAddress to, int messagingVersion, StreamingChannel.Kind kind)
         {
-            return new NettyStreamingChannel(messagingVersion, new EmbeddedChannel(), kind);
+            return new NettyStreamingChannel(messagingVersion, new TestChannel(), kind);
         }
     };
 
