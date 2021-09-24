@@ -23,7 +23,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -207,7 +206,7 @@ class MonitoringTask
         OperationsQueue(int maxOperations)
         {
             this.maxOperations = maxOperations;
-            this.queue = maxOperations > 0 ? new ArrayBlockingQueue<>(maxOperations) : newBlockingQueue();
+            this.queue = newBlockingQueue(maxOperations < 0 ? Integer.MAX_VALUE : maxOperations);
             this.numDroppedOperations = new AtomicLong();
         }
 

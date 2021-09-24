@@ -45,7 +45,8 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import org.apache.cassandra.SchemaLoader;
-import org.apache.cassandra.concurrent.DebuggableThreadPoolExecutor;
+import org.apache.cassandra.concurrent.ExecutorFactory;
+import org.apache.cassandra.concurrent.ExecutorPlus;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.dht.ByteOrderedPartitioner;
 import org.apache.cassandra.dht.IPartitioner;
@@ -118,11 +119,12 @@ public class RepairJobTest
             super(parentRepairSession, id, commonRange, keyspace, parallelismDegree, isIncremental, pullRepair, previewKind, optimiseStreams, cfnames);
         }
 
-        protected DebuggableThreadPoolExecutor createExecutor()
+        protected ExecutorPlus createExecutor()
         {
-            DebuggableThreadPoolExecutor executor = super.createExecutor();
-            executor.setKeepAliveTime(THREAD_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
-            return executor;
+            return ExecutorFactory.Global.executorFactory()
+                    .configurePooled("RepairJobTask", Integer.MAX_VALUE)
+                    .withKeepAlive(THREAD_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+                    .build();
         }
 
         @Override
@@ -277,6 +279,9 @@ public class RepairJobTest
                 break;
         }
 
+        // TODO this is failing, though the executor has keepAlive set correctly and I can see that the
+        // worker threads are timing out as expected. The measured size of session *before* running the
+        // tree -> sync task seems to be a lot bigger when compared to pre-CASSANDRA-16925
         assertThat(millisUntilFreed).isLessThan(TEST_TIMEOUT_S * 1000);
 
         List<SyncStat> results = syncResults.get(TEST_TIMEOUT_S, TimeUnit.SECONDS);
