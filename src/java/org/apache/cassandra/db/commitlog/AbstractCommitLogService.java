@@ -18,6 +18,7 @@
 package org.apache.cassandra.db.commitlog;
 
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 import com.google.common.annotations.VisibleForTesting;
 import org.slf4j.Logger;
@@ -147,7 +148,18 @@ public abstract class AbstractCommitLogService
             throw new IllegalArgumentException(String.format("Commit log flush interval must be positive: %fms",
                                                              syncIntervalNanos * 1e-6));
 
-        executor = executorFactory().infiniteLoop(name, new SyncRunnable(MonotonicClock.preciseTime), true);
+        SyncRunnable sync = new SyncRunnable(MonotonicClock.preciseTime);
+        executor = executorFactory().infiniteLoop(name, sync, true, interruptHandler(sync));
+    }
+
+    private Consumer<Thread> interruptHandler(final Object monitor)
+    {
+        return thread -> {
+            synchronized (monitor)
+            {
+                thread.interrupt();
+            }
+        };
     }
 
     class SyncRunnable implements Interruptible.Task
@@ -171,19 +183,22 @@ public abstract class AbstractCommitLogService
                 // sync and signal
                 long pollStarted = clock.now();
                 boolean flushToDisk = lastSyncedAt + syncIntervalNanos <= pollStarted || state != NORMAL || syncRequested;
-                if (flushToDisk)
+                synchronized (this)
                 {
-                    // in this branch, we want to flush the commit log to disk
-                    syncRequested = false;
-                    commitLog.sync(true);
-                    lastSyncedAt = pollStarted;
-                    syncComplete.signalAll();
-                    syncCount++;
-                }
-                else
-                {
-                    // in this branch, just update the commit log sync headers
-                    commitLog.sync(false);
+                    if (flushToDisk)
+                    {
+                        // in this branch, we want to flush the commit log to disk
+                        syncRequested = false;
+                        commitLog.sync(true);
+                        lastSyncedAt = pollStarted;
+                        syncComplete.signalAll();
+                        syncCount++;
+                    }
+                    else
+                    {
+                        // in this branch, just update the commit log sync headers
+                        commitLog.sync(false);
+                    }
                 }
 
                 if (state == SHUTTING_DOWN)
