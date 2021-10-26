@@ -185,6 +185,7 @@ public abstract class AbstractCommitLogService
                 boolean flushToDisk = lastSyncedAt + syncIntervalNanos <= pollStarted || state != NORMAL || syncRequested;
                 synchronized (this)
                 {
+                    boolean interrupted = Thread.interrupted();
                     if (flushToDisk)
                     {
                         // in this branch, we want to flush the commit log to disk
@@ -199,6 +200,8 @@ public abstract class AbstractCommitLogService
                         // in this branch, just update the commit log sync headers
                         commitLog.sync(false);
                     }
+                    if (interrupted)
+                        Thread.currentThread().interrupt();
                 }
 
                 if (state == SHUTTING_DOWN)
