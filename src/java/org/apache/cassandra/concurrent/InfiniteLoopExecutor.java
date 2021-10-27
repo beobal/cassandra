@@ -49,26 +49,36 @@ public class InfiniteLoopExecutor implements Interruptible
 
     public InfiniteLoopExecutor(String name, Task task)
     {
-        this(ExecutorFactory.Global.executorFactory(), name, task, Thread::interrupt);
+        this(ExecutorFactory.Global.executorFactory(), name, task, false);
     }
 
     public InfiniteLoopExecutor(ExecutorFactory factory, String name, Task task)
     {
-        this(factory, name, task, Thread::interrupt);
+        this(factory, name, task, false);
     }
 
-    public InfiniteLoopExecutor(ExecutorFactory factory, String name, Task task, Consumer<Thread> interruptHandler)
+    public InfiniteLoopExecutor(ExecutorFactory factory, String name, Task task, boolean synchronizeInterrupts)
     {
         this.task = task;
         this.thread = factory.startThread(name, this::loop);
-        this.interruptHandler = interruptHandler;
+        this.interruptHandler =  synchronizeInterrupts ? interruptHandler(task) : Thread::interrupt;
     }
 
-    public InfiniteLoopExecutor(BiFunction<String, Runnable, Thread> threadStarter, String name, Task task, Consumer<Thread> interruptHandler)
+    public InfiniteLoopExecutor(BiFunction<String, Runnable, Thread> threadStarter, String name, Task task, boolean synchronizeInterrupts)
     {
         this.task = task;
         this.thread = threadStarter.apply(name, this::loop);
-        this.interruptHandler = interruptHandler;
+        this.interruptHandler =  synchronizeInterrupts ? interruptHandler(task) : Thread::interrupt;
+    }
+
+    private Consumer<Thread> interruptHandler(final Object monitor)
+    {
+        return thread -> {
+            synchronized (monitor)
+            {
+                thread.interrupt();
+            }
+        };
     }
 
     private void loop()

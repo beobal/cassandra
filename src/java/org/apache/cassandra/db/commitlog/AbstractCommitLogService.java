@@ -149,17 +149,7 @@ public abstract class AbstractCommitLogService
                                                              syncIntervalNanos * 1e-6));
 
         SyncRunnable sync = new SyncRunnable(MonotonicClock.preciseTime);
-        executor = executorFactory().infiniteLoop(name, sync, true, interruptHandler(sync));
-    }
-
-    private Consumer<Thread> interruptHandler(final Object monitor)
-    {
-        return thread -> {
-            synchronized (monitor)
-            {
-                thread.interrupt();
-            }
-        };
+        executor = executorFactory().infiniteLoop(name, sync, true, true);
     }
 
     class SyncRunnable implements Interruptible.Task
@@ -185,7 +175,8 @@ public abstract class AbstractCommitLogService
                 boolean flushToDisk = lastSyncedAt + syncIntervalNanos <= pollStarted || state != NORMAL || syncRequested;
                 synchronized (this)
                 {
-                    boolean interrupted = Thread.interrupted();
+                    // if set, clear interrupted status to prevent ClosedByInterruptException in commitLog::sync
+                    Thread.interrupted();
                     if (flushToDisk)
                     {
                         // in this branch, we want to flush the commit log to disk
@@ -200,8 +191,6 @@ public abstract class AbstractCommitLogService
                         // in this branch, just update the commit log sync headers
                         commitLog.sync(false);
                     }
-                    if (interrupted)
-                        Thread.currentThread().interrupt();
                 }
 
                 if (state == SHUTTING_DOWN)
