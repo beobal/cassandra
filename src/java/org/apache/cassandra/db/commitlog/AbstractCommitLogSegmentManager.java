@@ -126,6 +126,7 @@ public abstract class AbstractCommitLogSegmentManager
 
                         synchronized (monitor)
                         {
+                            boolean interrupted = Thread.interrupted();
                             logger.trace("No segments in reserve; creating a fresh one");
                             availableSegment = createSegment();
 
@@ -139,6 +140,8 @@ public abstract class AbstractCommitLogSegmentManager
                             // Writing threads are not waiting for new segments, we can spend time on other tasks.
                             // flush old Cfs if we're full
                             maybeFlushToReclaim();
+                            if (interrupted)
+                                Thread.currentThread().interrupt();
                         }
                 }
             }
