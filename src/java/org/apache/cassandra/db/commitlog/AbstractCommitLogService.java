@@ -18,7 +18,6 @@
 package org.apache.cassandra.db.commitlog;
 
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Consumer;
 
 import com.google.common.annotations.VisibleForTesting;
 import org.slf4j.Logger;
@@ -37,7 +36,11 @@ import static com.codahale.metrics.Timer.Context;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
+
 import static org.apache.cassandra.concurrent.ExecutorFactory.Global.executorFactory;
+import static org.apache.cassandra.concurrent.InfiniteLoopExecutor.Daemon.NON_DAEMON;
+import static org.apache.cassandra.concurrent.InfiniteLoopExecutor.Interrupts.SYNCHRONIZED;
+import static org.apache.cassandra.concurrent.InfiniteLoopExecutor.SimulatorSafe.SAFE;
 import static org.apache.cassandra.concurrent.Interruptible.State.NORMAL;
 import static org.apache.cassandra.concurrent.Interruptible.State.SHUTTING_DOWN;
 import static org.apache.cassandra.utils.Clock.Global.currentTimeMillis;
@@ -149,7 +152,7 @@ public abstract class AbstractCommitLogService
                                                              syncIntervalNanos * 1e-6));
 
         SyncRunnable sync = new SyncRunnable(MonotonicClock.preciseTime);
-        executor = executorFactory().infiniteLoop(name, sync, true, true);
+        executor = executorFactory().infiniteLoop(name, sync, SAFE, NON_DAEMON, SYNCHRONIZED);
     }
 
     class SyncRunnable implements Interruptible.Task

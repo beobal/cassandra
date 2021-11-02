@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
-import java.util.function.Consumer;
+
 
 import com.google.common.annotations.VisibleForTesting;
 import org.slf4j.Logger;
@@ -47,6 +47,9 @@ import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.utils.concurrent.*;
 
 import static org.apache.cassandra.concurrent.ExecutorFactory.Global.executorFactory;
+import static org.apache.cassandra.concurrent.InfiniteLoopExecutor.Daemon.NON_DAEMON;
+import static org.apache.cassandra.concurrent.InfiniteLoopExecutor.Interrupts.SYNCHRONIZED;
+import static org.apache.cassandra.concurrent.InfiniteLoopExecutor.SimulatorSafe.SAFE;
 import static org.apache.cassandra.db.commitlog.CommitLogSegment.Allocation;
 import static org.apache.cassandra.utils.concurrent.WaitQueue.newWaitQueue;
 
@@ -117,7 +120,7 @@ public abstract class AbstractCommitLogSegmentManager
                                                      bufferType);
 
         AllocatorRunnable allocator = new AllocatorRunnable();
-        executor = executorFactory().infiniteLoop("COMMIT-LOG-ALLOCATOR", allocator, true, true);
+        executor = executorFactory().infiniteLoop("COMMIT-LOG-ALLOCATOR", allocator, SAFE, NON_DAEMON, SYNCHRONIZED);
         // for simplicity, ensure the first segment is allocated before continuing
         advanceAllocatingFrom(null);
     }

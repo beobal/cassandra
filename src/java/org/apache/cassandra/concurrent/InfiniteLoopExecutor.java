@@ -31,6 +31,9 @@ import java.util.function.Consumer;
 import org.apache.cassandra.utils.concurrent.UncheckedInterruptedException;
 
 import static org.apache.cassandra.concurrent.InfiniteLoopExecutor.InternalState.TERMINATED;
+import static org.apache.cassandra.concurrent.InfiniteLoopExecutor.Interrupts.SYNCHRONIZED;
+import static org.apache.cassandra.concurrent.InfiniteLoopExecutor.Interrupts.UNSYNCHRONIZED;
+
 import static org.apache.cassandra.concurrent.Interruptible.State.INTERRUPTED;
 import static org.apache.cassandra.concurrent.Interruptible.State.NORMAL;
 import static org.apache.cassandra.concurrent.Interruptible.State.SHUTTING_DOWN;
@@ -40,6 +43,9 @@ public class InfiniteLoopExecutor implements Interruptible
     private static final Logger logger = LoggerFactory.getLogger(InfiniteLoopExecutor.class);
 
     public enum InternalState { TERMINATED }
+    public enum SimulatorSafe { SAFE, UNSAFE };
+    public enum Daemon        { DAEMON, NON_DAEMON };
+    public enum Interrupts    { SYNCHRONIZED, UNSYNCHRONIZED };
 
     private static final AtomicReferenceFieldUpdater<InfiniteLoopExecutor, Object> stateUpdater = AtomicReferenceFieldUpdater.newUpdater(InfiniteLoopExecutor.class, Object.class, "state");
     private final Thread thread;
@@ -47,28 +53,33 @@ public class InfiniteLoopExecutor implements Interruptible
     private volatile Object state = NORMAL;
     private final Consumer<Thread> interruptHandler;
 
-    public InfiniteLoopExecutor(String name, Task task)
+    public InfiniteLoopExecutor(String name, Task task, Daemon daemon)
     {
-        this(ExecutorFactory.Global.executorFactory(), name, task, false);
+        this(ExecutorFactory.Global.executorFactory(), name, task, daemon, UNSYNCHRONIZED);
     }
 
-    public InfiniteLoopExecutor(ExecutorFactory factory, String name, Task task)
+    public InfiniteLoopExecutor(ExecutorFactory factory, String name, Task task, Daemon daemon)
     {
-        this(factory, name, task, false);
+        this(factory, name, task, daemon, UNSYNCHRONIZED);
     }
 
-    public InfiniteLoopExecutor(ExecutorFactory factory, String name, Task task, boolean synchronizeInterrupts)
+    public InfiniteLoopExecutor(ExecutorFactory factory, String name, Task task, Daemon daemon, Interrupts synchronizeInterrupts)
     {
         this.task = task;
-        this.thread = factory.startThread(name, this::loop);
-        this.interruptHandler =  synchronizeInterrupts ? interruptHandler(task) : Thread::interrupt;
+        this.thread = factory.startThread(name, this::loop, daemon);
+        this.interruptHandler =  synchronizeInterrupts == SYNCHRONIZED
+                                 ? interruptHandler(task)
+                                 : Thread::interrupt;
     }
 
-    public InfiniteLoopExecutor(BiFunction<String, Runnable, Thread> threadStarter, String name, Task task, boolean synchronizeInterrupts)
+    public InfiniteLoopExecutor(BiFunction<String, Runnable, Thread> threadStarter, String name, Task task, Daemon daemon,  Interrupts synchronizeInterrupts)
     {
         this.task = task;
         this.thread = threadStarter.apply(name, this::loop);
-        this.interruptHandler =  synchronizeInterrupts ? interruptHandler(task) : Thread::interrupt;
+        thread.setDaemon(daemon == Daemon.DAEMON);
+        this.interruptHandler =  synchronizeInterrupts == SYNCHRONIZED
+                                 ? interruptHandler(task)
+                                 : Thread::interrupt;
     }
 
     private Consumer<Thread> interruptHandler(final Object monitor)
