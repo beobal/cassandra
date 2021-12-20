@@ -19,7 +19,6 @@
 package org.apache.cassandra.auth;
 
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ScheduledFuture;
@@ -33,23 +32,30 @@ import java.util.function.IntConsumer;
 import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 
+//<<<<<<< HEAD
+import com.google.common.primitives.Ints;
 import com.google.common.util.concurrent.Uninterruptibles;
+//=======
+import com.google.common.collect.Sets;
+//>>>>>>> 93be93083a (Expose Auth Caches metrics)
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.Policy;
+import org.apache.cassandra.cache.UnweightedCacheSize;
 import org.apache.cassandra.concurrent.ExecutorPlus;
 import org.apache.cassandra.concurrent.ScheduledExecutors;
 import org.apache.cassandra.concurrent.Shutdownable;
+import org.apache.cassandra.metrics.UnweightedCacheMetrics;
 import org.apache.cassandra.utils.ExecutorUtils;
 import org.apache.cassandra.utils.MBeanWrapper;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static org.apache.cassandra.concurrent.ExecutorFactory.Global.executorFactory;
 
-public class AuthCache<K, V> implements AuthCacheMBean, Shutdownable
+public class AuthCache<K, V> implements AuthCacheMBean, UnweightedCacheSize, Shutdownable
 {
     private static final Logger logger = LoggerFactory.getLogger(AuthCache.class);
 
@@ -60,10 +66,11 @@ public class AuthCache<K, V> implements AuthCacheMBean, Shutdownable
     static final String CACHE_LOAD_RETRIES_PROPERTY = "cassandra.auth_cache.warming.max_retries";
     static final String CACHE_LOAD_RETRY_INTERVAL_PROPERTY = "cassandra.auth_cache.warming.retry_interval_ms";
 
+    @SuppressWarnings("rawtypes")
     private volatile ScheduledFuture cacheRefresher = null;
 
     // Keep a handle on created instances so their executors can be terminated cleanly
-    private static final Set<Shutdownable> REGISTRY = new HashSet<>(4);
+    private static final Set<Shutdownable> REGISTRY = Sets.newHashSetWithExpectedSize(5);
 
     public static void shutdownAllAndWait(long timeout, TimeUnit unit) throws InterruptedException, TimeoutException
     {
@@ -94,6 +101,8 @@ public class AuthCache<K, V> implements AuthCacheMBean, Shutdownable
     // credentials for a role couldn't be loaded without throwing an exception or serving stale
     // values until the natural expiry time.
     private final BiPredicate<K, V> invalidateCondition;
+
+    private final UnweightedCacheMetrics metrics;
 
     /**
      * @param name Used for MBean
@@ -178,6 +187,7 @@ public class AuthCache<K, V> implements AuthCacheMBean, Shutdownable
         this.bulkLoadFunction = checkNotNull(bulkLoadFunction);
         this.enableCache = checkNotNull(cacheEnabledDelegate);
         this.invalidateCondition = checkNotNull(invalidationCondition);
+        this.metrics = new UnweightedCacheMetrics(name, this);
         init();
     }
 
@@ -217,7 +227,7 @@ public class AuthCache<K, V> implements AuthCacheMBean, Shutdownable
     /**
      * Retrieve a value from the cache. Will call {@link LoadingCache#get(Object)} which will
      * "load" the value if it's not present, thus populating the key.
-     * @param k
+     * @param k key
      * @return The current value of {@code K} if cached or loaded.
      *
      * See {@link LoadingCache#get(Object)} for possible exceptions.
@@ -227,7 +237,13 @@ public class AuthCache<K, V> implements AuthCacheMBean, Shutdownable
         if (cache == null)
             return loadFunction.apply(k);
 
-        return cache.get(k);
+        metrics.requests.mark();
+        V v = cache.get(k);
+        if (v != null)
+            metrics.hits.mark();
+        else
+            metrics.misses.mark();
+        return v;
     }
 
     /**
@@ -286,7 +302,7 @@ public class AuthCache<K, V> implements AuthCacheMBean, Shutdownable
 
     /**
      * Set maximum number of entries in the cache.
-     * @param maxEntries
+     * @param maxEntries max number of entries
      */
     public synchronized void setMaxEntries(int maxEntries)
     {
@@ -319,6 +335,11 @@ public class AuthCache<K, V> implements AuthCacheMBean, Shutdownable
     public long getEstimatedSize()
     {
         return cache == null ? 0L : cache.estimatedSize();
+    }
+
+    public UnweightedCacheMetrics getMetrics()
+    {
+        return metrics;
     }
 
     /**
@@ -441,4 +462,23 @@ public class AuthCache<K, V> implements AuthCacheMBean, Shutdownable
             return Collections::emptyMap;
         }
     }
+
+    @Override
+    public long capacity()
+    {
+        return getMaxEntries();
+    }
+
+    @Override
+    public void setCapacity(long capacity)
+    {
+        setMaxEntries(Math.toIntExact(capacity));
+    }
+
+    @Override
+    public int size()
+    {
+        return Ints.checkedCast(getEstimatedSize());
+    }
+
 }

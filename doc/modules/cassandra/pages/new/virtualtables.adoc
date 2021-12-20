@@ -63,7 +63,7 @@ The following table describes the virtual tables:
 |===
 |Virtual Table |Description
 
-|caches |Displays the general cache information including cache name, capacity_bytes, entry_count, hit_count, hit_ratio double,
+|caches |Displays the general weighted cache information including cache name, capacity_bytes, entry_count, hit_count, hit_ratio,
 recent_hit_rate_per_second, recent_request_rate_per_second, request_count, and size_bytes.
 
 |clients |Lists information about all connected clients.
@@ -104,6 +104,8 @@ recent_hit_rate_per_second, recent_request_rate_per_second, request_count, and s
 
 |tombstones_per_read |Records counts, keyspace_name, tablek_name, max, and median for tombstones.
 
+|unweighted_ caches |Displays the general unweighted cache information including cache name, capacity, entry_count, hit_count, hit_ratio,
+recent_hit_rate_per_second, recent_request_rate_per_second, and request_count.
 |===
 
 We shall discuss some of the virtual tables in more detail next.
@@ -228,7 +230,7 @@ VIRTUAL TABLE system_views.clients (
 
 === Caches Virtual Table
 
-The `caches` virtual table lists information about the caches. The four
+The `caches` virtual table lists information about weighted caches. The four
 caches presently created are chunks, counters, keys and rows. A query on
 the `caches` virtual table returns the following details:
 
@@ -242,6 +244,24 @@ counters |       26214400 |           0 |         0 |       NaN |               
     rows |              0 |           0 |         0 |       NaN |                          0 |                              0 |             0 |          0
 
 (4 rows)
+....
+
+=== Unweighted Caches Virtual Table
+
+The `unweighted_caches` virtual table lists information about unweighted caches. The five caches presently created are
+credentials, jmx_permissions, network_permissions, permissions and roles. A query on the `unweighted_caches` virtual table returns the following details:
+
+....
+cqlsh:system_views> SELECT * FROM system_views.unweighted_caches;
+ name                | capacity | entry_count | hit_count | hit_ratio | recent_hit_rate_per_second | recent_request_rate_per_second | request_count
+ --------------------+----------+-------------+-----------+-----------+----------------------------+--------------------------------+---------------
+         credentials |     1000 |           1 |         2 |         1 |                          0 |                              0 |             2
+     jmx_permissions |     1000 |           0 |         0 |       NaN |                          0 |                              0 |             0
+ network_permissions |     1000 |           1 |        18 |         1 |                          2 |                              2 |            18
+         permissions |     1000 |           1 |         1 |         1 |                          0 |                              0 |             1
+               roles |     1000 |           1 |         9 |         1 |                          0 |                              0 |             9
+
+ (5 rows)
 ....
 
 === CQL metrics Virtual Table
