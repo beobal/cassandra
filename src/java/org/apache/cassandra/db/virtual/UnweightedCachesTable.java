@@ -28,7 +28,7 @@ import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.db.marshal.LongType;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.dht.LocalPartitioner;
-import org.apache.cassandra.metrics.UnweightedCacheMetrics;
+import org.apache.cassandra.metrics.CacheMetrics;
 import org.apache.cassandra.schema.TableMetadata;
 
 final class UnweightedCachesTable extends AbstractVirtualTable
@@ -59,7 +59,7 @@ final class UnweightedCachesTable extends AbstractVirtualTable
                            .build());
     }
 
-    private void addRow(SimpleDataSet result, String name, UnweightedCacheMetrics metrics)
+    private void addRow(SimpleDataSet result, String name, CacheMetrics metrics)
     {
         result.row(name)
               .column(CAPACITY, metrics.capacity.getValue())

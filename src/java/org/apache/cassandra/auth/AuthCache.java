@@ -38,18 +38,18 @@ import org.slf4j.LoggerFactory;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.Policy;
-import org.apache.cassandra.cache.UnweightedCacheSize;
+import org.apache.cassandra.cache.CacheSize;
 import org.apache.cassandra.concurrent.ExecutorPlus;
 import org.apache.cassandra.concurrent.ScheduledExecutors;
 import org.apache.cassandra.concurrent.Shutdownable;
-import org.apache.cassandra.metrics.UnweightedCacheMetrics;
+import org.apache.cassandra.metrics.CacheMetrics;
 import org.apache.cassandra.utils.ExecutorUtils;
 import org.apache.cassandra.utils.MBeanWrapper;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static org.apache.cassandra.concurrent.ExecutorFactory.Global.executorFactory;
 
-public class AuthCache<K, V> implements AuthCacheMBean, UnweightedCacheSize, Shutdownable
+public class AuthCache<K, V> implements AuthCacheMBean, CacheSize, Shutdownable
 {
     private static final Logger logger = LoggerFactory.getLogger(AuthCache.class);
 
@@ -90,7 +90,7 @@ public class AuthCache<K, V> implements AuthCacheMBean, UnweightedCacheSize, Shu
     // values until the natural expiry time.
     private final BiPredicate<K, V> invalidateCondition;
 
-    private final UnweightedCacheMetrics metrics;
+    private final CacheMetrics metrics;
 
     /**
      * @param name Used for MBean
@@ -171,7 +171,7 @@ public class AuthCache<K, V> implements AuthCacheMBean, UnweightedCacheSize, Shu
         this.loadFunction = checkNotNull(loadFunction);
         this.enableCache = checkNotNull(cacheEnabledDelegate);
         this.invalidateCondition = checkNotNull(invalidationCondition);
-        this.metrics = new UnweightedCacheMetrics(name, this);
+        this.metrics = new CacheMetrics(name, this);
         init();
     }
 
@@ -315,7 +315,7 @@ public class AuthCache<K, V> implements AuthCacheMBean, UnweightedCacheSize, Shu
         cache = initCache(cache);
     }
 
-    public UnweightedCacheMetrics getMetrics()
+    public CacheMetrics getMetrics()
     {
         return metrics;
     }
@@ -416,6 +416,12 @@ public class AuthCache<K, V> implements AuthCacheMBean, UnweightedCacheSize, Shu
     public int size()
     {
         return cache.asMap().size();
+    }
+
+    @Override
+    public long weightedSize()
+    {
+        return size();
     }
 
 }

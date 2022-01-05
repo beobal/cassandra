@@ -20,30 +20,15 @@
  */
 package org.apache.cassandra.cache;
 
-/**
- * Represents a weighted cache size.
- */
-public interface CacheSize extends UnweightedCacheSize
+public interface CacheSize
 {
 
-    /**
-     * Returns the maximum total weighted size of this cache.
-     */
     long capacity();
 
-    /**
-     * Specifies the maximum total weighted size of this cache.
-     */
     void setCapacity(long capacity);
 
-    /**
-     * Returns the approximate number of entries in this cache.
-     */
     int size();
 
-    /**
-     * Returns the approximate accumulated weight of entries in this cache.
-     */
     long weightedSize();
 
 }
