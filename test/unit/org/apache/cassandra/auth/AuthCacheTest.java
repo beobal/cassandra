@@ -323,26 +323,36 @@ public class AuthCacheTest
     @Test
     public void testMetricsOnCacheEnabled()
     {
-        TestCache authCache = new TestCache(this::countingLoaderForEvenNumbers, this::emptyBulkLoader, this::setValidity, () -> validity, () -> isCacheEnabled);
+        TestCache authCache = new TestCache(this::countingLoader, this::emptyBulkLoader, this::setValidity, () -> validity, () -> isCacheEnabled);
         authCache.get("10");
         authCache.get("11");
 
         assertThat(authCache.getMetrics().requests.getCount()).isEqualTo(2L);
-        assertThat(authCache.getMetrics().hits.getCount()).isEqualTo(1L);
-        assertThat(authCache.getMetrics().misses.getCount()).isEqualTo(1L);
+        assertThat(authCache.getMetrics().hits.getCount()).isEqualTo(0L);
+        assertThat(authCache.getMetrics().misses.getCount()).isEqualTo(2L);
+        assertEquals(2, loadCounter);
+
+        authCache.get("10");
+        authCache.get("11");
+
+        assertThat(authCache.getMetrics().requests.getCount()).isEqualTo(4L);
+        assertThat(authCache.getMetrics().hits.getCount()).isEqualTo(2L);
+        assertThat(authCache.getMetrics().misses.getCount()).isEqualTo(2L);
+        assertEquals(2, loadCounter);
     }
 
     @Test
     public void testMetricsOnCacheDisabled()
     {
         isCacheEnabled = false;
-        TestCache authCache = new TestCache(this::countingLoaderForEvenNumbers, this::emptyBulkLoader, this::setValidity, () -> validity, () -> isCacheEnabled);
+        TestCache authCache = new TestCache(this::countingLoader, this::emptyBulkLoader, this::setValidity, () -> validity, () -> isCacheEnabled);
         authCache.get("10");
         authCache.get("11");
 
         assertThat(authCache.getMetrics().requests.getCount()).isEqualTo(0L);
         assertThat(authCache.getMetrics().hits.getCount()).isEqualTo(0L);
         assertThat(authCache.getMetrics().misses.getCount()).isEqualTo(0L);
+        assertEquals(2, loadCounter);
     }
 
     private void setValidity(int validity)
@@ -364,19 +374,6 @@ public class AuthCacheTest
             throw UnavailableException.create(ConsistencyLevel.QUORUM, 3, 1);
 
         return loadedValue;
-    }
-
-    /**
-     * Loads the key if it represents an even number.
-     */
-    private Integer countingLoaderForEvenNumbers(String s)
-    {
-        Integer loadedValue = countingLoader(s);
-
-        if (loadedValue % 2 == 0)
-            return loadedValue;
-        else
-            return null;
     }
 
     private Map<String, Integer> emptyBulkLoader()
