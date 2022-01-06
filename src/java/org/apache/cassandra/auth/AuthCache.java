@@ -38,6 +38,8 @@ import org.slf4j.LoggerFactory;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.Policy;
+import com.github.benmanes.caffeine.cache.stats.CacheStats;
+import com.github.benmanes.caffeine.cache.stats.StatsCounter;
 import org.apache.cassandra.cache.CacheSize;
 import org.apache.cassandra.concurrent.ExecutorPlus;
 import org.apache.cassandra.concurrent.ScheduledExecutors;
@@ -221,12 +223,7 @@ public class AuthCache<K, V> implements AuthCacheMBean, CacheSize, Shutdownable
             return loadFunction.apply(k);
 
         metrics.requests.mark();
-        V v = cache.get(k);
-        if (v != null)
-            metrics.hits.mark();
-        else
-            metrics.misses.mark();
-        return v;
+        return cache.get(k);
     }
 
     /**
@@ -346,6 +343,7 @@ public class AuthCache<K, V> implements AuthCacheMBean, CacheSize, Shutdownable
                                    .expireAfterWrite(getValidity(), TimeUnit.MILLISECONDS)
                                    .maximumSize(getMaxEntries())
                                    .executor(cacheRefreshExecutor)
+                                   .recordStats(MetricsUpdater::new)
                                    .build(loadFunction::apply);
         }
         else
@@ -424,4 +422,27 @@ public class AuthCache<K, V> implements AuthCacheMBean, CacheSize, Shutdownable
         return size();
     }
 
+    private class MetricsUpdater implements StatsCounter
+    {
+        public void recordHits(int i)
+        {
+            metrics.hits.mark(i);
+        }
+
+        public void recordMisses(int i)
+        {
+            metrics.misses.mark(i);
+        }
+
+        public void recordLoadSuccess(long l) {}
+
+        public void recordLoadFailure(long l) {}
+
+        public void recordEviction() {}
+
+        public CacheStats snapshot()
+        {
+            return CacheStats.empty();
+        }
+    }
 }
