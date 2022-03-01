@@ -1,4 +1,5 @@
 4.1
+ * CQLSSTableWriter does not support DELETE (CASSANDRA-14797)
  * Make startup checks configurable (CASSANDRA-17220)
  * Add guardrail for number of partition keys on IN queries (CASSANDRA-17186)
  * update Python test framework from nose to pytest (CASSANDRA-17293)
