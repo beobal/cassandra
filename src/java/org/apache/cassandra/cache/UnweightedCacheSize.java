@@ -29,16 +29,16 @@ public interface UnweightedCacheSize
     /**
      * Returns the maximum number of entries in this cache.
      */
-    long capacity();
+    int maxEntries();
 
     /**
      * Specifies the maximum number of entries in this cache.
      */
-    void setCapacity(long capacity);
+    void setMaxEntries(int maxEntries);
 
     /**
      * Returns the approximate number of entries in this cache.
      */
-    int size();
+    int entries();
 
 }

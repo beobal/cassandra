@@ -23,7 +23,7 @@ package org.apache.cassandra.cache;
 /**
  * Represents a weighted cache size.
  */
-public interface CacheSize extends UnweightedCacheSize
+public interface CacheSize
 {
 
     /**

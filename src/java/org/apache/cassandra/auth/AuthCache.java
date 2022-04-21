@@ -462,19 +462,13 @@ public class AuthCache<K, V> implements AuthCacheMBean, UnweightedCacheSize, Shu
     }
 
     @Override
-    public long capacity()
+    public int maxEntries()
     {
         return getMaxEntries();
     }
 
     @Override
-    public void setCapacity(long capacity)
-    {
-        setMaxEntries(Math.toIntExact(capacity));
-    }
-
-    @Override
-    public int size()
+    public int entries()
     {
         return Ints.checkedCast(getEstimatedSize());
     }

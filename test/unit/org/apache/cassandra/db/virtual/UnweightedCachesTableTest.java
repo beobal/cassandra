@@ -60,11 +60,11 @@ public class UnweightedCachesTableTest extends CQLTester
         assertRows(execute("SELECT " +
                            "name, capacity, entry_count, hit_count, hit_ratio, request_count " +
                            "FROM vts.unweighted_caches"),
-                   row("credentials", 1000L, 0, 0L, Double.NaN, 0L),
-                   row("jmx_permissions", 1000L, 0, 0L, Double.NaN, 0L),
-                   row("network_permissions", 1000L, 0, 0L, Double.NaN, 0L),
-                   row("permissions", 1000L, 0, 0L, Double.NaN, 0L),
-                   row("roles", 1000L, 0, 0L, Double.NaN, 0L));
+                   row("credentials", 1000, 0, 0L, Double.NaN, 0L),
+                   row("jmx_permissions", 1000, 0, 0L, Double.NaN, 0L),
+                   row("network_permissions", 1000, 0, 0L, Double.NaN, 0L),
+                   row("permissions", 1000, 0, 0L, Double.NaN, 0L),
+                   row("roles", 1000, 0, 0L, Double.NaN, 0L));
     }
 
     @Test

@@ -49,7 +49,7 @@ final class UnweightedCachesTable extends AbstractVirtualTable
                            .kind(TableMetadata.Kind.VIRTUAL)
                            .partitioner(new LocalPartitioner(UTF8Type.instance))
                            .addPartitionKeyColumn(NAME, UTF8Type.instance)
-                           .addRegularColumn(CAPACITY, LongType.instance)
+                           .addRegularColumn(CAPACITY, Int32Type.instance)
                            .addRegularColumn(ENTRY_COUNT, Int32Type.instance)
                            .addRegularColumn(HIT_COUNT, LongType.instance)
                            .addRegularColumn(HIT_RATIO, DoubleType.instance)
@@ -62,7 +62,7 @@ final class UnweightedCachesTable extends AbstractVirtualTable
     private void addRow(SimpleDataSet result, String name, UnweightedCacheMetrics metrics)
     {
         result.row(name)
-              .column(CAPACITY, metrics.capacity.getValue())
+              .column(CAPACITY, metrics.maxEntries.getValue())
               .column(ENTRY_COUNT, metrics.entries.getValue())
               .column(HIT_COUNT, metrics.hits.getCount())
               .column(HIT_RATIO, metrics.hitRate.getValue())
