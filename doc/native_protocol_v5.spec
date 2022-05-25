@@ -69,10 +69,10 @@ Table of Contents
 
 1. Overview
 
-  The CQL binary protocol is a frame based protocol with a frame comprises a header, payload
-  and trailer. In v5 there are two distinct frame formats, compressed and uncompressed, in
-  both cases, the payload is a stream of CQL envelopes (Section 2.4). Each envelope contains
-  a single CQL message, along with a metadata header. In effect, the v5 framing format is a
+  The CQL binary protocol is a frame based protocol with frames comprising a header, payload
+  and trailer. In v5 there are two distinct frame formats, compressed and uncompressed and in
+  both cases the payload is a stream of CQL envelopes (Section 2.4). Each envelope contains
+  a single CQL message, along with a metadata header. In effect, the framing format is a
   simple wrapper around protocol v5.
 
   In either format, a frame may or may not be self contained. If self contained, then the
@@ -168,7 +168,7 @@ Table of Contents
 
   The header padding can be discarded.
 
-  An uncompressedn length of 0 signals that the compressed payload
+  An uncompressed length of 0 signals that the compressed payload
   should be used as-is and not decompressed.
 
   The CRC24 of the header is calculated with the same parameters as for
@@ -229,7 +229,7 @@ Table of Contents
       .                                       .
       +----------------------------------------
 
-  The frame protocol is big-endian (network byte order).
+  All values in an envelope are big-endian (network byte order).
 
   Each envelope contains a fixed size header (9 bytes) followed by a variable size
   body. The header is described in Section 2.4.1. The content of the body depends
