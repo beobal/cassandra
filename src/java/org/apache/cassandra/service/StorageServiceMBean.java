@@ -1259,4 +1259,7 @@ public interface StorageServiceMBean extends NotificationEmitter
 
     public void setSkipStreamDiskSpaceCheck(boolean value);
     public boolean getSkipStreamDiskSpaceCheck();
+
+    public void addToCms(List<String> ignoredEndpoints);
+    public List<String> describeCMS();
 }
