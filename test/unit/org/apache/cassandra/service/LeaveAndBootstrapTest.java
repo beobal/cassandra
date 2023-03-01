@@ -48,6 +48,7 @@ import org.apache.cassandra.locator.AbstractReplicationStrategy;
 import org.apache.cassandra.locator.SimpleSnitch;
 import org.apache.cassandra.locator.TokenMetadata;
 import org.apache.cassandra.schema.KeyspaceMetadata;
+import org.apache.cassandra.tcm.compatibility.TokenRingUtils;
 
 import static org.junit.Assert.*;
 
@@ -104,7 +105,7 @@ public class LeaveAndBootstrapTest
         for (Token token : keyTokens)
         {
             List<InetAddressAndPort> endpoints = new ArrayList<>();
-            Iterator<Token> tokenIter = TokenMetadata.ringIterator(tmd.sortedTokens(), token, false);
+            Iterator<Token> tokenIter = TokenRingUtils.ringIterator(tmd.sortedTokens(), token, false);
             while (tokenIter.hasNext())
             {
                 endpoints.add(tmd.getEndpoint(tokenIter.next()));
