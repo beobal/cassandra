@@ -831,7 +831,7 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean, 
 
         if (seeds.contains(to))
             gossipedWith.add(SEED);
-        if (ClusterMetadata.current().cmsMembers().contains(to))
+        if (ClusterMetadata.current().fullCMSMembers().contains(to))
             gossipedWith.add(CMS);
         GossiperDiagnostics.sendGossipDigestSyn(this, to);
         return gossipedWith;
@@ -900,7 +900,7 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean, 
 
     private void maybeGossipToCMS(Message<GossipDigestSyn> message)
     {
-        Set<InetAddressAndPort> cms = ClusterMetadata.current().cmsMembers();
+        Set<InetAddressAndPort> cms = ClusterMetadata.current().fullCMSMembers();
         if (cms.contains(getBroadcastAddressAndPort()))
             return;
 
@@ -2236,7 +2236,7 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean, 
     public void triggerRoundWithCMS()
     {
         ClusterMetadata metadata = ClusterMetadata.current();
-        Set<InetAddressAndPort> cms = metadata.cmsMembers();
+        Set<InetAddressAndPort> cms = metadata.fullCMSMembers();
         if (!cms.contains(getBroadcastAddressAndPort()))
         {
             logger.debug("Triggering gossip round with CMS {}", metadata.epoch);
