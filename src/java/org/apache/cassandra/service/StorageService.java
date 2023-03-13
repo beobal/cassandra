@@ -1662,8 +1662,8 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
     public boolean isBootstrapMode()
     {
-        // todo: old variable was never assigned
-        return false;
+        ClusterMetadata metadata = ClusterMetadata.currentNullable();
+        return metadata != null && metadata.myNodeState() == BOOTSTRAPPING;
     }
 
     public Map<List<String>, List<String>> getRangeToEndpointMap(String keyspace)
@@ -2423,12 +2423,12 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     @Deprecated(since = "4.0")
     public List<String> getJoiningNodes()
     {
-        return stringify(endpointsWithState(BOOTSTRAPPING, REGISTERED), false);
+        return stringify(endpointsWithState(BOOTSTRAPPING), false);
     }
 
     public List<String> getJoiningNodesWithPort()
     {
-        return stringify(endpointsWithState(BOOTSTRAPPING, REGISTERED), true);
+        return stringify(endpointsWithState(BOOTSTRAPPING), true);
     }
 
     /** @deprecated See CASSANDRA-7544 */
