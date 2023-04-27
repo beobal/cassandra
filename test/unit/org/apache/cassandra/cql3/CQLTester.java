@@ -157,6 +157,10 @@ import org.apache.cassandra.service.QueryState;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.transport.Event;
 import org.apache.cassandra.transport.Message;
+import org.apache.cassandra.tcm.ClusterMetadata;
+import org.apache.cassandra.tcm.ClusterMetadataService;
+import org.apache.cassandra.tcm.Epoch;
+import org.apache.cassandra.tcm.transformations.ForceSnapshot;
 import org.apache.cassandra.transport.ProtocolVersion;
 import org.apache.cassandra.transport.Server;
 import org.apache.cassandra.transport.SimpleClient;
@@ -175,8 +179,8 @@ import static org.apache.cassandra.config.CassandraRelevantProperties.TEST_DRIVE
 import static org.apache.cassandra.config.CassandraRelevantProperties.TEST_REUSE_PREPARED;
 import static org.apache.cassandra.config.CassandraRelevantProperties.TEST_ROW_CACHE_SIZE;
 import static org.apache.cassandra.config.CassandraRelevantProperties.TEST_USE_PREPARED;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -380,6 +384,8 @@ public abstract class CQLTester
         return new JMXServiceURL(String.format("service:jmx:rmi:///jndi/rmi://%s:%d/jmxrmi", jmxHost, jmxPort));
     }
 
+    private static ClusterMetadata baseClusterState;
+
     @BeforeClass
     public static void setUpClass()
     {
@@ -391,6 +397,7 @@ public abstract class CQLTester
         StorageService.instance.setPartitionerUnsafe(Murmur3Partitioner.instance);
         // Once per-JVM is enough
         prepareServer();
+        baseClusterState = ClusterMetadata.current();
     }
 
     @AfterClass
@@ -432,7 +439,11 @@ public abstract class CQLTester
     @After
     public void afterTest() throws Throwable
     {
-        dropPerTestKeyspace();
+        Epoch nextEpoch = ClusterMetadata.current().epoch.nextEpoch();
+        ClusterMetadata newBaseState = baseClusterState.forceEpoch(nextEpoch);
+        Epoch currentEpoch = ClusterMetadataService.instance().commit(new ForceSnapshot(newBaseState)).epoch;
+        assertTrue(currentEpoch.is(nextEpoch));
+
         // Restore standard behavior in case it was changed
         usePrepared = USE_PREPARED_VALUES;
         reusePrepared = REUSE_PREPARED;
