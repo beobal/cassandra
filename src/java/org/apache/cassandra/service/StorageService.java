@@ -730,7 +730,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
                 ClusterMetadataService.instance().commit(getStartupSequence(finishJoiningRing),
                                                          (metadata_) -> !metadata_.inProgressSequences.contains(self),
                                                          (metadata_) -> null,
-                                                         (metadata_, reason) -> {
+                                                         (metadata_, code, reason) -> {
                                                              throw new IllegalStateException(String.format("Can not commit event to metadata service: %s. Interrupting startup sequence.",
                                                                                                            reason));
                                                          });
@@ -3605,7 +3605,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
                                                                       ClusterMetadataService.instance().placementProvider()),
                                                      (metadata_) -> !metadata_.inProgressSequences.contains(self),
                                                      (metadata_) -> null,
-                                                     (metadata_, reason) -> {
+                                                     (metadata_, code, reason) -> {
                                                          throw new IllegalStateException(String.format("Can not commit event to metadata service: %s. Interrupting leave sequence.",
                                                                                                        reason));
                                                      });
@@ -3726,7 +3726,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
                                                                  true),
                                                  (metadata_) -> !metadata_.inProgressSequences.contains(self),
                                                  (metadata_) -> null,
-                                                 (metadata_, reason) -> {
+                                                 (metadata_, code, reason) -> {
                                                      throw new IllegalStateException(String.format("Can not commit event to metadata service: %s. Interrupting leave sequence.",
                                                                                                    reason));
                                                  });
