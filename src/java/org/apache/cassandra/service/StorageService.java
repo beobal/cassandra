@@ -31,10 +31,6 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -117,11 +113,12 @@ import org.apache.cassandra.db.lifecycle.LifecycleTransaction;
 import org.apache.cassandra.db.virtual.VirtualKeyspaceRegistry;
 import org.apache.cassandra.dht.BootStrapper;
 import org.apache.cassandra.dht.IPartitioner;
+import org.apache.cassandra.dht.OwnedRanges;
 import org.apache.cassandra.dht.Range;
-import org.apache.cassandra.dht.RangeStreamer;
+import org.apache.cassandra.dht.Token.TokenFactory;
+import org.apache.cassandra.hints.HintsService;
 import org.apache.cassandra.dht.StreamStateStore;
 import org.apache.cassandra.dht.Token;
-import org.apache.cassandra.dht.Token.TokenFactory;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.exceptions.UnavailableException;
@@ -134,7 +131,6 @@ import org.apache.cassandra.gms.FailureDetector;
 import org.apache.cassandra.gms.Gossiper;
 import org.apache.cassandra.gms.IEndpointStateChangeSubscriber;
 import org.apache.cassandra.gms.VersionedValue;
-import org.apache.cassandra.hints.HintsService;
 import org.apache.cassandra.index.IndexStatusManager;
 import org.apache.cassandra.io.sstable.IScrubber;
 import org.apache.cassandra.io.sstable.IVerifier;
@@ -229,7 +225,6 @@ import org.apache.cassandra.utils.WrappedRunnable;
 import org.apache.cassandra.utils.concurrent.Future;
 import org.apache.cassandra.utils.concurrent.FutureCombiner;
 import org.apache.cassandra.utils.concurrent.ImmediateFuture;
-import org.apache.cassandra.utils.concurrent.UncheckedInterruptedException;
 import org.apache.cassandra.utils.logging.LoggingSupportFactory;
 import org.apache.cassandra.utils.progress.ProgressListener;
 import org.apache.cassandra.utils.progress.jmx.JMXBroadcastExecutor;
@@ -319,6 +314,35 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     @VisibleForTesting // this is used for dtests only, see CASSANDRA-18152
     public volatile boolean skipNotificationListeners = false;
 
+    private final java.util.function.Predicate<Keyspace> anyOutOfRangeOpsRecorded
+    = keyspace -> keyspace.metric.outOfRangeTokenReads.getCount() > 0
+                  || keyspace.metric.outOfRangeTokenWrites.getCount() > 0
+                  || keyspace.metric.outOfRangeTokenPaxosRequests.getCount() > 0;
+
+    private long[] getOutOfRangeOperationCounts(Keyspace keyspace)
+    {
+        return new long[]
+               {
+               keyspace.metric.outOfRangeTokenReads.getCount(),
+               keyspace.metric.outOfRangeTokenWrites.getCount(),
+               keyspace.metric.outOfRangeTokenPaxosRequests.getCount()
+               };
+    }
+
+    public Map<String, long[]> getOutOfRangeOperationCounts()
+    {
+        return Schema.instance.getKeyspaces()
+                              .stream()
+                              .map(Keyspace::open)
+                              .filter(anyOutOfRangeOpsRecorded)
+                              .collect(Collectors.toMap(Keyspace::getName, this::getOutOfRangeOperationCounts));
+    }
+
+    public void incOutOfRangeOperationCount()
+    {
+        (isStarting() ? StorageMetrics.startupOpsForInvalidToken : StorageMetrics.totalOpsForInvalidToken).inc();
+    }
+
     /** @deprecated See CASSANDRA-12509 */
     @Deprecated(since = "3.10")
     public boolean isInShutdownHook()
@@ -365,6 +389,11 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     public Collection<Range<Token>> getLocalAndPendingRanges(String ks)
     {
         return ClusterMetadata.current().localWriteRanges(Keyspace.open(ks).getMetadata());
+    }
+
+    public OwnedRanges getNormalizedLocalRanges(String keyspaceName)
+    {
+        return new OwnedRanges(getLocalReplicas(keyspaceName).ranges());
     }
 
     public Collection<Range<Token>> getPrimaryRanges(String keyspace)
@@ -3360,6 +3389,13 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         Token token = metadata.partitioner.getToken(key);
         KeyspaceMetadata keyspaceMetadata = metadata.schema.getKeyspaces().getNullable(keyspaceName);
         return metadata.placements.get(keyspaceMetadata.params.replication).reads.forToken(token);
+    }
+
+    public boolean isEndpointValidForWrite(String keyspace, Token token)
+    {
+        ClusterMetadata metadata = ClusterMetadata.current();
+        KeyspaceMetadata keyspaceMetadata = metadata.schema.getKeyspaces().getNullable(keyspace);
+        return keyspaceMetadata != null && metadata.placements.get(keyspaceMetadata.params.replication).reads.forToken(token).containsSelf();
     }
 
     public void setLoggingLevel(String classQualifier, String rawLevel) throws Exception
