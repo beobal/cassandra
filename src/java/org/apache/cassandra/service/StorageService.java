@@ -3649,6 +3649,9 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     {
         if (ClusterMetadataService.instance().isMigrating() || ClusterMetadataService.state() == ClusterMetadataService.State.GOSSIP)
             throw new IllegalStateException("This cluster is migrating to cluster metadata, can't decommission until that is done.");
+        if (!EnumSet.of(Mode.LEAVING, Mode.NORMAL).contains(operationMode()))
+            throw new UnsupportedOperationException("Node in " + operationMode() + " state; wait for status to become normal");
+        logger.debug("DECOMMISSIONING");
         ClusterMetadata metadata = ClusterMetadata.current();
         NodeId self = metadata.myNodeId();
 
@@ -4220,9 +4223,9 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             finally
             {
                 if (!isFinalShutdown)
-                    logger.info("{}", Mode.DRAINING);
+                    logger.info("{}", Mode.DRAINED);
                 else
-                    logger.debug("{}", Mode.DRAINING);
+                    logger.debug("{}", Mode.DRAINED);
                 transientMode = Optional.of(Mode.DRAINED);
             }
         }
