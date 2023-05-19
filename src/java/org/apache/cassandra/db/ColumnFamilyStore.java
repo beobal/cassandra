@@ -512,7 +512,6 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean, Memtable.Owner
             initialMemtable = createMemtable(new AtomicReference<>(CommitLog.instance.getCurrentPosition()));
             memtableMetrics = memtableFactory.createMemtableMetrics(metadata);
         }
-        metric = new TableMetrics(this, memtableMetrics);
         data = new Tracker(this, initialMemtable, loadSSTables);
 
         // Note that this needs to happen before we load the first sstables, or the global sstable tracker will not
@@ -543,6 +542,8 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean, Memtable.Owner
         {
             indexManager.addIndex(info, true);
         }
+
+        metric = new TableMetrics(this, memtableMetrics);
 
         if (data.loadsstables)
         {
