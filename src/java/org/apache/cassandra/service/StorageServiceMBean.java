@@ -1065,6 +1065,7 @@ public interface StorageServiceMBean extends NotificationEmitter
     public boolean resumeBootstrap();
 
     public String getBootstrapState();
+    void abortBootstrap(String nodeId, String endpoint);
 
     /** Gets the concurrency settings for processing stages*/
     static class StageConcurrency implements Serializable
