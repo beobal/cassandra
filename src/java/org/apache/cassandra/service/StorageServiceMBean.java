@@ -1267,8 +1267,10 @@ public interface StorageServiceMBean extends NotificationEmitter
     public void setSkipStreamDiskSpaceCheck(boolean value);
     public boolean getSkipStreamDiskSpaceCheck();
 
-    void addToCms(List<String> endpoint);
-    List<String> describeCMS();
+    public void addToCms(List<String> ignoredEndpoints);
+    public void removeFromCms(boolean force);
+    public List<String> describeCMS();
+
     public void sealPeriod();
 
     public void unsafeRevertClusterMetadata(long epoch);
