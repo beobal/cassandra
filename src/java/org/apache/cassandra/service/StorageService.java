@@ -2343,7 +2343,10 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     @Nullable
     public UUID getHostIdForEndpoint(InetAddressAndPort address)
     {
-        return ClusterMetadata.current().directory.peerId(address).toUUID();
+        NodeId nodeId = ClusterMetadata.current().directory.peerId(address);
+        if (nodeId != null)
+            return nodeId.toUUID();
+        return null;
     }
 
     /* These methods belong to the MBean interface */
