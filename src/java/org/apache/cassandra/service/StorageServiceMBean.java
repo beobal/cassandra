@@ -1269,8 +1269,7 @@ public interface StorageServiceMBean extends NotificationEmitter
 
     public void addToCms(List<String> ignoredEndpoints);
     public void removeFromCms(boolean force);
-    public List<String> describeCMS();
-
+    public Map<String, String> describeCMS();
     public void sealPeriod();
 
     public void unsafeRevertClusterMetadata(long epoch);
