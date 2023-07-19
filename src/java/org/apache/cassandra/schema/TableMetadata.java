@@ -1767,8 +1767,11 @@ public class TableMetadata implements SchemaElement
                 ColumnMetadata.serializer.serialize(cm, out, version);
 
             out.writeInt(t.droppedColumns.size());
-            for (DroppedColumn dc : t.droppedColumns.values())
-                DroppedColumn.serializer.serialize(dc, out, version);
+            for (Entry<ByteBuffer, DroppedColumn> e: t.droppedColumns.entrySet())
+            {
+                ByteBufferUtil.writeWithShortLength(e.getKey(), out);
+                DroppedColumn.serializer.serialize(e.getValue(), out, version);
+            }
 
             Indexes.serializer.serialize(t.indexes, out, version);
             Triggers.serializer.serialize(t.triggers, out, version);
@@ -1830,8 +1833,11 @@ public class TableMetadata implements SchemaElement
                 size += ColumnMetadata.serializer.serializedSize(cm, version);
 
             size += sizeof(t.droppedColumns.size());
-            for (DroppedColumn dc : t.droppedColumns.values())
-                size += DroppedColumn.serializer.serializedSize(dc, version);
+            for (Entry<ByteBuffer, DroppedColumn> e : t.droppedColumns.entrySet())
+            {
+                size += ByteBufferUtil.serializedSizeWithShortLength(e.getKey());
+                size += DroppedColumn.serializer.serializedSize(e.getValue(), version);
+            }
 
             size += Indexes.serializer.serializedSize(t.indexes, version);
             size += Triggers.serializer.serializedSize(t.triggers, version);
