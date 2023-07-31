@@ -790,7 +790,7 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
         {
             Stream<?> peers = cluster.stream().filter(IInstance::isValid);
             Schema.instance.saveSystemKeyspace();
-            ClusterMetadataService.instance().fetchLogFromCMS();
+            ClusterMetadataService.instance().processor().fetchLogAndWait();
             NodeId self = Register.maybeRegister();
             boolean joinRing = config.get(Constants.KEY_DTEST_JOIN_RING) == null || (boolean) config.get(Constants.KEY_DTEST_JOIN_RING);
             if (ClusterMetadata.current().directory.peerState(self) != NodeState.JOINED && joinRing)
@@ -825,7 +825,7 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
             FBUtilities.getBroadcastAddressAndPort().getPort() != broadcastAddress().getPort())
             throw new IllegalStateException(String.format("%s != %s", FBUtilities.getBroadcastAddressAndPort(), broadcastAddress()));
 
-        ClusterMetadataService.instance().fetchLogFromCMS();
+        ClusterMetadataService.instance().processor().fetchLogAndWait();
 
         ActiveRepairService.instance().start();
         StreamManager.instance.start();
@@ -870,6 +870,8 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
         Future<?> future = async((ExecutorService executor) -> {
             Throwable error = null;
 
+            CompactionManager.instance.forceShutdown();
+
             error = parallelRun(error, executor,
                     () -> StorageService.instance.setRpcReady(false),
                     CassandraDaemon.getInstanceForTesting()::destroyClientTransports);
@@ -885,10 +887,12 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
 
             // trigger init early or else it could try to init and touch a thread pool that got shutdown
             HintsService hints = HintsService.instance;
-            ThrowingRunnable shutdownHints = () -> {
+            ThrowingRunnable shutdownBatchlogAndHints = () -> {
                 // this is to allow shutdown in the case hints were halted already
                 try
                 {
+                    // Batchlog manager can submit tasks to hints executor, so shut it down earlier and in sequence
+                    BatchlogManager.instance.shutdownAndWait(1L, MINUTES);
                     hints.shutdownBlocking();
                 }
                 catch (IllegalStateException e)
@@ -898,11 +902,8 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
                 }
             };
 
-            CompactionManager.instance.forceShutdown();
-
             error = parallelRun(error, executor,
-                                () -> BatchlogManager.instance.shutdownAndWait(1L, MINUTES),
-                                shutdownHints,
+                                shutdownBatchlogAndHints,
                                 () -> CompactionLogger.shutdownNowAndWait(1L, MINUTES),
                                 () -> AuthCache.shutdownAllAndWait(1L, MINUTES),
                                 () -> Sampler.shutdownNowAndWait(1L, MINUTES),

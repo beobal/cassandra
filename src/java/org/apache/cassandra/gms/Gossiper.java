@@ -524,6 +524,8 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean, 
         EndpointState epState = endpointStateMap.get(endpoint);
         if (epState == null || epState.isStateEmpty())
             return;
+        if (isShutdown(epState))
+            return;
         VersionedValue shutdown = StorageService.instance.valueFactory.shutdown(true);
         epState.addApplicationState(ApplicationState.STATUS_WITH_PORT, shutdown);
         epState.addApplicationState(ApplicationState.STATUS, StorageService.instance.valueFactory.shutdown(true));
