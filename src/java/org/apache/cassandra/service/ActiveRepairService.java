@@ -1124,6 +1124,7 @@ public class ActiveRepairService implements IEndpointStateChangeSubscriber, IFai
                                                     .get(keyspace.getMetadata().params.replication)
                                                     .reads
                                                     .forRange(range)
+                                                    .get()
                                                     .filter(FailureDetector.isReplicaAlive).endpoints();
                 if (!PaxosRepair.hasSufficientLiveNodesForTopologyChange(keyspace, range, endpoints))
                 {
@@ -1131,6 +1132,7 @@ public class ActiveRepairService implements IEndpointStateChangeSubscriber, IFai
                                                             .get(keyspace.getMetadata().params.replication)
                                                             .reads
                                                             .forRange(range)
+                                                            .get()
                                                             .filter(e -> !endpoints.contains(e.endpoint())).endpoints();
                     downEndpoints.removeAll(endpoints);
 

@@ -1047,12 +1047,11 @@ public abstract class AbstractCluster<I extends IInstance> implements ICluster<I
 
             forEach(startSequentially, i -> {
                 i.startup(this);
-                i.postStartup();
             });
             parallelForEach(startParallel, i -> {
                 i.startup(this);
-                i.postStartup();
             }, 0, null);
+            parallelForEach(instances, IInstance::postStartup, 0, null);
             monitor.waitForCompletion();
         }
     }
