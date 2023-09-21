@@ -77,11 +77,13 @@ public class PrepareMove implements Transformation
                '}';
     }
 
+    @Override
     public Kind kind()
     {
         return Kind.PREPARE_MOVE;
     }
 
+    @Override
     public Result execute(ClusterMetadata prev)
     {
         if (prev.directory.peerState(nodeId) != NodeState.JOINED)

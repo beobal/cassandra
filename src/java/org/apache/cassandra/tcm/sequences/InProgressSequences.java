@@ -36,6 +36,7 @@ import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.InProgressSequence;
 import org.apache.cassandra.tcm.MetadataValue;
+import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.NodeId;
 
 import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializer;
@@ -102,14 +103,14 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
         return lastModified;
     }
 
-    public boolean contains(SequenceKey nodeId)
+    public boolean contains(SequenceKey key)
     {
-        return state.containsKey(nodeId);
+        return state.containsKey(key);
     }
 
-    public InProgressSequence<?> get(SequenceKey nodeId)
+    public InProgressSequence<?> get(SequenceKey key)
     {
-        return state.get(nodeId);
+        return state.get(key);
     }
 
     public boolean isEmpty()
@@ -117,26 +118,33 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
         return state.isEmpty();
     }
 
-    public InProgressSequences with(SequenceKey nodeId, InProgressSequence<?> sequence)
+    public InProgressSequences with(SequenceKey key, InProgressSequence<?> sequence) throws Transformation.RejectedTransformationException
     {
+        if (contains(key))
+        {
+            throw new Transformation.RejectedTransformationException(String.format("Can not add a new in-progress sequence for %s, since there's already one assosicated with it: %s",
+                                                                                   key,
+                                                                                   get(key)));
+        }
+
         ImmutableMap.Builder<SequenceKey, InProgressSequence<?>> builder = ImmutableMap.builder();
-        builder.put(nodeId, sequence);
+        builder.put(key, sequence);
         for (Map.Entry<SequenceKey, InProgressSequence<?>> e : state.entrySet())
         {
-            if (e.getKey().equals(nodeId))
+            if (e.getKey().equals(key))
                 continue;
             builder.put(e.getKey(), e.getValue());
         }
         return new InProgressSequences(lastModified, builder.build());
     }
 
-    public InProgressSequences with(SequenceKey nodeId, Function<InProgressSequence<?>, InProgressSequence<?>> update)
+    public InProgressSequences with(SequenceKey key, Function<InProgressSequence<?>, InProgressSequence<?>> update)
     {
         ImmutableMap.Builder<SequenceKey, InProgressSequence<?>> builder = ImmutableMap.builder();
 
         for (Map.Entry<SequenceKey, InProgressSequence<?>> e : state.entrySet())
         {
-            if (e.getKey().equals(nodeId))
+            if (e.getKey().equals(key))
                 builder.put(e.getKey(), update.apply(e.getValue()));
             else
                 builder.put(e.getKey(), e.getValue());
@@ -144,18 +152,18 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
         return new InProgressSequences(lastModified, builder.build());
     }
 
-    public InProgressSequences without(SequenceKey nodeId)
+    public InProgressSequences without(SequenceKey keyd)
     {
         ImmutableMap.Builder<SequenceKey, InProgressSequence<?>> builder = ImmutableMap.builder();
         boolean removed = false;
         for (Map.Entry<SequenceKey, InProgressSequence<?>> e : state.entrySet())
         {
-            if (e.getKey().equals(nodeId))
+            if (e.getKey().equals(keyd))
                 removed = true;
             else
                 builder.put(e.getKey(), e.getValue());
         }
-        assert removed : String.format("Expected to remove node %s, but it wasn't found in in-progress sequences", nodeId);
+        assert removed : String.format("Expected to remove an in-progress sequence for %s, but it wasn't found in in-progress sequences", keyd);
         return new InProgressSequences(lastModified, builder.build());
 
     }

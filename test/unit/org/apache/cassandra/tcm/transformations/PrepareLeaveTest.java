@@ -79,7 +79,7 @@ public class PrepareLeaveTest
     }
 
     @Test
-    public void testCheckRF_Simple() throws UnknownHostException
+    public void testCheckRF_Simple() throws Throwable
     {
         Keyspaces kss = Keyspaces.of(DistributedMetadataLogKeyspace.initialMetadata(), KSM);
         ClusterMetadata metadata = prepMetadata(kss, 2, 2);
@@ -90,7 +90,7 @@ public class PrepareLeaveTest
     }
 
     @Test
-    public void testCheckRF_NTS() throws UnknownHostException
+    public void testCheckRF_NTS() throws Throwable
     {
         Keyspaces kss = Keyspaces.of(DistributedMetadataLogKeyspace.initialMetadata(), KSM_NTS);
         ClusterMetadata metadata = prepMetadata(kss, 4, 4);
@@ -103,7 +103,7 @@ public class PrepareLeaveTest
         assertFalse(executeLeave(metadata));
     }
 
-    private boolean executeLeave(ClusterMetadata metadata) throws UnknownHostException
+    private boolean executeLeave(ClusterMetadata metadata) throws Throwable
     {
         PrepareLeave prepareLeave = new PrepareLeave(metadata.directory.peerId(InetAddressAndPort.getByName("127.0.0.1")),
                                                      false,

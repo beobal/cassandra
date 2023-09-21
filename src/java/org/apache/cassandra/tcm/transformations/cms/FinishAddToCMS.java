@@ -47,6 +47,7 @@ public class FinishAddToCMS extends BaseMembershipTransformation
         super(addr);
     }
 
+    @Override
     public Kind kind()
     {
         return Kind.FINISH_ADD_TO_CMS;
@@ -57,6 +58,7 @@ public class FinishAddToCMS extends BaseMembershipTransformation
         return replica;
     }
 
+    @Override
     public Result execute(ClusterMetadata prev)
     {
         InProgressSequences sequences = prev.inProgressSequences;
@@ -71,7 +73,7 @@ public class FinishAddToCMS extends BaseMembershipTransformation
 
         return ReconfigureCMS.executeFinishAdd(prev,
                                                targetNode,
-                                               inProgressSequences -> inProgressSequences.without(targetNode));
+                                               (inProgressSequences, ignore_) -> inProgressSequences.without(targetNode));
     }
 
     public String toString()

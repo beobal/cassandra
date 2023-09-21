@@ -52,6 +52,14 @@ public interface Transformation
 
     Kind kind();
 
+    /**
+     * Performs the core function of the transformation, to transition ClusterMetadata from one state to the next.
+     * Returns a {@link Result}, either {@link Success} or {@link Rejected}. The former contains the transformed
+     * metadata along with an indication of which specific components were modified. It also includes the set of token
+     * ranges impacted by the change (if any). A {@link Rejected} result contains an {@link ExceptionCode} and reason string.
+     * @param metadata the starting state
+     * @return a result object indicating a success or failure in applying transformation
+     */
     Result execute(ClusterMetadata metadata);
 
     default boolean allowDuringUpgrades()
@@ -292,6 +300,18 @@ public interface Transformation
         public String toString()
         {
             return "EXECUTED {" + delegate.toString() + "}";
+        }
+    }
+
+    /**
+     * Allowed to be thrown inside transformations to signal that the error is expected by the transformation, and
+     * does not constitute a reason for retry.
+     */
+    class RejectedTransformationException extends RuntimeException
+    {
+        public RejectedTransformationException(String message)
+        {
+            super(message);
         }
     }
 }

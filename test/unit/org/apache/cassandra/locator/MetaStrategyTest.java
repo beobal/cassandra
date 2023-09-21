@@ -96,7 +96,7 @@ public class MetaStrategyTest
     }
 
     @Test
-    public void testDatacenterAware() throws UnknownHostException
+    public void testDatacenterAware() throws Throwable
     {
         ClusterMetadata metadata = metadata(node(addr(1), location("dc1", "rack1"), 1),
                                             node(addr(2), location("dc1", "rack1"), 2),

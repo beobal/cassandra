@@ -56,11 +56,13 @@ public class RemoveFromCMS extends BaseMembershipTransformation
         this.force = force;
     }
 
+    @Override
     public Kind kind()
     {
         return Kind.REMOVE_FROM_CMS;
     }
 
+    @Override
     public Result execute(ClusterMetadata prev)
     {
         InProgressSequences sequences = prev.inProgressSequences;
@@ -93,7 +95,7 @@ public class RemoveFromCMS extends BaseMembershipTransformation
         if (minProposedSize == 0)
             return new Transformation.Rejected(INVALID, String.format("Removing %s from the CMS would leave no members in CMS.", endpoint));
 
-        return ReconfigureCMS.executeRemove(prev, prev.directory.peerId(endpoint), i -> i);
+        return ReconfigureCMS.executeRemove(prev, prev.directory.peerId(endpoint), (i, ignored_)  -> i);
     }
 
     @Override

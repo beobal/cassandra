@@ -68,11 +68,13 @@ public class AdvanceCMSReconfiguration implements Transformation
         return new AdvanceCMSReconfiguration(idx + 1, lockKey, new PrepareCMSReconfiguration.Diff(additions, removals), active);
     }
 
+    @Override
     public Kind kind()
     {
         return Kind.ADVANCE_CMS_RECONFIGURATION;
     }
 
+    @Override
     public Result execute(ClusterMetadata prev)
     {
         InProgressSequences sequences = prev.inProgressSequences;
@@ -106,8 +108,8 @@ public class AdvanceCMSReconfiguration implements Transformation
                 List<NodeId> newRemovals = new ArrayList<>(diff.removals.subList(1, diff.removals.size()));
                 return ReconfigureCMS.executeRemove(prev,
                                                     removal,
-                                                    inProgressSequences -> inProgressSequences.with(ReconfigureCMS.SequenceKey.instance,
-                                                                                                    new ReconfigureCMS(next(diff.additions, newRemovals, null))));
+                                                    (inProgressSequences, ignored_) -> inProgressSequences.with(ReconfigureCMS.SequenceKey.instance,
+                                                                                                                new ReconfigureCMS(next(diff.additions, newRemovals, null))));
             }
             else
             {
@@ -121,8 +123,8 @@ public class AdvanceCMSReconfiguration implements Transformation
         {
             return ReconfigureCMS.executeFinishAdd(prev,
                                                    activeTransition.nodeId,
-                                                   inProgressSequences -> inProgressSequences.with(ReconfigureCMS.SequenceKey.instance,
-                                                                                                   new ReconfigureCMS(next(diff.additions, diff.removals, null))));
+                                                   (inProgressSequences, ignored_) -> inProgressSequences.with(ReconfigureCMS.SequenceKey.instance,
+                                                                                                               new ReconfigureCMS(next(diff.additions, diff.removals, null))));
         }
     }
 

@@ -56,8 +56,7 @@ public class ReconfigureCMSTest extends FuzzTestBase
             Random rnd = new Random(2);
             Supplier<Integer> nodeSelector = () -> rnd.nextInt(cluster.size() - 1) + 1;
             cluster.get(nodeSelector.get()).nodetoolResult("reconfigurecms", "--sync", "0").asserts().failure();
-            // TODO: this works, but makes the test slower; uncomment when we merge RejectedException patch
-            //cluster.get(nodeSelector.get()).nodetoolResult("reconfigurecms", "--sync", "500").asserts().failure();
+            cluster.get(nodeSelector.get()).nodetoolResult("reconfigurecms", "--sync", "500").asserts().failure();
             cluster.get(nodeSelector.get()).nodetoolResult("reconfigurecms", "--sync", "5").asserts().success();
             cluster.get(1).runOnInstance(() -> {
                 ClusterMetadata metadata = ClusterMetadata.current();

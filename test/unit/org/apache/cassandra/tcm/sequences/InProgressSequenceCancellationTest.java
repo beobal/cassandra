@@ -83,7 +83,7 @@ public class InProgressSequenceCancellationTest
     }
 
     @Test
-    public void revertBootstrapAndJoinEffects()
+    public void revertBootstrapAndJoinEffects() throws Throwable
     {
         for (int i = 0; i < ITERATIONS; i++)
             testRevertingBootstrap(System.nanoTime());
@@ -157,7 +157,7 @@ public class InProgressSequenceCancellationTest
     }
 
     @Test
-    public void revertUnbootstrapAndLeaveEffects()
+    public void revertUnbootstrapAndLeaveEffects() throws Throwable
     {
         for (int i = 0; i < ITERATIONS; i++)
             testRevertingLeave(System.nanoTime());
@@ -223,7 +223,7 @@ public class InProgressSequenceCancellationTest
     }
 
     @Test
-    public void revertBootstrapAndReplaceEffects()
+    public void revertBootstrapAndReplaceEffects() throws Throwable
     {
         for (int i = 0; i < ITERATIONS; i++)
             testRevertingReplace(System.nanoTime());

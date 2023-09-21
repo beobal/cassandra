@@ -82,8 +82,8 @@ public class AddToCMS extends InProgressSequence<AddToCMS>
                                                                            if (sequence_.kind() != JOIN_OWNERSHIP_GROUP)
                                                                            {
                                                                                throw new IllegalStateException(String.format("Following accepted initiation of node to CMS, " +
-                                                                                                                             "an incorrect sequence %s was found in progress. %s ",
-                                                                                                                             sequence_.kind(), sequence_));
+                                                                                                                             "an incorrect sequence %s was found in progress. %s.\nRejection reason: %s",
+                                                                                                                             sequence_.kind(), sequence_, reason));
                                                                            }
 
                                                                            return metadata.inProgressSequences.get(nodeId);
