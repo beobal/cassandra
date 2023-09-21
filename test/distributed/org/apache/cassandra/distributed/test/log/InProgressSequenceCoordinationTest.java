@@ -21,6 +21,7 @@ package org.apache.cassandra.distributed.test.log;
 import java.util.concurrent.Callable;
 import java.util.function.BiFunction;
 
+import org.junit.Assert;
 import org.junit.Test;
 
 import org.apache.cassandra.distributed.Cluster;
@@ -30,15 +31,19 @@ import org.apache.cassandra.distributed.api.TokenSupplier;
 import org.apache.cassandra.distributed.shared.ClusterUtils;
 import org.apache.cassandra.distributed.shared.NetworkTopology;
 import org.apache.cassandra.distributed.shared.WithProperties;
+import org.apache.cassandra.service.StorageService;
+import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.Epoch;
+import org.apache.cassandra.tcm.InProgressSequence;
+import org.apache.cassandra.tcm.membership.NodeId;
+import org.apache.cassandra.tcm.sequences.AddToCMS;
+import org.apache.cassandra.tcm.sequences.InProgressSequences;
+import org.apache.cassandra.tcm.sequences.LeaveStreams;
+import org.apache.cassandra.tcm.sequences.SequenceState;
 import org.apache.cassandra.tcm.transformations.PrepareJoin;
 import org.apache.cassandra.tcm.transformations.PrepareLeave;
 import org.apache.cassandra.tcm.transformations.PrepareReplace;
-import org.apache.cassandra.service.StorageService;
-import org.apache.cassandra.tcm.InProgressSequence;
-import org.apache.cassandra.tcm.sequences.InProgressSequences;
-import org.apache.cassandra.tcm.sequences.SequenceState;
 import org.apache.cassandra.utils.concurrent.Condition;
 
 import static org.apache.cassandra.config.CassandraRelevantProperties.REPLACE_ADDRESS_FIRST_BOOT;
@@ -237,6 +242,42 @@ public class InProgressSequenceCoordinationTest extends FuzzTestBase
             // Wait for the cluster to all witness the finish join event.
             Epoch finalEpoch = finishReplaceEpoch.call();
             ClusterUtils.waitForCMSToQuiesce(cluster, finalEpoch);
+        }
+    }
+
+    @Test
+    public void rejectSubsequentInProgressSequence() throws Throwable
+    {
+        try (Cluster cluster = builder().withNodes(2)
+                                        .start())
+        {
+            cluster.get(2).runOnInstance(() -> {
+                NodeId self = ClusterMetadata.current().myNodeId();
+                ClusterMetadataService.instance().commit(new PrepareLeave(self,
+                                                                          true,
+                                                                          ClusterMetadataService.instance().placementProvider(),
+                                                                          LeaveStreams.Kind.UNBOOTSTRAP),
+                                                         (metadata_) -> null,
+                                                         (metadata_, code, reason) -> {
+                                                             InProgressSequence<?> sequence = metadata_.inProgressSequences.get(self);
+                                                             // We might have discovered a sequence we ourselves committed but got no response for
+                                                             if (sequence == null || sequence.kind() != InProgressSequences.Kind.LEAVE)
+                                                             {
+                                                                 throw new IllegalStateException(String.format("Can not commit event to metadata service: %s. Interrupting leave sequence.",
+                                                                                                               reason));
+                                                             }
+                                                             return null;
+                                                         });
+                try
+                {
+                    AddToCMS.initiate();
+                    Assert.fail("Should have failed");
+                }
+                catch (Throwable t)
+                {
+                    Assert.assertTrue(t.getMessage().contains("since there's already one assosicated with it"));
+                }
+            });
         }
     }
 

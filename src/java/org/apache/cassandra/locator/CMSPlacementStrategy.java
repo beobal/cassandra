@@ -31,6 +31,7 @@ import com.google.common.annotations.VisibleForTesting;
 import org.apache.cassandra.gms.FailureDetector;
 import org.apache.cassandra.schema.ReplicationParams;
 import org.apache.cassandra.tcm.ClusterMetadata;
+import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.Directory;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.membership.NodeState;
@@ -98,9 +99,8 @@ public interface CMSPlacementStrategy
                 Collection<InetAddressAndPort> nodesInDc = metadata.directory.allDatacenterEndpoints().get(e.getKey());
                 if (nodesInDc == null)
                     throw new IllegalStateException(String.format("There are no nodes in %s datacenter", e.getKey()));
-                // TODO: this should throw RejectedException, when it is merged and rebased.
                 if (nodesInDc.size() < e.getValue())
-                    throw new IllegalStateException(String.format("There are not enough nodes in %s datacenter to satisfy replication factor", e.getKey()));
+                    throw new Transformation.RejectedTransformationException(String.format("There are not enough nodes in %s datacenter to satisfy replication factor", e.getKey()));
 
                 rf.put(e.getKey(), ReplicationFactor.fullOnly(e.getValue()));
             }

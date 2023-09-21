@@ -20,14 +20,11 @@ package org.apache.cassandra.tcm.transformations.cms;
 
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.tcm.ClusterMetadata;
-import org.apache.cassandra.tcm.InProgressSequence;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.sequences.AddToCMS;
 import org.apache.cassandra.tcm.sequences.ReconfigureCMS;
 import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializer;
-
-import static org.apache.cassandra.exceptions.ExceptionCode.INVALID;
 
 @Deprecated
 public class StartAddToCMS extends BaseMembershipTransformation
@@ -45,17 +42,16 @@ public class StartAddToCMS extends BaseMembershipTransformation
         super(addr);
     }
 
+    @Override
     public Kind kind()
     {
         return Kind.START_ADD_TO_CMS;
     }
 
+    @Override
     public Result execute(ClusterMetadata prev)
     {
         NodeId nodeId = prev.directory.peerId(endpoint);
-        InProgressSequence<?> sequence = prev.inProgressSequences.get(nodeId);
-        if (sequence != null)
-            return new Rejected(INVALID, String.format("Can not add node to CMS, since it already has an active in-progress sequence %s", sequence));
 
         return ReconfigureCMS.executeStartAdd(prev, nodeId, (inProgressSequences, streamCandidates) -> {
             AddToCMS joinSequence = new AddToCMS(prev.nextEpoch(), nodeId, streamCandidates, new FinishAddToCMS(endpoint));
@@ -64,6 +60,7 @@ public class StartAddToCMS extends BaseMembershipTransformation
         });
     }
 
+    @Override
     public String toString()
     {
         return "StartAddMember{" +

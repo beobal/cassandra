@@ -21,7 +21,6 @@ package org.apache.cassandra.tcm;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.cassandra.config.CassandraRelevantProperties;
-import org.apache.cassandra.exceptions.ExceptionCode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,6 +30,7 @@ import org.apache.cassandra.tcm.log.Replication;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.JVMStabilityInspector;
 
+import static org.apache.cassandra.exceptions.ExceptionCode.INVALID;
 import static org.apache.cassandra.exceptions.ExceptionCode.SERVER_ERROR;
 
 public abstract class AbstractLocalProcessor implements Processor
@@ -61,12 +61,13 @@ public abstract class AbstractLocalProcessor implements Processor
                 !transform.allowDuringUpgrades() &&
                 previous.metadataSerializationUpgradeInProgress())
             {
-                result = new Transformation.Rejected(ExceptionCode.INVALID, "Upgrade in progress, can't commit " + transform);
+                result = new Transformation.Rejected(INVALID, "Upgrade in progress, can't commit " + transform);
             }
             else
             {
-                result = transform.execute(previous);
+                result = executeStrictly(previous, transform);
             }
+
             // If we got a rejection, it could be that _we_ are not aware of the highest epoch.
             // Just try to catch up to the latest distributed state.
             if (result.isRejected())
@@ -117,6 +118,32 @@ public abstract class AbstractLocalProcessor implements Processor
                                                                      retryPolicy.tries, retryPolicy.maxTries,
                                                                      TimeUnit.NANOSECONDS.toMillis(retryPolicy.remainingNanos())), false);
     }
+
+    /**
+     * Calls {@link Transformation#execute(ClusterMetadata)}, but catches any
+     * {@link Transformation.RejectedTransformationException}, which is used by implementations to indicate that a known
+     * and ultimately fatal error has been encountered. Throwing such an error implies that the transformation has not
+     * succeeded and will not succeed if executed again, so no retries should be attempted. These scenarios are rare and
+     * using an unchecked exception for this purpose enables us to propagate fatal errors without polluting the
+     * {@link Transformation}interface . Here, those exceptions are caught and a {@link Transformation.Rejected}
+     * response returned, shortcircuiting any retry logic intended to mitigate more transient failures.
+     *
+     * @param metadata the starting state
+     * @param transformation to be applied to the starting state
+     * @return result of the application
+     */
+    private Transformation.Result executeStrictly(ClusterMetadata metadata, Transformation transformation)
+    {
+        try
+        {
+            return transformation.execute(metadata);
+        }
+        catch (Transformation.RejectedTransformationException e)
+        {
+            return new Transformation.Rejected(INVALID, e.getMessage());
+        }
+    }
+
 
     private Replication toReplication(Transformation.Success success, Entry.Id entryId, Epoch lastKnown, Transformation transform)
     {

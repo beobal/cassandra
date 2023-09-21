@@ -169,7 +169,7 @@ public class ClusterMetadataTransformationTest
     }
 
     @Test
-    public void testModifyInProgressSequences()
+    public void testModifyInProgressSequences() throws Throwable
     {
         ClusterMetadata metadata = new ClusterMetadata(Murmur3Partitioner.instance, Directory.EMPTY, DistributedSchema.empty());
         // Initial state has InProgressSequences.EMPTY, so supplying the same value results in no change

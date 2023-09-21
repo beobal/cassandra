@@ -76,11 +76,13 @@ public class PrepareCMSReconfiguration
             this.toReplace = toReplace;
         }
 
+        @Override
         public Kind kind()
         {
             return Kind.PREPARE_SIMPLE_CMS_RECONFIGURATION;
         }
 
+        @Override
         public Result execute(ClusterMetadata prev)
         {
             if (!prev.fullCMSMembers().contains(prev.directory.getNodeAddresses(toReplace).broadcastAddress))
@@ -139,11 +141,13 @@ public class PrepareCMSReconfiguration
             this.replicationParams = replicationParams;
         }
 
+        @Override
         public Kind kind()
         {
             return Kind.PREPARE_COMPLEX_CMS_RECONFIGURATION;
         }
 
+        @Override
         public Result execute(ClusterMetadata prev)
         {
             KeyspaceMetadata keyspace = prev.schema.getKeyspaceMetadata(SchemaConstants.METADATA_KEYSPACE_NAME);

@@ -27,8 +27,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.function.BiFunction;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.slf4j.Logger;
@@ -99,7 +97,7 @@ public class ReconfigureCMS extends InProgressSequence<ReconfigureCMS>
         this.next = next;
     }
 
-    public static Transformation.Result executeStartAdd(ClusterMetadata prev, NodeId nodeId, BiFunction<InProgressSequences, Set<InetAddressAndPort>, InProgressSequences> updateInProgressSequenes)
+    public static Transformation.Result executeStartAdd(ClusterMetadata prev, NodeId nodeId, TransformFn<InProgressSequences, Set<InetAddressAndPort>> updateInProgressSequenes) throws Transformation.RejectedTransformationException
     {
         InetAddressAndPort endpoint = prev.directory.endpoint(nodeId);
         Replica replica = new Replica(endpoint, entireRange, true);
@@ -128,7 +126,7 @@ public class ReconfigureCMS extends InProgressSequence<ReconfigureCMS>
                                       EntireRange.affectedRanges(prev));
     }
 
-    public static Transformation.Result executeFinishAdd(ClusterMetadata prev, NodeId nodeId, Function<InProgressSequences, InProgressSequences> updateInProgressSequenes)
+    public static Transformation.Result executeFinishAdd(ClusterMetadata prev, NodeId nodeId, TransformFn<InProgressSequences, InProgressSequences> updateInProgressSequenes) throws Transformation.RejectedTransformationException
     {
         ReplicationParams metaParams = ReplicationParams.meta(prev);
         InetAddressAndPort endpoint = prev.directory.endpoint(nodeId);
@@ -140,11 +138,11 @@ public class ReconfigureCMS extends InProgressSequence<ReconfigureCMS>
                                                        .withReadReplica(prev.nextEpoch(), replica);
         transformer = transformer.with(prev.placements.unbuild().with(metaParams, builder.build()).build());
 
-        return Transformation.success(transformer.with(updateInProgressSequenes.apply(prev.inProgressSequences)),
+        return Transformation.success(transformer.with(updateInProgressSequenes.apply(prev.inProgressSequences, null)),
                                       EntireRange.affectedRanges(prev));
     }
 
-    public static Transformation.Result executeRemove(ClusterMetadata prev, NodeId nodeId, Function<InProgressSequences, InProgressSequences> updateInProgressSequenes)
+    public static Transformation.Result executeRemove(ClusterMetadata prev, NodeId nodeId, TransformFn<InProgressSequences, InProgressSequences> updateInProgressSequenes) throws Transformation.RejectedTransformationException
     {
         ClusterMetadata.Transformer transformer = prev.transformer();
         InetAddressAndPort endpoint = prev.directory.endpoint(nodeId);
@@ -163,7 +161,7 @@ public class ReconfigureCMS extends InProgressSequence<ReconfigureCMS>
             return new Transformation.Rejected(INVALID, String.format("Removing %s will leave no nodes in CMS", endpoint));
 
         return Transformation.success(transformer.with(prev.placements.unbuild().with(metaParams, proposed).build())
-                                                 .with(updateInProgressSequenes.apply(prev.inProgressSequences)),
+                                                 .with(updateInProgressSequenes.apply(prev.inProgressSequences, null)),
                                       EntireRange.affectedRanges(prev));
     }
 
@@ -421,5 +419,10 @@ public class ReconfigureCMS extends InProgressSequence<ReconfigureCMS>
                 return 0;
             }
         }
+    }
+
+    public interface TransformFn<T1, T2>
+    {
+        T1 apply(T1 v1, T2 v2) throws Transformation.RejectedTransformationException;
     }
 }

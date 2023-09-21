@@ -87,10 +87,9 @@ public class BootWithMetadataTest
      * same code paths as the counterpart test in o.a.c.distributed.test.log, but in a unit test
      * it is much easier to generate random metadata, which need not actually be valid for a
      * running service, so that we can better exercise the deserialisation code.
-     * @throws IOException
      */
     @Test
-    public void bootFromExportedMetadataTest() throws IOException
+    public void bootFromExportedMetadataTest() throws Throwable
     {
         // sorting to preserve primary replicas requires real data in Directory
         // and DataPlacements, this test uses completely random data so disable it
@@ -180,7 +179,7 @@ public class BootWithMetadataTest
         return fromRead.epoch;
     }
 
-    private InProgressSequences addSequence(InProgressSequences sequences, InProgressSequence<?> seq)
+    private InProgressSequences addSequence(InProgressSequences sequences, InProgressSequence<?> seq) throws Transformation.RejectedTransformationException
     {
         return sequences.with(seq.sequenceKey(), seq);
     }
