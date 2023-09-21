@@ -1639,6 +1639,7 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean, 
         //notify snitches that Gossiper is about to start
         DatabaseDescriptor.getEndpointSnitch().gossiperStarting();
 
+        shutdownAnnounced.set(false);
         scheduledGossipTask = executor.scheduleWithFixedDelay(new GossipTask(),
                                                               Gossiper.intervalInMillis,
                                                               Gossiper.intervalInMillis,
