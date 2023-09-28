@@ -223,7 +223,7 @@ public class AlterSchema implements Transformation
             next = next.with(newPlacementsBuilder.build());
         }
 
-        return success(next, LockedRanges.AffectedRanges.EMPTY);
+        return Transformation.success(next, LockedRanges.AffectedRanges.EMPTY);
     }
 
     private static Map<ReplicationParams, Set<KeyspaceMetadata>> groupByReplication(Keyspaces keyspaces)

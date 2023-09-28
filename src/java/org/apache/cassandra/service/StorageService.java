@@ -75,6 +75,8 @@ import com.google.common.collect.Ordering;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.RateLimiter;
 import com.google.common.util.concurrent.Uninterruptibles;
+
+import org.apache.cassandra.tcm.transformations.cms.AdvanceCMSReconfiguration;
 import org.apache.cassandra.utils.progress.ProgressEvent;
 import org.apache.cassandra.utils.progress.ProgressEventType;
 import org.apache.commons.lang3.StringUtils;
@@ -150,7 +152,6 @@ import org.apache.cassandra.locator.EndpointsForToken;
 import org.apache.cassandra.locator.IEndpointSnitch;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.locator.LocalStrategy;
-import org.apache.cassandra.locator.MetaStrategy;
 import org.apache.cassandra.locator.RangesAtEndpoint;
 import org.apache.cassandra.locator.RangesByEndpoint;
 import org.apache.cassandra.locator.Replica;
@@ -203,12 +204,11 @@ import org.apache.cassandra.tcm.migration.GossipCMSListener;
 import org.apache.cassandra.tcm.ownership.MovementMap;
 import org.apache.cassandra.tcm.ownership.TokenMap;
 import org.apache.cassandra.tcm.ownership.VersionedEndpoints;
-import org.apache.cassandra.tcm.sequences.AddToCMS;
 import org.apache.cassandra.tcm.sequences.BootstrapAndJoin;
 import org.apache.cassandra.tcm.sequences.BootstrapAndReplace;
 import org.apache.cassandra.tcm.sequences.InProgressSequences;
 import org.apache.cassandra.tcm.sequences.LeaveStreams;
-import org.apache.cassandra.tcm.sequences.ProgressBarrier;
+import org.apache.cassandra.tcm.sequences.ReconfigureCMS;
 import org.apache.cassandra.tcm.sequences.ReplaceSameAddress;
 import org.apache.cassandra.tcm.transformations.Assassinate;
 import org.apache.cassandra.tcm.transformations.CancelInProgressSequence;
@@ -220,8 +220,6 @@ import org.apache.cassandra.tcm.transformations.Unregister;
 import org.apache.cassandra.tcm.transformations.Register;
 import org.apache.cassandra.tcm.transformations.Startup;
 import org.apache.cassandra.tcm.transformations.UnsafeJoin;
-import org.apache.cassandra.tcm.transformations.cms.EntireRange;
-import org.apache.cassandra.tcm.transformations.cms.RemoveFromCMS;
 import org.apache.cassandra.transport.ClientResourceLimits;
 import org.apache.cassandra.transport.ProtocolVersion;
 import org.apache.cassandra.utils.Clock;
@@ -869,7 +867,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             case REGISTERED:
             case LEFT:
                 if (isReplacing())
-                    maybeHandoverCMS(metadata, DatabaseDescriptor.getReplaceAddress());
+                    ReconfigureCMS.maybeReconfigureCMS(metadata, DatabaseDescriptor.getReplaceAddress());
 
                 ClusterMetadataService.instance().commit(startupSequence.get(),
                                                          (metadata_) -> null,
@@ -926,12 +924,12 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         initialized = true;
     }
 
-    private void finishInProgressSequences(NodeId self)
+    public void finishInProgressSequences(InProgressSequences.SequenceKey sequenceKey)
     {
         ClusterMetadata metadata = ClusterMetadata.current();
         while (true)
         {
-            InProgressSequence<?> sequence = metadata.inProgressSequences.get(self);
+            InProgressSequence<?> sequence = metadata.inProgressSequences.get(sequenceKey);
             if (sequence == null)
                 break;
             if (InProgressSequences.isLeave(sequence))
@@ -3629,62 +3627,6 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         return keys;
     }
 
-    public void maybeHandoverCMS(ClusterMetadata metadata, InetAddressAndPort toRemove)
-    {
-        Set<InetAddressAndPort> cmsMembers = metadata.placements.get(ReplicationParams.meta()).reads.byEndpoint().keySet();
-        if (cmsMembers.contains(toRemove))
-        {
-            if (metadata.directory.peerIds().size() == cmsMembers.size())
-                throw new IllegalStateException(String.format("Cannot complete operation as it will remove %1$s from the " +
-                                                              "Cluster Metadata Service, but there are no available " +
-                                                              "candidates to replace it. To continue, either expand the " +
-                                                              "cluster first or manually remove %1$s from the CMS to " +
-                                                              "temporarily reduce the replication factor of the CMS " +
-                                                              "keyspace. This operation may then be retried.",
-                                                              toRemove));
-
-            boolean nominated = false;
-            Set<InetAddressAndPort> tried = new HashSet<>();
-            for (Entry<NodeId, NodeAddresses> e : metadata.directory.addresses.entrySet())
-            {
-                InetAddressAndPort addr = e.getValue().broadcastAddress;
-                if (!cmsMembers.contains(addr))
-                {
-                    logger.info("Nominating an alternative CMS node ({}) before decommission.", addr);
-                    try
-                    {
-                        tried.add(addr);
-                        AddToCMS.initiate(e.getKey(), addr);
-                        nominated = true;
-                        break;
-                    }
-                    catch (IllegalStateException t)
-                    {
-                        logger.error("Could not successfully nominate " + addr, t);
-                    }
-                }
-            }
-            // TODO: implement a test for unbootstrap and alternative nomination with alternatives being down
-            // besides, this _still_ can easily nominate a down node.
-            if (!nominated)
-                throw new IllegalStateException(String.format("Could not nominate an alternative CMS node. Tried:%s", tried));
-
-            // We can force removal from the CMS as it doesn't alter the size of the service
-            Epoch epoch = ClusterMetadataService.instance().commit(new RemoveFromCMS(toRemove, true),
-                                                                   latest -> latest,
-                                                                   (latest, code, message) -> {
-                                                                       if (!ClusterMetadata.current().isCMSMember(toRemove))
-                                                                           return latest;
-                                                                       throw new IllegalStateException("Could not remove the current node from CMS: " + message);
-                                                                   }).epoch;
-            // Awaiting on the progress barrier will leave a log message in case it could not collect a majority. But we do not
-            // want to block the operation at that point, since for the purpose of executing CMS operations, we have already
-            // stopped being a CMS node, and for the purpose of either continuing or starting a leave sequence, we will not
-            // be able to collect a majority of CMS nodes during commit.
-            new ProgressBarrier(epoch, metadata.directory.location(metadata.myNodeId()), EntireRange.affectedRanges).await();
-        }
-    }
-
     public void decommission(boolean force)
     {
         decommission(force, true);
@@ -3701,7 +3643,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         ClusterMetadata metadata = ClusterMetadata.current();
         NodeId self = metadata.myNodeId();
 
-        maybeHandoverCMS(metadata, getBroadcastAddressAndPort());
+        ReconfigureCMS.maybeReconfigureCMS(metadata, getBroadcastAddressAndPort());
         InProgressSequence<?> inProgress = metadata.inProgressSequences.get(self);
 
         if (inProgress == null)
@@ -3942,7 +3884,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         if (metadata.inProgressSequences.contains(toRemove))
             throw new UnsupportedOperationException("Can not remove a node that has an in-progress sequence");
 
-        maybeHandoverCMS(metadata, endpoint);
+        ReconfigureCMS.maybeReconfigureCMS(metadata, endpoint);
 
         logger.info("starting removenode with {} {}", metadata.epoch, toRemove);
 
@@ -4436,6 +4378,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     private LinkedHashMap<InetAddressAndPort, Float> getEffectiveOwnership(String keyspace)
     {
         ClusterMetadata metadata = ClusterMetadata.current();
+        ReplicationParams replicationParams = null;
         AbstractReplicationStrategy strategy;
         if (keyspace != null)
         {
@@ -4450,6 +4393,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
                 throw new IllegalStateException("Ownership values for keyspaces with LocalStrategy are meaningless");
 
             strategy = keyspaceInstance.replicationStrategy;
+            replicationParams = keyspaceInstance.params.replication;
         }
         else
         {
@@ -4476,13 +4420,14 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             Keyspace keyspaceInstance = Schema.instance.getKeyspaceInstance(keyspace);
             if (keyspaceInstance == null)
                 throw new IllegalStateException("The node does not have " + keyspace + " yet, probably still bootstrapping. Effective ownership information is meaningless.");
+            replicationParams = keyspaceInstance.getMetadata().params.replication;
             strategy = keyspaceInstance.getReplicationStrategy();
         }
 
-        if (strategy instanceof MetaStrategy)
+        if (replicationParams.isMeta())
         {
             LinkedHashMap<InetAddressAndPort, Float> ownership = Maps.newLinkedHashMap();
-            metadata.placements.get(ReplicationParams.meta()).writes.byEndpoint().flattenValues().forEach((r) -> {
+            metadata.placements.get(replicationParams).writes.byEndpoint().flattenValues().forEach((r) -> {
                 ownership.put(r.endpoint(), 1.0f);
             });
             return ownership;
@@ -5828,15 +5773,63 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     }
 
     @Override
-    public void addToCms(List<String> ignoredEndpoints)
+    public void initializeCMS(List<String> ignoredEndpoints)
     {
-        ClusterMetadataService.instance().addToCms(ignoredEndpoints);
+        ClusterMetadataService.instance().upgradeFromGossip(ignoredEndpoints);
     }
 
     @Override
-    public void removeFromCms(boolean force)
+    public void resumeReconfigureCms()
     {
-        ClusterMetadataService.instance().removeFromCms(force);
+        StorageService.instance.finishInProgressSequences(ReconfigureCMS.SequenceKey.instance);
+    }
+
+    @Override
+    public void reconfigureCMS(int rf, boolean sync)
+    {
+        Runnable r = () -> ClusterMetadataService.instance().reconfigureCMS(ReplicationParams.simpleMeta(rf));
+        if (sync)
+            r.run();
+        else
+            ScheduledExecutors.nonPeriodicTasks.submit(r);
+    }
+
+    @Override
+    public Map<String, List<String>> reconfigureCMSStatus()
+    {
+        ClusterMetadata metadata = ClusterMetadata.current();
+        ReconfigureCMS sequence = (ReconfigureCMS) metadata.inProgressSequences.get(ReconfigureCMS.SequenceKey.instance);
+        if (sequence == null)
+             return null;
+
+        AdvanceCMSReconfiguration advance = sequence.next;
+        Map<String, List<String >> status = new LinkedHashMap<>(); // to preserve order
+        if (advance.activeTransition != null)
+            status.put("ACTIVE", Collections.singletonList(metadata.directory.endpoint(advance.activeTransition.nodeId).toString()));
+
+        if (!advance.diff.additions.isEmpty())
+            status.put("ADDITIONS", advance.diff.additions.stream()
+                                                          .map(metadata.directory::endpoint)
+                                                          .map(Object::toString)
+                                                          .collect(Collectors.toList()));
+
+        if (!advance.diff.removals.isEmpty())
+            status.put("REMOVALS", advance.diff.removals.stream()
+                                                        .map(metadata.directory::endpoint)
+                                                        .map(Object::toString)
+                                                        .collect(Collectors.toList()));
+
+        return status;
+    }
+
+    @Override
+    public void reconfigureCMS(Map<String, Integer> rf, boolean sync)
+    {
+        Runnable r = () -> ClusterMetadataService.instance().reconfigureCMS(ReplicationParams.ntsMeta(rf));
+        if (sync)
+            r.run();
+        else
+            ScheduledExecutors.nonPeriodicTasks.submit(r);
     }
 
     @Override
@@ -5853,6 +5846,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         info.put("EPOCH", Long.toString(metadata.epoch.getEpoch()));
         info.put("LOCAL_PENDING", Integer.toString(ClusterMetadataService.instance().log().pendingBufferSize()));
         info.put("COMMITS_PAUSED", Boolean.toString(service.commitsPaused()));
+        info.put("REPLICATION_FACTOR", ReplicationParams.meta(metadata).toString());
         return info;
     }
 

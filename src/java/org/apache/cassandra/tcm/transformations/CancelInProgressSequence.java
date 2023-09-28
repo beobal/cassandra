@@ -63,7 +63,7 @@ public class CancelInProgressSequence implements Transformation
         // "revert(Applied)Effects"?
         ClusterMetadata.Transformer transformer = sequence.cancel(prev)
                                                           .with(prev.inProgressSequences.without(nodeId));
-        return success(transformer, LockedRanges.AffectedRanges.EMPTY);
+        return Transformation.success(transformer, LockedRanges.AffectedRanges.EMPTY);
     }
 
     @Override

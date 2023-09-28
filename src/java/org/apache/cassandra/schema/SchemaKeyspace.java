@@ -459,7 +459,8 @@ public final class SchemaKeyspace
         builder.update(Keyspaces)
                .row()
                .add(KeyspaceParams.Option.DURABLE_WRITES.toString(), params.durableWrites)
-               .add(KeyspaceParams.Option.REPLICATION.toString(), params.replication.asMap());
+               .add(KeyspaceParams.Option.REPLICATION.toString(),
+                    (params.replication.isMeta() ? params.replication.asNonMeta() : params.replication).asMap());
 
         return builder;
     }
@@ -934,7 +935,11 @@ public final class SchemaKeyspace
         UntypedResultSet.Row row = query(query, keyspaceName).one();
         boolean durableWrites = row.getBoolean(KeyspaceParams.Option.DURABLE_WRITES.toString());
         Map<String, String> replication = row.getFrozenTextMap(KeyspaceParams.Option.REPLICATION.toString());
-        return KeyspaceParams.create(durableWrites, replication);
+        KeyspaceParams params = KeyspaceParams.create(durableWrites, replication);
+        if (keyspaceName.equals(SchemaConstants.METADATA_KEYSPACE_NAME))
+            params = new KeyspaceParams(params.durableWrites, params.replication.asMeta());
+
+        return params;
     }
 
     private static Types fetchTypes(String keyspaceName)

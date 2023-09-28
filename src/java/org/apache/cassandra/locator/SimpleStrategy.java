@@ -41,7 +41,6 @@ import org.apache.cassandra.tcm.ownership.DataPlacement;
 import org.apache.cassandra.tcm.ownership.PlacementForRange;
 import org.apache.cassandra.tcm.ownership.VersionedEndpoints;
 
-
 /**
  * This class returns the nodes responsible for a given
  * key but does not respect rack awareness. Basically
@@ -50,7 +49,8 @@ import org.apache.cassandra.tcm.ownership.VersionedEndpoints;
  */
 public class SimpleStrategy extends AbstractReplicationStrategy
 {
-    private static final String REPLICATION_FACTOR = "replication_factor";
+    public static final String REPLICATION_FACTOR = "replication_factor";
+
     private static final Logger logger = LoggerFactory.getLogger(SimpleStrategy.class);
     private final ReplicationFactor rf;
 

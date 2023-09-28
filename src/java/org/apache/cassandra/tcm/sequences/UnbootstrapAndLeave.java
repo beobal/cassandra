@@ -35,7 +35,6 @@ import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.InProgressSequence;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.Location;
-import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.membership.NodeState;
 import org.apache.cassandra.tcm.ownership.DataPlacements;
 import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializer;
@@ -218,7 +217,7 @@ public class UnbootstrapAndLeave extends InProgressSequence<UnbootstrapAndLeave>
     }
 
     @Override
-    protected NodeId nodeId()
+    protected InProgressSequences.SequenceKey sequenceKey()
     {
         return startLeave.nodeId();
     }

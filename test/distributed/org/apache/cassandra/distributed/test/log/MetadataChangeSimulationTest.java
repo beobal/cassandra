@@ -22,6 +22,7 @@ import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -33,9 +34,11 @@ import java.util.TreeSet;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import com.google.common.collect.Sets;
 import org.junit.Assert;
 import org.junit.Test;
 
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.dht.Murmur3Partitioner.LongToken;
@@ -44,6 +47,7 @@ import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.distributed.test.log.PlacementSimulator.SimulatedPlacements;
 import org.apache.cassandra.locator.EndpointsForRange;
 import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.locator.CMSPlacementStrategy;
 import org.apache.cassandra.locator.Replica;
 import org.apache.cassandra.schema.ReplicationParams;
 import org.apache.cassandra.tcm.AtomicLongBackedProcessor;
@@ -52,6 +56,7 @@ import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.membership.Directory;
 import org.apache.cassandra.tcm.membership.Location;
 import org.apache.cassandra.tcm.membership.NodeAddresses;
+import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.membership.NodeVersion;
 import org.apache.cassandra.tcm.ownership.DataPlacement;
 import org.apache.cassandra.tcm.ownership.DataPlacements;
@@ -65,6 +70,11 @@ import static org.apache.cassandra.distributed.test.log.PlacementSimulator.nodeF
 
 public class MetadataChangeSimulationTest extends CMSTestBase
 {
+    static
+    {
+        DatabaseDescriptor.setPartitionerUnsafe(Murmur3Partitioner.instance);
+    }
+
     private static final Random rng = new Random(1);
 
     @Test
@@ -242,11 +252,9 @@ public class MetadataChangeSimulationTest extends CMSTestBase
 
     public void simulate(int toBootstrap, PlacementSimulator.ReplicationFactor rf, int concurrency) throws Throwable
     {
-        System.out.println(String.format("RUNNING SIMULATION. TO BOOTSTRAP: %s, RF: %s, CONCURRENCY: %s",
-                                         toBootstrap, rf, concurrency));
+        System.out.printf("RUNNING SIMULATION. TO BOOTSTRAP: %s, RF: %s, CONCURRENCY: %s%n",
+                          toBootstrap, rf, concurrency);
         long startTime = System.currentTimeMillis();
-        final List<Long> longs;
-
         ModelChecker<ModelState, CMSSut> modelChecker = new ModelChecker<>();
         ClusterMetadataService.unsetInstance();
         modelChecker.init(ModelState.empty(PlacementSimulator.nodeFactory(), toBootstrap, concurrency),
@@ -366,6 +374,83 @@ public class MetadataChangeSimulationTest extends CMSTestBase
                     .run();
     }
 
+    @Test
+    public void simulateDCAwareBounces() throws Throwable
+    {
+        Random random = new Random(1L);
+        for (int i = 0; i < 10; i++)
+        {
+            PlacementSimulator.ReplicationFactor ntsRf = new PlacementSimulator.NtsReplicationFactor(3, 3);
+            Map<String, Integer> cmsRf = new HashMap<>();
+            for (String s : ntsRf.asMap().keySet())
+                cmsRf.put(s, 3);
+
+            simulateBounces(ntsRf, new CMSPlacementStrategy.DatacenterAware(cmsRf, (cm, n) -> random.nextInt(10) > 1), random);
+        }
+    }
+
+    public void simulateBounces(PlacementSimulator.ReplicationFactor rf, CMSPlacementStrategy CMSConfigurationStrategy, Random random) throws Throwable
+    {
+
+        try(CMSSut sut = new CMSSut(AtomicLongBackedProcessor::new, false, rf))
+        {
+            ModelState state = ModelState.empty(PlacementSimulator.nodeFactory(), 300, 1);
+
+            for (Map.Entry<String, Integer> e : rf.asMap().entrySet())
+            {
+                int dc = Integer.parseInt(e.getKey().replace("datacenter", ""));
+
+                for (int i = 0; i < 100; i++)
+                {
+                    ModelChecker.Pair<ModelState, Node> registration = registerNewNode(state, sut, dc, random.nextInt(5) + 1);
+                    state = SimulatedOperation.joinWithoutBootstrap(registration.l, sut, registration.r);
+                }
+            }
+
+            Set<NodeId> newCms = CMSConfigurationStrategy.reconfigure(sut.service.metadata().directory.toNodeIds(sut.service.metadata().fullCMSMembers()),
+                                                                      sut.service.metadata());
+
+            ClusterMetadata metadata = sut.service.metadata();
+
+            for (int i = 0; i < 100; i++)
+            {
+                Set<NodeId> bouncing = new HashSet<>();
+                Set<NodeId> replicasFromBouncedReplicaSets = new HashSet<>();
+                int j = 0;
+                outer:
+                for (VersionedEndpoints.ForRange placements : sut.service.metadata().placements.get(rf.asKeyspaceParams().replication).writes.replicaGroups().values())
+                {
+                    List<NodeId> replicas = new ArrayList<>(metadata.directory.toNodeIds(placements.get().endpoints()));
+                    List<NodeId> bounceCandidates = new ArrayList<>();
+                    for (NodeId replica : replicas)
+                    {
+                        if (!replicasFromBouncedReplicaSets.contains(replica))
+                            bounceCandidates.add(replica);
+                        else
+                            continue outer;
+                    }
+
+                    if (!bounceCandidates.isEmpty())
+                    {
+                        NodeId toBounce = bounceCandidates.get(random.nextInt(bounceCandidates.size()));
+                        bouncing.add(toBounce);
+                        replicasFromBouncedReplicaSets.addAll(replicas);
+                    }
+                    j++;
+                }
+
+                int majority = newCms.size() / 2 + 1;
+                String msg = String.format("In a %d node cluster, %d nodes picked for bounce, %d out of %d CMS nodes%n",
+                                           metadata.directory.peerIds().size(),
+                                           bouncing.size(), Sets.intersection(newCms, bouncing).size(), newCms.size());
+                if (Sets.intersection(newCms, bouncing).size() >= majority)
+                    throw new AssertionError(msg);
+                else
+                    System.out.print(msg);
+            }
+        }
+    }
+
     public static void validatePlacementsFinal(CMSTestBase.CMSSut sut, ModelState modelState) throws Throwable
     {
         ClusterMetadata actualMetadata = sut.service.metadata();
@@ -462,7 +547,7 @@ public class MetadataChangeSimulationTest extends CMSTestBase
         StringBuilder sb = new StringBuilder();
         for (Map.Entry<?, ?> e : predicted.entrySet())
         {
-            sb.append(e.getKey()).append("=").append(e.getValue()).append(",\n");
+            sb.append(e.getKey()).append('=').append(e.getValue()).append(",\n");
         }
 
         return sb.toString();
@@ -672,7 +757,7 @@ public class MetadataChangeSimulationTest extends CMSTestBase
                                            "to write set, we expect to have at least %d ranges over-replicated, but got %d. RF %s (%s)",
                                            finalBootstrappingNodes + finalMovingNodes + finalLeavingNodes, finalBootstrappingNodes, finalMovingNodes, finalLeavingNodes, finalReplacedNodes, finalExpectedOverReplicated, finalOverreplicated,
                                            rf, placements),
-                       overreplicated >= expectedOverReplicated && overreplicated <= (expectedOverReplicated * rf.total() + 2 + movingNodes * rf.total()));;
+                       overreplicated >= expectedOverReplicated && overreplicated <= (expectedOverReplicated * rf.total() + 2 + movingNodes * rf.total()));
         }
     }
 }

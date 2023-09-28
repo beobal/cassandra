@@ -25,7 +25,7 @@ import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.ownership.DataPlacement;
-import org.apache.cassandra.tcm.transformations.cms.EntireRange;
+import org.apache.cassandra.tcm.ownership.EntireRange;
 
 public class LocalStrategy extends SystemStrategy
 {

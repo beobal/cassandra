@@ -20,19 +20,18 @@ package org.apache.cassandra.tcm.transformations.cms;
 
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.locator.Replica;
-import org.apache.cassandra.schema.ReplicationParams;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.InProgressSequence;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.NodeId;
-import org.apache.cassandra.tcm.ownership.DataPlacement;
 import org.apache.cassandra.tcm.sequences.AddToCMS;
 import org.apache.cassandra.tcm.sequences.InProgressSequences;
+import org.apache.cassandra.tcm.sequences.ReconfigureCMS;
 import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializer;
 
 import static org.apache.cassandra.exceptions.ExceptionCode.INVALID;
-import static org.apache.cassandra.tcm.transformations.cms.EntireRange.affectedRanges;
 
+@Deprecated
 public class FinishAddToCMS extends BaseMembershipTransformation
 {
     public static final AsymmetricMetadataSerializer<Transformation, FinishAddToCMS> serializer = new SerializerBase<FinishAddToCMS>()
@@ -70,13 +69,9 @@ public class FinishAddToCMS extends BaseMembershipTransformation
         if (!(sequence instanceof AddToCMS))
             return new Rejected(INVALID, "Can't execute finish join as cluster metadata contains a sequence of a different kind");
 
-        ClusterMetadata.Transformer transformer = prev.transformer();
-        DataPlacement.Builder builder = prev.placements.get(ReplicationParams.meta())
-                                                       .unbuild()
-                                                       .withReadReplica(prev.nextEpoch(), replica);
-        transformer = transformer.with(prev.placements.unbuild().with(ReplicationParams.meta(), builder.build()).build())
-                                 .with(prev.inProgressSequences.without(targetNode));
-        return success(transformer, affectedRanges);
+        return ReconfigureCMS.executeFinishAdd(prev,
+                                               targetNode,
+                                               inProgressSequences -> inProgressSequences.without(targetNode));
     }
 
     public String toString()

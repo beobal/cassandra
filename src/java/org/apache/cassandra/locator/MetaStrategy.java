@@ -27,8 +27,17 @@ import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.ownership.DataPlacement;
 
-import static org.apache.cassandra.tcm.transformations.cms.EntireRange.entireRange;
+import static org.apache.cassandra.tcm.ownership.EntireRange.entireRange;
 
+/**
+ * MetaStrategy is designed for distributed cluster metadata keyspace, and should not be used by
+ * the users directly. This strategy allows a configurable number of nodes to own an entire range and
+ * be responsible for cluster metadata queries.
+ *
+ * Nodes are added to and removed from placements using ReconfigureCMS sequence, and PrepareCMSReconfiguration/
+ * AdvanceCMSReconfiguration, according to CMSPlacementStrategy derived from params specified in
+ * options of MetaStrategy.
+ */
 public class MetaStrategy extends SystemStrategy
 {
     public MetaStrategy(String keyspaceName, Map<String, String> configOptions)
@@ -39,19 +48,20 @@ public class MetaStrategy extends SystemStrategy
     @Override
     public EndpointsForRange calculateNaturalReplicas(Token token, ClusterMetadata metadata)
     {
-        return metadata.placements.get(ReplicationParams.meta()).reads.forRange(entireRange).get();
+        return metadata.placements.get(ReplicationParams.meta(metadata)).reads.forRange(entireRange).get();
     }
 
     @Override
     public DataPlacement calculateDataPlacement(Epoch epoch, List<Range<Token>> ranges, ClusterMetadata metadata)
     {
-        return metadata.placements.get(ReplicationParams.meta());
+        return metadata.placements.get(ReplicationParams.meta(metadata));
     }
 
     @Override
     public ReplicationFactor getReplicationFactor()
     {
-        int rf = ClusterMetadata.current().placements.get(ReplicationParams.meta()).writes.forRange(entireRange).get().byEndpoint.size();
+        ClusterMetadata metadata = ClusterMetadata.current();
+        int rf = metadata.placements.get(ReplicationParams.meta(metadata)).writes.forRange(entireRange).get().byEndpoint.size();
         return ReplicationFactor.fullOnly(rf);
     }
 

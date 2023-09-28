@@ -49,7 +49,6 @@ public class CMSMembershipTest extends FuzzTestBase
                 cluster.get(idx).runOnInstance(() -> {
                     AddToCMS.initiate();
                     ClusterMetadataService.instance().commit(CustomTransformation.make(idx));
-
                 });
             }
         }
@@ -93,6 +92,19 @@ public class CMSMembershipTest extends FuzzTestBase
     {
         try (Cluster cluster = builder().withNodes(3).start())
         {
+            cluster.get(1).runOnInstance(() -> {
+                try
+                {
+                    // When there's only one CMS node left, we should reject even `forced` transformatiosn
+                    ClusterMetadataService.instance().commit(new RemoveFromCMS(FBUtilities.getBroadcastAddressAndPort(), true));
+                }
+                catch (IllegalStateException e)
+                {
+                    if (!e.getMessage().contains("would leave no members in CMS"))
+                        throw new AssertionError(e.getMessage());
+                }
+            });
+
             cluster.get(1).runOnInstance(() -> {
                 ClusterMetadata metadata = ClusterMetadata.current();
                 for (NodeId nodeId : metadata.directory.peerIds())

@@ -97,7 +97,6 @@ import org.apache.cassandra.io.sstable.metadata.StatsMetadata;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.locator.InetAddressAndPort;
-import org.apache.cassandra.locator.MetaStrategy;
 import org.apache.cassandra.locator.RangesAtEndpoint;
 import org.apache.cassandra.metrics.CompactionMetrics;
 import org.apache.cassandra.metrics.TableMetrics;
@@ -627,7 +626,7 @@ public class CompactionManager implements CompactionManagerMBean, ICompactionMan
             logger.info("Cleanup cannot run before a node has joined the ring");
             return AllSSTableOpStatus.ABORTED;
         }
-        if (cfStore.keyspace.getReplicationStrategy() instanceof MetaStrategy)
+        if (cfStore.keyspace.getMetadata().params.replication.isMeta())
             return AllSSTableOpStatus.SUCCESSFUL; // todo - we probably want to be able to cleanup MetaStrategy keyspaces
         final boolean hasIndexes = cfStore.indexManager.hasIndexes();
 

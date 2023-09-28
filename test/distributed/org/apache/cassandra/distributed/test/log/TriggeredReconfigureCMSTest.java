@@ -48,7 +48,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-public class CMSHandoffTest extends FuzzTestBase
+// Tests for operations such as remove, decomission, and replace triggering CMS reconfiguration
+public class TriggeredReconfigureCMSTest extends FuzzTestBase
 {
     @Test
     public void testRemoveCMSMember() throws IOException, ExecutionException, InterruptedException
@@ -59,21 +60,20 @@ public class CMSHandoffTest extends FuzzTestBase
                                                               .with(Feature.NETWORK, Feature.GOSSIP))
                                       .start())
         {
-            cluster.get(2).nodetoolResult("addtocms").asserts().success();
-            cluster.get(3).nodetoolResult("addtocms").asserts().success();
+            cluster.get(1).nodetoolResult("reconfigurecms", "--sync", "3").asserts().success();
             Set<String> cms = getCMSMembers(cluster.get(1));
             assertEquals(3, cms.size());
-            assertTrue(cms.contains("/127.0.0.1"));
-            assertTrue(cms.contains("/127.0.0.2"));
-            assertTrue(cms.contains("/127.0.0.3"));
 
-            String nodeId = cluster.get(2).callOnInstance(() -> ClusterMetadata.current().myNodeId().toUUID().toString());
-            cluster.get(2).shutdown().get();
+            String instanceToRemove =  cms.stream().filter(addr -> !addr.contains("/127.0.0.1")).findFirst().get();
+            IInvokableInstance nodeToRemove = cluster.stream().filter(i -> i.config().broadcastAddress().toString().contains(instanceToRemove)).findFirst().get();
+            String nodeId = nodeToRemove.callOnInstance(() -> ClusterMetadata.current().myNodeId().toUUID().toString());
+            nodeToRemove.shutdown().get();
+
             cluster.get(1).runOnInstance(() -> {
                 try
                 {
                     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
-                    while (FailureDetector.instance.isAlive(InetAddressAndPort.getByName("127.0.0.2")) &&
+                    while (FailureDetector.instance.isAlive(InetAddressAndPort.getByName(instanceToRemove.replace("/", ""))) &&
                            System.nanoTime() < deadline)
                         Uninterruptibles.sleepUninterruptibly(100, TimeUnit.MILLISECONDS);
                 }
@@ -87,14 +87,12 @@ public class CMSHandoffTest extends FuzzTestBase
             cms = getCMSMembers(cluster.get(1));
             assertEquals(3, cms.size());
             assertTrue(cms.contains("/127.0.0.1"));
-            assertFalse(cms.contains("/127.0.0.2"));
-            assertTrue(cms.contains("/127.0.0.3"));
-            assertTrue(cms.contains("/127.0.0.4") ^ cms.contains("/127.0.0.5"));
+            assertFalse(cms.contains(instanceToRemove));
         }
     }
 
     @Test
-    public void testDecommissionCMSMember() throws IOException, ExecutionException, InterruptedException
+    public void testDecommissionCMSMember() throws IOException
     {
         try (Cluster cluster = Cluster.build(5)
                                       .withNodeIdTopology(NetworkTopology.singleDcNetworkTopology(5, "dc0", "rack0"))
@@ -102,21 +100,12 @@ public class CMSHandoffTest extends FuzzTestBase
                                                               .with(Feature.NETWORK, Feature.GOSSIP))
                                       .start())
         {
-            cluster.get(2).nodetoolResult("addtocms").asserts().success();
-            cluster.get(3).nodetoolResult("addtocms").asserts().success();
+            cluster.get(1).nodetoolResult("reconfigurecms", "--sync", "3").asserts().success();
             Set<String> cms = getCMSMembers(cluster.get(1));
             assertEquals(3, cms.size());
-            assertTrue(cms.contains("/127.0.0.1"));
-            assertTrue(cms.contains("/127.0.0.2"));
-            assertTrue(cms.contains("/127.0.0.3"));
-
-            cluster.get(2).nodetoolResult("decommission").asserts().success();
+            cluster.get(1).nodetoolResult("decommission").asserts().success();
             cms = getCMSMembers(cluster.get(1));
             assertEquals(3, cms.size());
-            assertTrue(cms.contains("/127.0.0.1"));
-            assertFalse(cms.contains("/127.0.0.2"));
-            assertTrue(cms.contains("/127.0.0.3"));
-            assertTrue(cms.contains("/127.0.0.4") ^ cms.contains("/127.0.0.5"));
         }
     }
 
@@ -130,13 +119,10 @@ public class CMSHandoffTest extends FuzzTestBase
                                                               .with(Feature.NETWORK, Feature.GOSSIP))
                                       .start())
         {
-            cluster.get(2).nodetoolResult("addtocms").asserts().success();
-            cluster.get(3).nodetoolResult("addtocms").asserts().success();
+            cluster.get(1).nodetoolResult("reconfigurecms", "--sync", "3").asserts().success();
             Set<String> cms = getCMSMembers(cluster.get(1));
             assertEquals(3, cms.size());
             assertTrue(cms.contains("/127.0.0.1"));
-            assertTrue(cms.contains("/127.0.0.2"));
-            assertTrue(cms.contains("/127.0.0.3"));
 
             IInvokableInstance toReplace = cluster.get(2);
             Collection<String> replacedTokens = ClusterUtils.getLocalTokens(toReplace);
@@ -160,8 +146,6 @@ public class CMSHandoffTest extends FuzzTestBase
             assertEquals(3, cms.size());
             assertTrue(cms.contains("/127.0.0.1"));
             assertFalse(cms.contains("/127.0.0.2"));
-            assertTrue(cms.contains("/127.0.0.3"));
-            assertTrue(cms.contains("/127.0.0.4") ^ cms.contains("/127.0.0.5"));
         }
     }
 }

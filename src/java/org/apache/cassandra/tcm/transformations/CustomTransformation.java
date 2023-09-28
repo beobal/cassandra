@@ -173,7 +173,7 @@ public class CustomTransformation implements Transformation
         public Result execute(ClusterMetadata prev)
         {
             StringValue value = StringValue.create(str);
-            return success(prev.transformer().with(METADATA_KEY, value), LockedRanges.AffectedRanges.EMPTY);
+            return Transformation.success(prev.transformer().with(METADATA_KEY, value), LockedRanges.AffectedRanges.EMPTY);
         }
 
         public String toString()
@@ -231,7 +231,7 @@ public class CustomTransformation implements Transformation
         public Result execute(ClusterMetadata prev)
         {
             IntValue value = IntValue.create(v);
-            return success(prev.transformer().with(METADATA_KEY, value), LockedRanges.AffectedRanges.EMPTY);
+            return Transformation.success(prev.transformer().with(METADATA_KEY, value), LockedRanges.AffectedRanges.EMPTY);
         }
 
         public String toString()

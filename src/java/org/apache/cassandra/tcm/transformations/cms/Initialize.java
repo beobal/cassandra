@@ -28,12 +28,11 @@ import org.apache.cassandra.schema.Keyspaces;
 import org.apache.cassandra.schema.SystemDistributedKeyspace;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.Transformation;
+import org.apache.cassandra.tcm.ownership.EntireRange;
 import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializer;
 import org.apache.cassandra.tcm.serialization.Version;
 import org.apache.cassandra.tcm.transformations.ForceSnapshot;
 import org.apache.cassandra.tracing.TraceKeyspace;
-
-import static org.apache.cassandra.tcm.transformations.cms.EntireRange.affectedRanges;
 
 public class Initialize extends ForceSnapshot
 {
@@ -72,7 +71,7 @@ public class Initialize extends ForceSnapshot
         ClusterMetadata next = baseState;
         DistributedSchema initialSchema = new DistributedSchema(setUpDistributedSystemKeyspaces(next));
         ClusterMetadata.Transformer transformer = next.transformer().with(initialSchema);
-        return success(transformer, affectedRanges);
+        return Transformation.success(transformer, EntireRange.affectedRanges(prev));
     }
 
     public Keyspaces setUpDistributedSystemKeyspaces(ClusterMetadata next)

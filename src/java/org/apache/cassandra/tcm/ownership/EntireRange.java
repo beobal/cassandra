@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.tcm.transformations.cms;
+package org.apache.cassandra.tcm.ownership;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.dht.Range;
@@ -25,10 +25,8 @@ import org.apache.cassandra.locator.EndpointsForRange;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.locator.Replica;
 import org.apache.cassandra.schema.ReplicationParams;
+import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.Epoch;
-import org.apache.cassandra.tcm.ownership.DataPlacement;
-import org.apache.cassandra.tcm.ownership.PlacementForRange;
-import org.apache.cassandra.tcm.ownership.VersionedEndpoints;
 import org.apache.cassandra.tcm.sequences.LockedRanges;
 import org.apache.cassandra.utils.FBUtilities;
 
@@ -36,7 +34,11 @@ public class EntireRange
 {
     public static final Range<Token> entireRange = new Range<>(DatabaseDescriptor.getPartitioner().getMinimumToken(),
                                                                DatabaseDescriptor.getPartitioner().getMinimumToken());
-    public static final LockedRanges.AffectedRanges affectedRanges = LockedRanges.AffectedRanges.singleton(ReplicationParams.meta(), entireRange);
+    public static LockedRanges.AffectedRanges affectedRanges(ClusterMetadata metadata)
+    {
+        return LockedRanges.AffectedRanges.singleton(ReplicationParams.meta(metadata), entireRange);
+    }
+
     public static Replica replica(InetAddressAndPort addr)
     {
         return new Replica(addr, entireRange, true);

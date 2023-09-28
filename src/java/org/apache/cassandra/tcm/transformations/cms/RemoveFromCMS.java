@@ -30,20 +30,23 @@ import org.apache.cassandra.io.util.DataOutputPlus;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.schema.ReplicationParams;
 import org.apache.cassandra.tcm.ClusterMetadata;
+import org.apache.cassandra.tcm.InProgressSequence;
 import org.apache.cassandra.tcm.Transformation;
+import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.ownership.DataPlacement;
+import org.apache.cassandra.tcm.sequences.InProgressSequences;
+import org.apache.cassandra.tcm.sequences.ReconfigureCMS;
 import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializer;
 import org.apache.cassandra.tcm.serialization.Version;
 
 import static org.apache.cassandra.exceptions.ExceptionCode.INVALID;
-import static org.apache.cassandra.tcm.transformations.cms.EntireRange.affectedRanges;
 
+@Deprecated
 public class RemoveFromCMS extends BaseMembershipTransformation
 {
     private static final Logger logger = LoggerFactory.getLogger(RemoveFromCMS.class);
     public static final Serializer serializer = new Serializer();
-    // Note: this is not configurable as its value must always be consistent across all nodes
-    // TODO make this a configurable setting stored in ClusterMetadata itself
+    // Note: use CMS reconfiguration rather than manual addition/removal
     public static final int MIN_SAFE_CMS_SIZE = 3;
     public final boolean force;
 
@@ -60,32 +63,37 @@ public class RemoveFromCMS extends BaseMembershipTransformation
 
     public Result execute(ClusterMetadata prev)
     {
-        ClusterMetadata.Transformer transformer = prev.transformer();
-        if (!prev.fullCMSMembers().contains(endpoint))
-            return new Rejected(INVALID, String.format("%s is not currently a CMS member, cannot remove it", endpoint));
+        InProgressSequences sequences = prev.inProgressSequences;
+        NodeId nodeId = prev.directory.peerId(endpoint);
+        InProgressSequence<?> sequence = sequences.get(nodeId);
 
-        DataPlacement.Builder builder = prev.placements.get(ReplicationParams.meta()).unbuild();
-        builder.reads.withoutReplica(prev.nextEpoch(), replica);
-        builder.writes.withoutReplica(prev.nextEpoch(), replica);
-        DataPlacement proposed = builder.build();
-        int minProposedSize = Math.min(proposed.reads.forRange(replica.range()).size(),
-                                       proposed.writes.forRange(replica.range()).size());
-        if ( minProposedSize < MIN_SAFE_CMS_SIZE)
+        // This is theoretically permissible, but feels unsafe
+        if (sequence != null)
+            return new Transformation.Rejected(INVALID, "Can't remove node from CMS as there are ongoing range movements on it");
+
+        ReplicationParams metaParams = ReplicationParams.meta(prev);
+        DataPlacement placements = prev.placements.get(metaParams);
+
+        int minProposedSize = (int) Math.min(placements.reads.forRange(replica.range()).get().stream().filter(r -> !r.endpoint().equals(endpoint)).count(),
+                                             placements.writes.forRange(replica.range()).get().stream().filter(r -> !r.endpoint().equals(endpoint)).count());
+        if (minProposedSize < MIN_SAFE_CMS_SIZE)
         {
             logger.warn("Removing {} from CMS members would reduce the service size to {} which is below the " +
                         "configured safe quorum {}. This requires the force option which is set to {}, {}proceeding",
                         endpoint, minProposedSize, MIN_SAFE_CMS_SIZE, force, force ? "" : "not ");
             if (!force)
             {
-                return new Rejected(INVALID, String.format("Removing %s from the CMS would reduce the number of members to " +
-                                                           "%d, below the configured soft minimum %d. " +
-                                                           "To perform this operation anyway, resubmit with force=true",
-                                                           endpoint, minProposedSize, MIN_SAFE_CMS_SIZE));
+                return new Transformation.Rejected(INVALID, String.format("Removing %s from the CMS would reduce the number of members to " +
+                                                                          "%d, below the configured soft minimum %d. " +
+                                                                          "To perform this operation anyway, resubmit with force=true",
+                                                                          endpoint, minProposedSize, MIN_SAFE_CMS_SIZE));
             }
         }
 
-        return success(transformer.with(prev.placements.unbuild().with(ReplicationParams.meta(), proposed).build()),
-                       affectedRanges);
+        if (minProposedSize == 0)
+            return new Transformation.Rejected(INVALID, String.format("Removing %s from the CMS would leave no members in CMS.", endpoint));
+
+        return ReconfigureCMS.executeRemove(prev, prev.directory.peerId(endpoint), i -> i);
     }
 
     @Override

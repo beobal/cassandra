@@ -33,9 +33,9 @@ import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.membership.NodeVersion;
 import org.apache.cassandra.tcm.ownership.DataPlacement;
+import org.apache.cassandra.tcm.ownership.EntireRange;
 import org.apache.cassandra.tcm.serialization.VerboseMetadataSerializer;
 import org.apache.cassandra.tcm.serialization.Version;
-import org.apache.cassandra.tcm.transformations.cms.EntireRange;
 
 public class TransformClusterMetadataHelper
 {
@@ -63,9 +63,9 @@ public class TransformClusterMetadataHelper
         DatabaseDescriptor.setPartitionerUnsafe(partitioner);
         ClusterMetadataService.initializeForTools(false);
         ClusterMetadata metadata = ClusterMetadataService.deserializeClusterMetadata(sourceFile);
-        System.out.println("Old CMS: " + metadata.placements.get(ReplicationParams.meta()));
+        System.out.println("Old CMS: " + metadata.placements.get(ReplicationParams.meta(metadata)));
         metadata = makeCMS(metadata, InetAddressAndPort.getByNameUnchecked(args[1]));
-        System.out.println("New CMS: " + metadata.placements.get(ReplicationParams.meta()));
+        System.out.println("New CMS: " + metadata.placements.get(ReplicationParams.meta(metadata)));
         Path p = Files.createTempFile("clustermetadata", "dump");
         try (FileOutputStreamPlus out = new FileOutputStreamPlus(p))
         {
@@ -76,8 +76,9 @@ public class TransformClusterMetadataHelper
 
     public static ClusterMetadata makeCMS(ClusterMetadata metadata, InetAddressAndPort endpoint)
     {
-        Iterable<Replica> currentReplicas = metadata.placements.get(ReplicationParams.meta()).writes.byEndpoint().flattenValues();
-        DataPlacement.Builder builder = metadata.placements.get(ReplicationParams.meta()).unbuild();
+        ReplicationParams metaParams = ReplicationParams.meta(metadata);
+        Iterable<Replica> currentReplicas = metadata.placements.get(metaParams).writes.byEndpoint().flattenValues();
+        DataPlacement.Builder builder = metadata.placements.get(metaParams).unbuild();
         for (Replica replica : currentReplicas)
         {
             builder.withoutReadReplica(metadata.epoch, replica)
@@ -86,7 +87,7 @@ public class TransformClusterMetadataHelper
         Replica newCMS = EntireRange.replica(endpoint);
         builder.withReadReplica(metadata.epoch, newCMS)
                .withWriteReplica(metadata.epoch, newCMS);
-        return metadata.transformer().with(metadata.placements.unbuild().with(ReplicationParams.meta(),
+        return metadata.transformer().with(metadata.placements.unbuild().with(metaParams,
                                                                               builder.build())
                                                               .build())
                        .build().metadata;

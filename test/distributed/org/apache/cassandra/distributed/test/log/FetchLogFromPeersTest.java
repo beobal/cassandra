@@ -45,6 +45,7 @@ import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.log.Replication;
+import org.apache.cassandra.tcm.sequences.AddToCMS;
 import org.apache.cassandra.tcm.transformations.SealPeriod;
 
 import static org.junit.Assert.assertTrue;
@@ -258,8 +259,8 @@ public class FetchLogFromPeersTest extends TestBaseImpl
                                              .start()))
         {
             cluster.schemaChange(withKeyspace("create table %s.tbl (id int primary key)"));
-            cluster.get(2).nodetoolResult("addtocms").asserts().success();
-            cluster.get(3).nodetoolResult("addtocms").asserts().success();
+            cluster.get(2).runOnInstance(() -> AddToCMS.initiate());
+            cluster.get(3).runOnInstance(() -> AddToCMS.initiate());
             // isolate node2 from the other CMS members to ensure it's behind
             cluster.filters().inbound().from(1).to(2).drop();
             cluster.filters().inbound().from(3).to(2).drop();

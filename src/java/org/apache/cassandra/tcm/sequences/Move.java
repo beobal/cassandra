@@ -55,7 +55,6 @@ import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.InProgressSequence;
 import org.apache.cassandra.tcm.Transformation;
-import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.membership.NodeState;
 import org.apache.cassandra.tcm.ownership.DataPlacements;
 import org.apache.cassandra.tcm.ownership.MovementMap;
@@ -122,7 +121,7 @@ public class Move extends InProgressSequence<Move>
         if (next == Transformation.Kind.START_MOVE)
             return ProgressBarrier.immediate();
         ClusterMetadata metadata = ClusterMetadata.current();
-        return new ProgressBarrier(latestModification, metadata.directory.location(nodeId()), metadata.current().lockedRanges.locked.get(lockKey));
+        return new ProgressBarrier(latestModification, metadata.directory.location(startMove.nodeId()), metadata.lockedRanges.locked.get(lockKey));
     }
 
     @Override
@@ -255,10 +254,11 @@ public class Move extends InProgressSequence<Move>
     }
 
     @Override
-    protected NodeId nodeId()
+    protected InProgressSequences.SequenceKey sequenceKey()
     {
         return startMove.nodeId();
     }
+
     /**
      * Returns a mapping of destination -> source*, where the destination is the node that needs to stream from source
      *

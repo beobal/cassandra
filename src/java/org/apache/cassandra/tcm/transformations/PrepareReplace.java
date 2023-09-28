@@ -146,7 +146,7 @@ public class PrepareReplace implements Transformation
                                                    .with(newLockedRanges)
                                                    .with(prev.inProgressSequences.with(replacement(), plan));
         logger.info("Node {} is replacing {}, tokens {}", prev.directory.endpoint(replacement), prev.directory.endpoint(replaced), prev.tokenMap.tokens(replaced));
-        return success(proposed, rangesToLock);
+        return Transformation.success(proposed, rangesToLock);
     }
 
     @Override

@@ -565,4 +565,11 @@ public class ProgressBarrier
                ", affectedPeers=" + affectedRanges +
                '}';
     }
+
+    @VisibleForTesting
+    public static void propagateLast(LockedRanges.AffectedRanges ranges)
+    {
+        ClusterMetadata metadata = ClusterMetadata.current();
+        new ProgressBarrier(metadata.epoch, metadata.directory.location(metadata.myNodeId()), ranges).await();
+    }
 }

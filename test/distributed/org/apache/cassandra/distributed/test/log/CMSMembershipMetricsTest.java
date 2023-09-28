@@ -30,6 +30,7 @@ import org.apache.cassandra.distributed.impl.DistributedTestSnitch;
 import org.apache.cassandra.distributed.test.TestBaseImpl;
 import org.apache.cassandra.gms.FailureDetector;
 import org.apache.cassandra.metrics.TCMMetrics;
+import org.apache.cassandra.tcm.sequences.AddToCMS;
 import org.awaitility.Awaitility;
 
 import static org.junit.Assert.assertEquals;
@@ -48,13 +49,13 @@ public class CMSMembershipMetricsTest extends TestBaseImpl
             assertCMSMembership(1, cluster.get(1));
             assertCMSMembership(0, cluster.get(2), cluster.get(3));
 
-            cluster.get(2).nodetoolResult("addtocms").asserts().success();
+            cluster.get(2).runOnInstance(() -> AddToCMS.initiate());
             cluster.forEach(i -> assertMembershipSize(2, i));
             cluster.forEach(i -> assertUnreachableCMSMembers(0, i));
             assertCMSMembership(1, cluster.get(1), cluster.get(2));
             assertCMSMembership(0, cluster.get(3));
 
-            cluster.get(3).nodetoolResult("addtocms").asserts().success();
+            cluster.get(3).runOnInstance(() -> AddToCMS.initiate());
             cluster.forEach(i -> assertMembershipSize(3, i));
             cluster.forEach(i -> assertUnreachableCMSMembers(0, i));
             assertCMSMembership(1, cluster.get(1), cluster.get(2), cluster.get(3));

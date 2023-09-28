@@ -61,7 +61,7 @@ public class SealPeriod implements Transformation
         if (prev.lastInPeriod)
             return new Rejected(INVALID, "Have just sealed this period");
 
-        return success(prev.transformer(true), LockedRanges.AffectedRanges.EMPTY);
+        return Transformation.success(prev.transformer(true), LockedRanges.AffectedRanges.EMPTY);
     }
 
     static class Serializer implements AsymmetricMetadataSerializer<Transformation, SealPeriod>

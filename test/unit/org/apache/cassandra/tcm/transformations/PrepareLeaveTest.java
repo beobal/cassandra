@@ -37,6 +37,7 @@ import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.schema.DistributedMetadataLogKeyspace;
 import org.apache.cassandra.schema.DistributedSchema;
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.KeyspaceParams;
@@ -80,7 +81,7 @@ public class PrepareLeaveTest
     @Test
     public void testCheckRF_Simple() throws UnknownHostException
     {
-        Keyspaces kss = Keyspaces.NONE.with(KSM);
+        Keyspaces kss = Keyspaces.of(DistributedMetadataLogKeyspace.initialMetadata(), KSM);
         ClusterMetadata metadata = prepMetadata(kss, 2, 2);
         assertTrue(executeLeave(metadata));
         // should be rejected:
@@ -91,7 +92,7 @@ public class PrepareLeaveTest
     @Test
     public void testCheckRF_NTS() throws UnknownHostException
     {
-        Keyspaces kss = Keyspaces.NONE.with(KSM_NTS);
+        Keyspaces kss = Keyspaces.of(DistributedMetadataLogKeyspace.initialMetadata(), KSM_NTS);
         ClusterMetadata metadata = prepMetadata(kss, 4, 4);
         assertTrue(executeLeave(metadata));
         // should be accepted (4 nodes in dc1 where we remove the host):

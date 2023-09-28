@@ -135,7 +135,7 @@ public class PrepareLeave implements Transformation
         ClusterMetadata.Transformer next = prev.transformer()
                                                .with(prev.lockedRanges.lock(unlockKey, rangesToLock))
                                                .with(prev.inProgressSequences.with(leaving, plan));
-        return success(next, rangesToLock);
+        return Transformation.success(next, rangesToLock);
     }
 
     private boolean validateReplicationForDecommission(ClusterMetadata proposed)

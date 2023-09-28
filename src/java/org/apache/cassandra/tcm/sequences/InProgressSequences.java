@@ -36,22 +36,23 @@ import org.apache.cassandra.tcm.InProgressSequence;
 import org.apache.cassandra.tcm.MetadataValue;
 import org.apache.cassandra.tcm.membership.NodeId;
 
-import org.apache.cassandra.tcm.serialization.MetadataSerializer;
 import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializer;
+import org.apache.cassandra.tcm.serialization.MetadataSerializer;
 import org.apache.cassandra.tcm.serialization.Version;
 
 import static org.apache.cassandra.db.TypeSizes.sizeof;
 import static org.apache.cassandra.tcm.sequences.InProgressSequences.Kind.LEAVE;
+import static org.apache.cassandra.tcm.serialization.Version.V2;
 
 public class InProgressSequences implements MetadataValue<InProgressSequences>
 {
     public static final Serializer serializer = new Serializer();
-    
+
     public static InProgressSequences EMPTY = new InProgressSequences(Epoch.EMPTY, ImmutableMap.of());
-    private final ImmutableMap<NodeId, InProgressSequence<?>> state;
+    private final ImmutableMap<SequenceKey, InProgressSequence<?>> state;
     private final Epoch lastModified;
 
-    private InProgressSequences(Epoch lastModified, ImmutableMap<NodeId, InProgressSequence<?>> state)
+    private InProgressSequences(Epoch lastModified, ImmutableMap<SequenceKey, InProgressSequence<?>> state)
     {
         this.lastModified = lastModified;
         this.state = state;
@@ -69,12 +70,12 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
         return lastModified;
     }
 
-    public boolean contains(NodeId nodeId)
+    public boolean contains(SequenceKey nodeId)
     {
         return state.containsKey(nodeId);
     }
 
-    public InProgressSequence<?> get(NodeId nodeId)
+    public InProgressSequence<?> get(SequenceKey nodeId)
     {
         return state.get(nodeId);
     }
@@ -84,11 +85,11 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
         return state.isEmpty();
     }
 
-    public InProgressSequences with(NodeId nodeId, InProgressSequence<?> sequence)
+    public InProgressSequences with(SequenceKey nodeId, InProgressSequence<?> sequence)
     {
-        ImmutableMap.Builder<NodeId, InProgressSequence<?>> builder = ImmutableMap.builder();
+        ImmutableMap.Builder<SequenceKey, InProgressSequence<?>> builder = ImmutableMap.builder();
         builder.put(nodeId, sequence);
-        for (Map.Entry<NodeId, InProgressSequence<?>> e : state.entrySet())
+        for (Map.Entry<SequenceKey, InProgressSequence<?>> e : state.entrySet())
         {
             if (e.getKey().equals(nodeId))
                 continue;
@@ -97,11 +98,11 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
         return new InProgressSequences(lastModified, builder.build());
     }
 
-    public InProgressSequences with(NodeId nodeId, Function<InProgressSequence<?>, InProgressSequence<?>> update)
+    public InProgressSequences with(SequenceKey nodeId, Function<InProgressSequence<?>, InProgressSequence<?>> update)
     {
-        ImmutableMap.Builder<NodeId, InProgressSequence<?>> builder = ImmutableMap.builder();
+        ImmutableMap.Builder<SequenceKey, InProgressSequence<?>> builder = ImmutableMap.builder();
 
-        for (Map.Entry<NodeId, InProgressSequence<?>> e : state.entrySet())
+        for (Map.Entry<SequenceKey, InProgressSequence<?>> e : state.entrySet())
         {
             if (e.getKey().equals(nodeId))
                 builder.put(e.getKey(), update.apply(e.getValue()));
@@ -111,11 +112,11 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
         return new InProgressSequences(lastModified, builder.build());
     }
 
-    public InProgressSequences without(NodeId nodeId)
+    public InProgressSequences without(SequenceKey nodeId)
     {
-        ImmutableMap.Builder<NodeId, InProgressSequence<?>> builder = ImmutableMap.builder();
+        ImmutableMap.Builder<SequenceKey, InProgressSequence<?>> builder = ImmutableMap.builder();
         boolean removed = false;
-        for (Map.Entry<NodeId, InProgressSequence<?>> e : state.entrySet())
+        for (Map.Entry<SequenceKey, InProgressSequence<?>> e : state.entrySet())
         {
             if (e.getKey().equals(nodeId))
                 removed = true;
@@ -147,11 +148,14 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
     public enum Kind
     {
         JOIN_OWNERSHIP_GROUP(AddToCMS.serializer),
+
         JOIN(BootstrapAndJoin.serializer),
         MOVE(Move.serializer),
         REPLACE(BootstrapAndReplace.serializer),
         LEAVE(UnbootstrapAndLeave.serializer),
-        REMOVE(UnbootstrapAndLeave.serializer)
+        REMOVE(UnbootstrapAndLeave.serializer),
+
+        RECONFIGURE_CMS(ReconfigureCMS.serializer)
         ;
 
         public final AsymmetricMetadataSerializer<InProgressSequence<?>, ? extends InProgressSequence<?>> serializer;
@@ -198,12 +202,24 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
         {
             Epoch.serializer.serialize(t.lastModified, out, version);
             out.writeInt(t.state.size());
-            for (Map.Entry<NodeId, InProgressSequence<?>> entry : t.state.entrySet())
+            for (Map.Entry<SequenceKey, InProgressSequence<?>> entry : t.state.entrySet())
             {
-                NodeId.serializer.serialize(entry.getKey(), out, version);
-                InProgressSequence<?> seq = entry.getValue();
-                out.writeUTF(seq.kind().name());
-                entry.getValue().kind().serializer.serialize(seq, out, version);
+                if (Version.UNKNOWN.isBefore(V2))
+                {
+                    NodeId.serializer.serialize((NodeId) entry.getKey(), out, version);
+                    InProgressSequence<?> seq = entry.getValue();
+                    out.writeUTF(seq.kind().name());
+                    entry.getValue().kind().serializer.serialize(seq, out, version);
+                }
+                else
+                {
+                    // Starting V2, we serialize the sequence first since we rely on the type during deserialization
+                    InProgressSequence<?> seq = entry.getValue();
+                    out.writeUTF(seq.kind().name());
+                    entry.getValue().kind().serializer.serialize(seq, out, version);
+                    MetadataSerializer<SequenceKey> keySerializer = (MetadataSerializer<SequenceKey>) seq.keySerializer();
+                    keySerializer.serialize(entry.getKey(), out, version);
+                }
             }
         }
 
@@ -211,13 +227,23 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
         {
             Epoch lastModified = Epoch.serializer.deserialize(in, version);
             int ipsSize = in.readInt();
-            ImmutableMap.Builder<NodeId, InProgressSequence<?>> res = ImmutableMap.builder();
+            ImmutableMap.Builder<SequenceKey, InProgressSequence<?>> res = ImmutableMap.builder();
             for (int i = 0; i < ipsSize; i++)
             {
-                NodeId nodeId = NodeId.serializer.deserialize(in, version);
-                Kind kind = Kind.valueOf(in.readUTF());
-                InProgressSequence<?> ips = kind.serializer.deserialize(in, version);
-                res.put(nodeId, ips);
+                if (Version.UNKNOWN.isBefore(V2))
+                {
+                    NodeId nodeId = NodeId.serializer.deserialize(in, version);
+                    Kind kind = Kind.valueOf(in.readUTF());
+                    InProgressSequence<?> ips = kind.serializer.deserialize(in, version);
+                    res.put(nodeId, ips);
+                }
+                else
+                {
+                    Kind kind = Kind.valueOf(in.readUTF());
+                    InProgressSequence<?> ips = kind.serializer.deserialize(in, version);
+                    SequenceKey key = ips.keySerializer().deserialize(in, version);
+                    res.put(key, ips);
+                }
             }
             return new InProgressSequences(lastModified, res.build());
         }
@@ -226,12 +252,23 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
         {
             long size = Epoch.serializer.serializedSize(t.lastModified, version);
             size += sizeof(t.state.size());
-            for (Map.Entry<NodeId, InProgressSequence<?>> entry : t.state.entrySet())
+            for (Map.Entry<SequenceKey, InProgressSequence<?>> entry : t.state.entrySet())
             {
-                size += NodeId.serializer.serializedSize(entry.getKey(), version);
-                InProgressSequence<?> seq = entry.getValue();
-                size += sizeof(seq.kind().name());
-                size += entry.getValue().kind().serializer.serializedSize(seq, version);
+                if (Version.UNKNOWN.isBefore(V2))
+                {
+                    size += NodeId.serializer.serializedSize((NodeId) entry.getKey(), version);
+                    InProgressSequence<?> seq = entry.getValue();
+                    size += sizeof(seq.kind().name());
+                    size += entry.getValue().kind().serializer.serializedSize(seq, version);
+                }
+                else
+                {
+                    InProgressSequence<?> seq = entry.getValue();
+                    size += sizeof(seq.kind().name());
+                    size += entry.getValue().kind().serializer.serializedSize(seq, version);
+                    MetadataSerializer<SequenceKey> keySerializer = (MetadataSerializer<SequenceKey>) seq.keySerializer();
+                    size += keySerializer.serializedSize(entry.getKey(), version);
+                }
             }
             return size;
         }
@@ -244,5 +281,12 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
                "lastModified=" + lastModified +
                ", state=" + state +
                '}';
+    }
+
+    /**
+     * Opaque key identifying the sequence
+     */
+    public interface SequenceKey
+    {
     }
 }

@@ -39,5 +39,6 @@ public class DescribeCMS extends NodeTool.NodeToolCmd
         System.out.printf("Epoch: %s%n", info.get("EPOCH"));
         System.out.printf("Local Pending Count: %s%n", info.get("LOCAL_PENDING"));
         System.out.printf("Commits Paused: %s%n", info.get("COMMITS_PAUSED"));
+        System.out.printf("Replication factor: %s%n", info.get("REPLICATION_FACTOR"));
     }
 }

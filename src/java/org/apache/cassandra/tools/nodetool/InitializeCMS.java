@@ -18,19 +18,22 @@
 
 package org.apache.cassandra.tools.nodetool;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import io.airlift.airline.Command;
 import io.airlift.airline.Option;
 import org.apache.cassandra.tools.NodeProbe;
 import org.apache.cassandra.tools.NodeTool;
 
-@Command(name = "removefromcms", description = "Remove this node from the cluster metadata service")
-public class RemoveFromCMS extends NodeTool.NodeToolCmd
+@Command(name = "initializecms", description = "Upgrade from gossip and initialize CMS")
+public class InitializeCMS extends NodeTool.NodeToolCmd
 {
-    @Option(title = "force", name = {"-f", "--force"}, description = "Ignore warnings if removal reduces the CMS membership to an unsafe size", required = false)
-    private boolean force = false;
+    @Option(title = "ignored endpoints", name = {"-i", "--ignore"}, description = "Hosts to ignore due to them being down", required = false)
+    private List<String> endpoint = new ArrayList<>();
     @Override
     protected void execute(NodeProbe probe)
     {
-        probe.getStorageService().removeFromCms(force);
+        probe.getStorageService().initializeCMS(endpoint);
     }
 }
