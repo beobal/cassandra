@@ -26,6 +26,7 @@ import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableMap;
 
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.cql3.CqlBuilder;
 import org.apache.cassandra.db.TypeSizes;
 import org.apache.cassandra.io.IVersionedSerializer;
@@ -46,8 +47,6 @@ import static org.apache.cassandra.db.TypeSizes.sizeof;
 
 public final class ReplicationParams
 {
-    private static final ReplicationParams META = new ReplicationParams(MetaStrategy.class, ImmutableMap.of());;
-
     public static final Serializer serializer = new Serializer();
     public static final MessageSerializer messageSerializer = new MessageSerializer();
 
@@ -62,7 +61,7 @@ public final class ReplicationParams
         this.options = ImmutableMap.copyOf(options);
     }
 
-    static ReplicationParams local()
+    public static ReplicationParams local()
     {
         return new ReplicationParams(LocalStrategy.class, ImmutableMap.of());
     }
@@ -77,6 +76,38 @@ public final class ReplicationParams
         return klass == MetaStrategy.class;
     }
 
+    /**
+     * For backward-compatibility reasons we are persisting replication params for cluster metadata as non-meta
+     * replication params. This means that when we are creating mutations, meta params will be written to as Network
+     * Topology Strategy (in local DC, if no DCs are specified), and when schema is loaded from system tables, we will
+     * create a meta strategy instance for cluster metadata keyspace.
+     */
+    public ReplicationParams asMeta()
+    {
+        assert !isMeta() : this;
+        if (options.containsKey(SimpleStrategy.REPLICATION_FACTOR))
+        {
+            Map<String, String> dcRf = new HashMap<>();
+            String rf = options.get(SimpleStrategy.REPLICATION_FACTOR);
+            dcRf.put(DatabaseDescriptor.getLocalDataCenter(), rf);
+            return new ReplicationParams(MetaStrategy.class, dcRf);
+        }
+
+        return new ReplicationParams(MetaStrategy.class, options);
+    }
+
+    /**
+     * Counterpart of `asMeta`, see comment for asMeta for details.
+     */
+    public ReplicationParams asNonMeta()
+    {
+        assert isMeta() : this;
+        if (options.containsKey(SimpleStrategy.REPLICATION_FACTOR))
+            return new ReplicationParams(SimpleStrategy.class, options);
+
+        return new ReplicationParams(NetworkTopologyStrategy.class, options);
+    }
+
     @VisibleForTesting
     public static ReplicationParams simple(int replicationFactor)
     {
@@ -88,10 +119,40 @@ public final class ReplicationParams
         return new ReplicationParams(SimpleStrategy.class, ImmutableMap.of("replication_factor", replicationFactor));
     }
 
-    // meta replication, i.e. the replication strategy used for topology decisions
-    public static ReplicationParams meta()
+    public static ReplicationParams simpleMeta(int replicationFactor)
     {
-        return META;
+        if (replicationFactor <= 0)
+            throw new IllegalStateException("Replication factor should be strictly positive");
+
+        Map<String, Integer> dcRf = new HashMap<>();
+        dcRf.put(DatabaseDescriptor.getLocalDataCenter(), replicationFactor);
+        return ntsMeta(dcRf);
+    }
+
+    public static ReplicationParams ntsMeta(Map<String, Integer> replicationFactor)
+    {
+        Map<String, String> rfAsString = new HashMap<>();
+        int aggregate = 0;
+        for (Map.Entry<String, Integer> e : replicationFactor.entrySet())
+        {
+            int rf = e.getValue();
+            aggregate += rf;
+            if (rf <= 0)
+                throw new IllegalStateException("Replication factor should be strictly positive: " + rf);
+            rfAsString.put(e.getKey(), Integer.toString(rf));
+        }
+
+        if (aggregate <= 0)
+            throw new IllegalArgumentException("Aggregate replication factor should be strictly positive: " + replicationFactor);
+        return new ReplicationParams(MetaStrategy.class, rfAsString);
+    }
+
+    // meta replication, i.e. the replication strategy used for topology decisions
+    public static ReplicationParams meta(ClusterMetadata metadata)
+    {
+        ReplicationParams metaParams = metadata.schema.getKeyspaceMetadata(SchemaConstants.METADATA_KEYSPACE_NAME).params.replication;
+        assert metaParams.isMeta() : metaParams;
+        return metaParams;
     }
 
     static ReplicationParams nts(Object... args)

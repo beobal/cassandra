@@ -31,21 +31,24 @@ import org.apache.cassandra.io.util.DataInputBuffer;
 import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.cassandra.io.util.DataOutputBuffer;
 import org.apache.cassandra.io.util.DataOutputPlus;
+import org.apache.cassandra.tcm.sequences.CancelCMSReconfiguration;
 import org.apache.cassandra.tcm.sequences.LockedRanges;
 import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializer;
 import org.apache.cassandra.tcm.serialization.VerboseMetadataSerializer;
 import org.apache.cassandra.tcm.serialization.Version;
 import org.apache.cassandra.tcm.transformations.*;
 import org.apache.cassandra.tcm.transformations.Startup;
+import org.apache.cassandra.tcm.transformations.cms.AdvanceCMSReconfiguration;
 import org.apache.cassandra.tcm.transformations.cms.FinishAddToCMS;
 import org.apache.cassandra.tcm.transformations.cms.Initialize;
 import org.apache.cassandra.tcm.transformations.cms.PreInitialize;
 import org.apache.cassandra.tcm.transformations.cms.RemoveFromCMS;
 import org.apache.cassandra.tcm.transformations.cms.StartAddToCMS;
+import org.apache.cassandra.tcm.transformations.cms.PrepareCMSReconfiguration;
 
 public interface Transformation
 {
-    Serializer serializer = new Serializer();
+    Serializer transformationSerializer = new Serializer();
 
     Kind kind();
 
@@ -56,7 +59,7 @@ public interface Transformation
         return false;
     }
 
-    default Success success(ClusterMetadata.Transformer transformer, LockedRanges.AffectedRanges affectedRanges)
+    static Success success(ClusterMetadata.Transformer transformer, LockedRanges.AffectedRanges affectedRanges)
     {
         ClusterMetadata.Transformer.Transformed transformed = transformer.build();
         return new Success(transformed.metadata, affectedRanges, transformed.modifiedKeys);
@@ -192,7 +195,13 @@ public interface Transformation
 
         STARTUP(() -> Startup.serializer),
 
-        CUSTOM(() -> CustomTransformation.serializer);
+        CUSTOM(() -> CustomTransformation.serializer),
+
+        PREPARE_SIMPLE_CMS_RECONFIGURATION(() -> PrepareCMSReconfiguration.Simple.serializer),
+        PREPARE_COMPLEX_CMS_RECONFIGURATION(() -> PrepareCMSReconfiguration.Complex.serializer),
+        ADVANCE_CMS_RECONFIGURATION(() -> AdvanceCMSReconfiguration.serializer),
+        CANCEL_CMS_RECONFIGURATION(() -> CancelCMSReconfiguration.serializer)
+        ;
 
         private final Supplier<AsymmetricMetadataSerializer<Transformation, ? extends Transformation>> serializer;
 

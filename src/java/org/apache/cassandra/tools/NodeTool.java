@@ -95,7 +95,6 @@ public class NodeTool
     {
         List<Class<? extends NodeToolCmdRunnable>> commands = newArrayList(
                 AbortBootstrap.class,
-                AddToCMS.class,
                 Assassinate.class,
                 CassHelp.class,
                 CfHistograms.class,
@@ -161,6 +160,7 @@ public class NodeTool
                 GossipInfo.class,
                 Import.class,
                 Info.class,
+                InitializeCMS.class,
                 InvalidateCIDRPermissionsCache.class,
                 InvalidateCounterCache.class,
                 InvalidateCredentialsCache.class,
@@ -184,6 +184,7 @@ public class NodeTool
                 Rebuild.class,
                 RebuildIndex.class,
                 RecompressSSTables.class,
+                ReconfigureCMS.class,
                 Refresh.class,
                 RefreshSizeEstimates.class,
                 ReloadLocalSchema.class,
@@ -191,7 +192,6 @@ public class NodeTool
                 ReloadSslCertificates.class,
                 ReloadTriggers.class,
                 RelocateSSTables.class,
-                RemoveFromCMS.class,
                 RemoveNode.class,
                 Repair.class,
                 ReplayBatchlog.class,

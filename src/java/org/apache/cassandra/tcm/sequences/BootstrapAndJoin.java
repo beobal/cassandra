@@ -46,7 +46,6 @@ import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.InProgressSequence;
 import org.apache.cassandra.tcm.Transformation;
-import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.membership.NodeState;
 import org.apache.cassandra.tcm.ownership.DataPlacement;
 import org.apache.cassandra.tcm.ownership.DataPlacements;
@@ -146,7 +145,7 @@ public class BootstrapAndJoin extends InProgressSequence<BootstrapAndJoin>
         if (next == Transformation.Kind.START_JOIN)
             return ProgressBarrier.immediate();
         ClusterMetadata metadata = ClusterMetadata.current();
-        return new ProgressBarrier(latestModification, metadata.directory.location(nodeId()), metadata.lockedRanges.locked.get(lockKey));
+        return new ProgressBarrier(latestModification, metadata.directory.location(startJoin.nodeId()), metadata.lockedRanges.locked.get(lockKey));
     }
 
     @Override
@@ -292,7 +291,7 @@ public class BootstrapAndJoin extends InProgressSequence<BootstrapAndJoin>
     }
 
     @Override
-    protected NodeId nodeId()
+    protected InProgressSequences.SequenceKey sequenceKey()
     {
         return startJoin.nodeId();
     }

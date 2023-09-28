@@ -232,7 +232,7 @@ public class SchemaChangeDuringRangeMovementTest extends CQLTester
         public Result execute(ClusterMetadata metadata)
         {
             LockedRanges newLocked = metadata.lockedRanges.lock(LockedRanges.keyFor(metadata.epoch), toLock);
-            return success(metadata.transformer().with(newLocked), toLock);
+            return Transformation.success(metadata.transformer().with(newLocked), toLock);
         }
     }
 
@@ -248,7 +248,7 @@ public class SchemaChangeDuringRangeMovementTest extends CQLTester
         public Result execute(ClusterMetadata metadata)
         {
             LockedRanges newLocked = LockedRanges.EMPTY;
-            return success(metadata.transformer().with(newLocked), LockedRanges.AffectedRanges.EMPTY);
+            return Transformation.success(metadata.transformer().with(newLocked), LockedRanges.AffectedRanges.EMPTY);
         }
     }
 }

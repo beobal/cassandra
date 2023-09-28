@@ -81,7 +81,7 @@ public class Register implements Transformation
 
         ClusterMetadata.Transformer next = prev.transformer()
                                                .register(addresses, location, version);
-        return success(next, LockedRanges.AffectedRanges.EMPTY);
+        return Transformation.success(next, LockedRanges.AffectedRanges.EMPTY);
     }
 
     public static NodeId maybeRegister()

@@ -112,12 +112,12 @@ public class PrepareMove implements Transformation
                                  finishMove,
                                  false);
 
-        return success(prev.transformer()
-                           .withNodeState(nodeId, NodeState.MOVING)
-                           .with(prev.lockedRanges.lock(lockKey, rangesToLock))
-                           .with(transitionPlan.toSplit.apply(prev.nextEpoch(), prev.placements))
-                           .with(prev.inProgressSequences.with(nodeId, sequence)),
-                       rangesToLock);
+        return Transformation.success(prev.transformer()
+                                          .withNodeState(nodeId, NodeState.MOVING)
+                                          .with(prev.lockedRanges.lock(lockKey, rangesToLock))
+                                          .with(transitionPlan.toSplit.apply(prev.nextEpoch(), prev.placements))
+                                          .with(prev.inProgressSequences.with(nodeId, sequence)),
+                                      rangesToLock);
     }
 
     public static class Serializer<T extends PrepareMove> implements AsymmetricMetadataSerializer<Transformation, T>

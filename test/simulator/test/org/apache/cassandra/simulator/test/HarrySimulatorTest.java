@@ -61,6 +61,7 @@ import org.apache.cassandra.distributed.fuzz.InJvmSut;
 import org.apache.cassandra.distributed.shared.WithProperties;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.net.Verb;
+import org.apache.cassandra.schema.ReplicationParams;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.simulator.*;
 import org.apache.cassandra.simulator.cluster.ClusterActionListener.NoOpListener;
@@ -77,7 +78,6 @@ import org.apache.cassandra.simulator.utils.KindOfSequence;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.membership.NodeState;
-import org.apache.cassandra.tcm.sequences.AddToCMS;
 import org.apache.cassandra.tcm.transformations.PrepareJoin;
 import org.apache.cassandra.utils.CloseableIterator;
 
@@ -151,8 +151,7 @@ public class HarrySimulatorTest
                          }
                      })));
                      work.add(work(lazy(() -> simulation.clusterActions.initializeCluster(new ClusterActions.InitialConfiguration(simulation.nodeState.joined(), new int[0])))));
-                     work.add(work(addToCMS(simulation.simulated, simulation.cluster, 5),
-                                   addToCMS(simulation.simulated, simulation.cluster, 9)));
+                     work.add(work(reconfigureCMS(simulation.simulated, simulation.cluster, 2, true)));
                      work.add(work(simulation.clusterActions.schemaChange(1,
                                                                           String.format("CREATE KEYSPACE %s WITH replication = {'class': 'NetworkTopologyStrategy', " + rfString + "};",
                                                                                         simulation.harryRun.schemaSpec.keyspace))));
@@ -181,7 +180,6 @@ public class HarrySimulatorTest
                          {
                              node = registeredNodes.remove(0);
                              long token = simulation.simulated.random.uniform(Long.MIN_VALUE, Long.MAX_VALUE);
-                             work.add(work(addToCMS(simulation.simulated, simulation.cluster, node)));
                              work.add(work(ActionList.of(bootstrap(simulation.simulated, simulation.cluster, token, node)),
                                            generate(rowsPerPhase, simulation, cl)
                              ));
@@ -360,13 +358,13 @@ public class HarrySimulatorTest
     public static Map<Verb, FutureActionScheduler> networkSchedulers(int nodes, SimulatedTime time, RandomSource random)
     {
         Set<Verb> extremelyLossy = new HashSet<>(Arrays.asList(TCM_COMMIT_REQ, TCM_REPLICATION, TCM_NOTIFY_REQ,
-                                                               TCM_CURRENT_EPOCH_REQ, TCM_FETCH_CMS_LOG_REQ, TCM_FETCH_PEER_LOG_REQ,
+                                                               TCM_FETCH_CMS_LOG_REQ, TCM_FETCH_PEER_LOG_REQ,
                                                                TCM_INIT_MIG_RSP, TCM_INIT_MIG_REQ, TCM_ABORT_MIG,
                                                                TCM_DISCOVER_RSP, TCM_DISCOVER_REQ));
 
         Set<Verb> somewhatSlow = new HashSet<>(Arrays.asList(BATCH_STORE_REQ, BATCH_STORE_RSP));
 
-        Set<Verb> somewhatLossy = new HashSet<>(Arrays.asList(PAXOS2_COMMIT_REMOTE_REQ, PAXOS2_COMMIT_REMOTE_RSP, PAXOS2_PREPARE_RSP, PAXOS2_PREPARE_REQ, PAXOS2_PROPOSE_RSP, PAXOS2_PROPOSE_REQ,
+        Set<Verb> somewhatLossy = new HashSet<>(Arrays.asList(TCM_CURRENT_EPOCH_REQ, PAXOS2_COMMIT_REMOTE_REQ, PAXOS2_COMMIT_REMOTE_RSP, PAXOS2_PREPARE_RSP, PAXOS2_PREPARE_REQ, PAXOS2_PROPOSE_RSP, PAXOS2_PROPOSE_REQ,
                                                               PAXOS_PREPARE_RSP, PAXOS_PREPARE_REQ, PAXOS_PROPOSE_RSP, PAXOS_PROPOSE_REQ, PAXOS_COMMIT_RSP, PAXOS_COMMIT_REQ,
                                                               TCM_NOTIFY_RSP, TCM_FETCH_CMS_LOG_RSP, TCM_FETCH_PEER_LOG_RSP, TCM_COMMIT_RSP));
 
@@ -383,11 +381,27 @@ public class HarrySimulatorTest
         return schedulers;
     }
 
-    public Action addToCMS(SimulatedSystems simulated, Cluster cluster, int node)
+    public Action reconfigureCMS(SimulatedSystems simulated, Cluster cluster, int rf, boolean inEachDc)
     {
         return new SimulatedActionTask("", Action.Modifiers.RELIABLE_NO_TIMEOUTS, Action.Modifiers.RELIABLE_NO_TIMEOUTS, null, simulated,
-                                       new InterceptedExecution.InterceptedRunnableExecution((InterceptingExecutor) cluster.get(node).executor(),
-                                                                                             cluster.get(node).transfer((IIsolatedExecutor.SerializableRunnable) () -> AddToCMS.initiate())));
+                                       new InterceptedExecution.InterceptedRunnableExecution((InterceptingExecutor) cluster.get(1).executor(),
+                                                                                             cluster.get(1).transfer((IIsolatedExecutor.SerializableRunnable) () -> {
+                                                                                                 ReplicationParams params;
+                                                                                                 if (inEachDc)
+                                                                                                 {
+                                                                                                     Map<String, Integer> rfs = new HashMap<>();
+                                                                                                     for (String dc : ClusterMetadata.current().directory.knownDatacenters())
+                                                                                                     {
+                                                                                                         rfs.put(dc, rf);
+                                                                                                     }
+                                                                                                     params = ReplicationParams.ntsMeta(rfs);
+                                                                                                 }
+                                                                                                 else
+                                                                                                 {
+                                                                                                     params = ReplicationParams.simpleMeta(rf);
+                                                                                                 }
+                                                                                                 ClusterMetadataService.instance().reconfigureCMS(params);
+                                                                                             })));
     }
 
     /**

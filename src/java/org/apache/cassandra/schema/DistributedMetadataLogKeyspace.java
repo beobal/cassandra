@@ -276,8 +276,8 @@ public final class DistributedMetadataLogKeyspace
                                    .comment(description);
     }
 
-    public static KeyspaceMetadata metadata()
+    public static KeyspaceMetadata initialMetadata()
     {
-        return KeyspaceMetadata.create(SchemaConstants.METADATA_KEYSPACE_NAME, new KeyspaceParams(true, ReplicationParams.meta()), Tables.of(Log));
+        return KeyspaceMetadata.create(SchemaConstants.METADATA_KEYSPACE_NAME, new KeyspaceParams(true, ReplicationParams.simpleMeta(1)), Tables.of(Log));
     }
 }

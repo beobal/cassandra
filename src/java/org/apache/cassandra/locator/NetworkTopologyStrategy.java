@@ -220,11 +220,11 @@ public class NetworkTopologyStrategy extends AbstractReplicationStrategy
         return calculateNaturalReplicas(searchToken, replicatedRange, metadata.directory, metadata.tokenMap, datacenters);
     }
 
-    private static EndpointsForRange calculateNaturalReplicas(Token searchToken,
-                                                              Range<Token> replicatedRange,
-                                                              Directory directory,
-                                                              TokenMap tokens,
-                                                              Map<String, ReplicationFactor> datacenters)
+    public static EndpointsForRange calculateNaturalReplicas(Token searchToken,
+                                                             Range<Token> replicatedRange,
+                                                             Directory directory,
+                                                             TokenMap tokens,
+                                                             Map<String, ReplicationFactor> datacenters)
     {
         EndpointsForRange.Builder builder = new EndpointsForRange.Builder(replicatedRange);
         Set<Location> seenRacks = new HashSet<>();

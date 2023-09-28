@@ -39,8 +39,8 @@ import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.membership.NodeVersion;
 import org.apache.cassandra.tcm.ownership.DataPlacement;
+import org.apache.cassandra.tcm.ownership.EntireRange;
 import org.apache.cassandra.tcm.serialization.VerboseMetadataSerializer;
-import org.apache.cassandra.tcm.transformations.cms.EntireRange;
 
 import static org.apache.cassandra.distributed.shared.ClusterUtils.start;
 import static org.junit.Assert.assertEquals;
@@ -106,12 +106,12 @@ public class BootWithMetadataTest extends TestBaseImpl
                     Replica oldCMS = EntireRange.replica(InetAddressAndPort.getByNameUnchecked("127.0.0.1"));
                     Replica newCMS = EntireRange.replica(InetAddressAndPort.getByNameUnchecked("127.0.0.2"));
                     ClusterMetadata.Transformer transformer = metadata.transformer();
-                    DataPlacement.Builder builder = metadata.placements.get(ReplicationParams.meta()).unbuild()
+                    DataPlacement.Builder builder = metadata.placements.get(ReplicationParams.meta(metadata)).unbuild()
                                                                        .withoutReadReplica(metadata.nextEpoch(), oldCMS)
                                                                        .withoutWriteReplica(metadata.nextEpoch(), oldCMS)
                                                                        .withWriteReplica(metadata.nextEpoch(), newCMS)
                                                                        .withReadReplica(metadata.nextEpoch(), newCMS);
-                    transformer = transformer.with(metadata.placements.unbuild().with(ReplicationParams.meta(), builder.build()).build());
+                    transformer = transformer.with(metadata.placements.unbuild().with(ReplicationParams.meta(metadata), builder.build()).build());
                     ClusterMetadata toDump = transformer.build().metadata.forceEpoch(Epoch.create(1000));
                     Path p = Files.createTempFile("clustermetadata", "dump");
                     try (FileOutputStreamPlus out = new FileOutputStreamPlus(p))

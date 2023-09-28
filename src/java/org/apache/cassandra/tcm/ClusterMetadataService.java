@@ -45,6 +45,8 @@ import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.metrics.TCMMetrics;
 import org.apache.cassandra.net.IVerbHandler;
 import org.apache.cassandra.schema.DistributedSchema;
+import org.apache.cassandra.schema.ReplicationParams;
+import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.tcm.log.Entry;
 import org.apache.cassandra.tcm.log.LocalLog;
 import org.apache.cassandra.tcm.log.LogState;
@@ -56,14 +58,12 @@ import org.apache.cassandra.tcm.migration.Election;
 import org.apache.cassandra.tcm.migration.GossipProcessor;
 import org.apache.cassandra.tcm.ownership.PlacementProvider;
 import org.apache.cassandra.tcm.ownership.UniformRangePlacement;
-import org.apache.cassandra.tcm.sequences.AddToCMS;
-import org.apache.cassandra.tcm.sequences.ProgressBarrier;
+import org.apache.cassandra.tcm.sequences.ReconfigureCMS;
 import org.apache.cassandra.tcm.serialization.VerboseMetadataSerializer;
 import org.apache.cassandra.tcm.serialization.Version;
 import org.apache.cassandra.tcm.transformations.ForceSnapshot;
 import org.apache.cassandra.tcm.transformations.SealPeriod;
-import org.apache.cassandra.tcm.transformations.cms.EntireRange;
-import org.apache.cassandra.tcm.transformations.cms.RemoveFromCMS;
+import org.apache.cassandra.tcm.transformations.cms.PrepareCMSReconfiguration;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.JVMStabilityInspector;
 import org.apache.cassandra.utils.Pair;
@@ -275,50 +275,18 @@ public class ClusterMetadataService
         return ClusterMetadata.current().isCMSMember(peer);
     }
 
-    public void removeFromCms(boolean force)
-    {
-        ClusterMetadata metadata = metadata();
-        Set<InetAddressAndPort> existingMembers = metadata.fullCMSMembers();
-        InetAddressAndPort local = FBUtilities.getBroadcastAddressAndPort();
-        if (!existingMembers.contains(FBUtilities.getBroadcastAddressAndPort()))
-        {
-            logger.info("Not a CMS member");
-            throw new IllegalStateException("Not a CMS member");
-        }
-
-        int minSafeSize = RemoveFromCMS.MIN_SAFE_CMS_SIZE;
-        if ((existingMembers.size() <= minSafeSize) && !force)
-        {
-            String msg = String.format("Shrinking CMS size below %d requires the force option", minSafeSize);
-            logger.info(msg);
-            throw new IllegalStateException(msg);
-        }
-
-        Epoch epoch = ClusterMetadataService.instance().commit(new RemoveFromCMS(local, force)).epoch;
-        // Awaiting on the progress barrier will leave a log message in case it could not collect a majority. But we do not
-        // want to block the operation at that point, since for the purpose of executing CMS operations, we have already
-        // stopped being a CMS node, and for the purpose of either continuing or starting a leave sequence, we will not
-        // be able to collect a majority of CMS nodes during commit.
-        new ProgressBarrier(epoch, metadata.directory.location(metadata.myNodeId()), EntireRange.affectedRanges).await();
-    }
-
-    public void addToCms(List<String> ignoredEndpoints)
+    public void upgradeFromGossip(List<String> ignoredEndpoints)
     {
         Set<InetAddressAndPort> ignored = ignoredEndpoints.stream().map(InetAddressAndPort::getByNameUnchecked).collect(toSet());
         if (ignored.contains(FBUtilities.getBroadcastAddressAndPort()))
         {
-            String msg = "Can't ignore local host " + FBUtilities.getBroadcastAddressAndPort() + " when doing CMS migration";
+            String msg = String.format("Can't ignore local host %s when doing CMS migration", FBUtilities.getBroadcastAddressAndPort());
             logger.error(msg);
             throw new IllegalStateException(msg);
         }
 
         ClusterMetadata metadata = metadata();
         Set<InetAddressAndPort> existingMembers = metadata.fullCMSMembers();
-        if (existingMembers.contains(FBUtilities.getBroadcastAddressAndPort()))
-        {
-            logger.info("Already in the CMS");
-            throw new IllegalStateException("Already in the CMS");
-        }
 
         if (!metadata.directory.allAddresses().containsAll(ignored))
         {
@@ -368,9 +336,27 @@ public class ClusterMetadataService
         }
         else
         {
-            logger.info("Adding local node to existing CMS nodes; {}", existingMembers);
-            AddToCMS.initiate();
+            throw new IllegalStateException("Can't upgrade from gossip since CMS is already initialized");
         }
+    }
+
+    // This method is to be used _only_ for interactive purposes (i.e. nodetool), since it assumes no retries are going to be attempted on reject.
+    public void reconfigureCMS(ReplicationParams replicationParams)
+    {
+        Transformation transformation = new PrepareCMSReconfiguration.Complex(replicationParams);
+
+        ClusterMetadataService.instance().commit(transformation,
+                                                 (metadata_) -> metadata_,
+                                                 (metadata_, code, reason) -> {
+                                                     InProgressSequence<?> sequence = metadata_.inProgressSequences.get(ReconfigureCMS.SequenceKey.instance);
+                                                     if (sequence != null)
+                                                         return null;
+
+                                                     throw new IllegalStateException(String.format("Can not commit event to metadata service: \"%s\"(%s). Interrupting CMS Reconfiguration.",
+                                                                                                   code, reason));
+                                                 });
+
+        StorageService.instance.finishInProgressSequences(ReconfigureCMS.SequenceKey.instance);
     }
 
     public boolean applyFromGossip(ClusterMetadata expected, ClusterMetadata updated)

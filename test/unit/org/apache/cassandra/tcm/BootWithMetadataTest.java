@@ -182,14 +182,14 @@ public class BootWithMetadataTest
 
     private InProgressSequences addSequence(InProgressSequences sequences, InProgressSequence<?> seq)
     {
-        return sequences.with(seq.nodeId(), seq);
+        return sequences.with(seq.sequenceKey(), seq);
     }
 
     private AddToCMS addToCMS(Random random)
     {
         return new AddToCMS(epoch(random),
                             node(random),
-                            Collections.singletonList(randomEndpoint(random)),
+                            Collections.singleton(randomEndpoint(random)),
                             new FinishAddToCMS(randomEndpoint(random)));
     }
 

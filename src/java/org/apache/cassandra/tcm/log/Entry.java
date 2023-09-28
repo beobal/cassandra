@@ -92,14 +92,14 @@ public class Entry implements Comparable<Entry>
         {
             Id.serializer.serialize(t.id, out, version);
             Epoch.serializer.serialize(t.epoch, out, version);
-            Transformation.serializer.serialize(t.transform, out, version);
+            Transformation.transformationSerializer.serialize(t.transform, out, version);
         }
 
         public Entry deserialize(DataInputPlus in, Version version) throws IOException
         {
             Id entryId = Id.serializer.deserialize(in, version);
             Epoch epoch = Epoch.serializer.deserialize(in, version);
-            Transformation transform = Transformation.serializer.deserialize(in, version);
+            Transformation transform = Transformation.transformationSerializer.deserialize(in, version);
             return new Entry(entryId, epoch, transform);
         }
 
@@ -107,7 +107,7 @@ public class Entry implements Comparable<Entry>
         {
             return Id.serializer.serializedSize(t.id, version) +
                    Epoch.serializer.serializedSize(t.epoch, version) +
-                   Transformation.serializer.serializedSize(t.transform, version);
+                   Transformation.transformationSerializer.serializedSize(t.transform, version);
         }
     }
     public static class Id

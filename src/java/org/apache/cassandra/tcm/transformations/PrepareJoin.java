@@ -166,7 +166,7 @@ public class PrepareJoin implements Transformation
                                                    .with(startingPlacements)
                                                    .with(prev.inProgressSequences.with(nodeId, plan));
 
-        return success(proposed, rangesToLock);
+        return Transformation.success(proposed, rangesToLock);
     }
 
     public static abstract class Serializer<T extends PrepareJoin> implements AsymmetricMetadataSerializer<Transformation, T>

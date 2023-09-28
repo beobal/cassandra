@@ -83,7 +83,7 @@ public class PreInitialize implements Transformation
                                           true);
             dataPlacementBuilder.reads.withReplica(metadata.nextEpoch(), replica);
             dataPlacementBuilder.writes.withReplica(metadata.nextEpoch(), replica);
-            DataPlacements initialPlacement = metadata.placements.unbuild().with(ReplicationParams.meta(), dataPlacementBuilder.build()).build();
+            DataPlacements initialPlacement = metadata.placements.unbuild().with(ReplicationParams.meta(metadata), dataPlacementBuilder.build()).build();
 
             transformer.with(initialPlacement);
         }

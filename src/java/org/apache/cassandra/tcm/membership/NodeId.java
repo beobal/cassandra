@@ -27,10 +27,11 @@ import com.google.common.primitives.Ints;
 import org.apache.cassandra.db.TypeSizes;
 import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.cassandra.io.util.DataOutputPlus;
+import org.apache.cassandra.tcm.sequences.InProgressSequences;
 import org.apache.cassandra.tcm.serialization.MetadataSerializer;
 import org.apache.cassandra.tcm.serialization.Version;
 
-public class NodeId implements Comparable<NodeId>
+public class NodeId implements Comparable<NodeId>, InProgressSequences.SequenceKey
 {
     public static final Serializer serializer = new Serializer();
 

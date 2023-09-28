@@ -94,7 +94,7 @@ public class Commit
         {
             out.writeInt(serializationVersion.asInt());
             Entry.Id.serializer.serialize(t.entryId, out, serializationVersion);
-            Transformation.serializer.serialize(t.transform, out, serializationVersion);
+            Transformation.transformationSerializer.serialize(t.transform, out, serializationVersion);
             Epoch.serializer.serialize(t.lastKnown, out, serializationVersion);
         }
 
@@ -102,7 +102,7 @@ public class Commit
         {
             Version deserializationVersion = Version.fromInt(in.readInt());
             Entry.Id entryId = Entry.Id.serializer.deserialize(in, deserializationVersion);
-            Transformation transform = Transformation.serializer.deserialize(in, deserializationVersion);
+            Transformation transform = Transformation.transformationSerializer.deserialize(in, deserializationVersion);
             Epoch lastKnown = Epoch.serializer.deserialize(in, deserializationVersion);
             return new Commit(entryId, transform, lastKnown);
         }
@@ -110,7 +110,7 @@ public class Commit
         public long serializedSize(Commit t, int version)
         {
             return TypeSizes.sizeof(serializationVersion.asInt()) +
-                   Transformation.serializer.serializedSize(t.transform, serializationVersion) +
+                   Transformation.transformationSerializer.serializedSize(t.transform, serializationVersion) +
                    Entry.Id.serializer.serializedSize(t.entryId, serializationVersion) +
                    Epoch.serializer.serializedSize(t.lastKnown, serializationVersion);
         }

@@ -128,6 +128,14 @@ public class Directory implements MetadataValue<Directory>
                '}';
     }
 
+    public Set<NodeId> toNodeIds(Collection<InetAddressAndPort> addrs)
+    {
+        Set<NodeId> nodeIds = new HashSet<>();
+        for (InetAddressAndPort addr : addrs)
+            nodeIds.add(peerId(addr));
+        return nodeIds;
+    }
+
     @Override
     public Epoch lastModified()
     {

@@ -37,15 +37,15 @@ import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.Commit;
 import org.apache.cassandra.tcm.MetadataSnapshots;
 import org.apache.cassandra.tcm.Processor;
+import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.log.LocalLog;
 import org.apache.cassandra.tcm.log.LogStorage;
+import org.apache.cassandra.tcm.ownership.EntireRange;
 import org.apache.cassandra.tcm.ownership.UniformRangePlacement;
 import org.apache.cassandra.tcm.transformations.AlterSchema;
 import org.apache.cassandra.tcm.transformations.cms.Initialize;
 import org.apache.cassandra.utils.FBUtilities;
 import org.mockito.Mockito;
-
-import static org.apache.cassandra.tcm.transformations.cms.EntireRange.affectedRanges;
 
 public class CMSTestBase
 {
@@ -113,7 +113,7 @@ public class CMSTestBase
                     ClusterMetadata next = baseState;
                     DistributedSchema initialSchema = new DistributedSchema(prev.schema.getKeyspaces());
                     ClusterMetadata.Transformer transformer = next.transformer().with(initialSchema);
-                    return success(transformer, affectedRanges);
+                    return Transformation.success(transformer, EntireRange.affectedRanges(prev));
                 }
 
             });

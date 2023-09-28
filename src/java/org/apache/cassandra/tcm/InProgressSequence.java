@@ -22,10 +22,15 @@ import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.sequences.InProgressSequences;
 import org.apache.cassandra.tcm.sequences.SequenceState;
 import org.apache.cassandra.tcm.sequences.ProgressBarrier;
+import org.apache.cassandra.tcm.serialization.MetadataSerializer;
 
-public abstract class InProgressSequence<T extends InProgressSequence<T>>
+public abstract class InProgressSequence<SELF extends InProgressSequence<SELF>>
 {
     public abstract InProgressSequences.Kind kind();
+    public MetadataSerializer<? extends InProgressSequences.SequenceKey> keySerializer()
+    {
+        return NodeId.serializer;
+    }
 
     public abstract ProgressBarrier barrier();
 
@@ -49,7 +54,7 @@ public abstract class InProgressSequence<T extends InProgressSequence<T>>
     /**
      * Advance the state of in-progress sequence after execution
      */
-    public abstract T advance(Epoch waitForWatermark);
+    public abstract SELF advance(Epoch waitForWatermark);
 
     // TODO rename this. It really provides the result of undoing any steps in the sequence
     //      which have already been executed
@@ -63,16 +68,16 @@ public abstract class InProgressSequence<T extends InProgressSequence<T>>
      */
     protected abstract Transformation.Kind stepFollowing(Transformation.Kind kind);
 
-    protected abstract NodeId nodeId();
+    protected abstract InProgressSequences.SequenceKey sequenceKey();
 
     protected ClusterMetadata commit(Transformation transform)
     {
-        NodeId targetNode = nodeId();
+        InProgressSequences.SequenceKey sequenceKey = sequenceKey();
         assert nextStep() == transform.kind() : String.format(String.format("Expected %s to be next step, but got %s.", nextStep(), transform.kind()));
         return ClusterMetadataService.instance().commit(transform,
                       (metadata) -> metadata,
                       (metadata, code, reason) -> {
-                          InProgressSequence<?> seq = metadata.inProgressSequences.get(targetNode);
+                          InProgressSequence<?> seq = metadata.inProgressSequences.get(sequenceKey);
                           Transformation.Kind actual = seq == null ? null : seq.nextStep();
 
                           Transformation.Kind expectedNextOp = stepFollowing(transform.kind());

@@ -19,37 +19,21 @@
 package org.apache.cassandra.tcm.sequences;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.HashSet;
 import java.util.NoSuchElementException;
 import java.util.Objects;
-import java.util.Optional;
-import java.util.concurrent.ExecutionException;
-import java.util.function.Supplier;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.cassandra.gms.FailureDetector;
 import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.cassandra.io.util.DataOutputPlus;
 import org.apache.cassandra.locator.InetAddressAndPort;
-import org.apache.cassandra.locator.RangesAtEndpoint;
-import org.apache.cassandra.metrics.TCMMetrics;
-import org.apache.cassandra.schema.DistributedMetadataLogKeyspace;
-import org.apache.cassandra.schema.SchemaConstants;
-import org.apache.cassandra.service.ActiveRepairService;
-import org.apache.cassandra.streaming.PreviewKind;
-import org.apache.cassandra.streaming.StreamOperation;
-import org.apache.cassandra.streaming.StreamPlan;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.InProgressSequence;
-import org.apache.cassandra.tcm.Retry;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializer;
@@ -57,16 +41,15 @@ import org.apache.cassandra.tcm.serialization.Version;
 import org.apache.cassandra.tcm.transformations.cms.FinishAddToCMS;
 import org.apache.cassandra.tcm.transformations.cms.StartAddToCMS;
 import org.apache.cassandra.utils.FBUtilities;
-import org.apache.cassandra.utils.concurrent.Future;
 
 import static org.apache.cassandra.db.TypeSizes.sizeof;
 import static org.apache.cassandra.tcm.sequences.InProgressSequences.Kind.JOIN_OWNERSHIP_GROUP;
 import static org.apache.cassandra.tcm.sequences.SequenceState.continuable;
-import static org.apache.cassandra.tcm.transformations.cms.EntireRange.entireRange;
 
 /**
  * Add this or another node as a member of CMS.
  */
+@Deprecated
 public class AddToCMS extends InProgressSequence<AddToCMS>
 {
     private static final Logger logger = LoggerFactory.getLogger(AddToCMS.class);
@@ -74,7 +57,7 @@ public class AddToCMS extends InProgressSequence<AddToCMS>
 
     private final Epoch latestModification;
     private final NodeId toAdd;
-    private final List<InetAddressAndPort> streamCandidates;
+    private final Set<InetAddressAndPort> streamCandidates;
     private final FinishAddToCMS finishJoin;
 
     public static void initiate()
@@ -107,10 +90,10 @@ public class AddToCMS extends InProgressSequence<AddToCMS>
                                                                        });
 
         InProgressSequences.resume(sequence);
-        repairPaxosTopology();
+        ReconfigureCMS.repairPaxosTopology();
     }
 
-    public AddToCMS(Epoch latestModification, NodeId toAdd, List<InetAddressAndPort> streamCandidates, FinishAddToCMS join)
+    public AddToCMS(Epoch latestModification, NodeId toAdd, Set<InetAddressAndPort> streamCandidates, FinishAddToCMS join)
     {
         this.toAdd = toAdd;
         this.latestModification = latestModification;
@@ -130,77 +113,12 @@ public class AddToCMS extends InProgressSequence<AddToCMS>
         return finishJoin.kind();
     }
 
-    private void streamRanges() throws ExecutionException, InterruptedException
-    {
-        StreamPlan streamPlan = new StreamPlan(StreamOperation.BOOTSTRAP, 1, true, null, PreviewKind.NONE);
-        // Current node is the streaming target. We can pick any other live CMS node as a streaming source
-        if (finishJoin.getEndpoint().equals(FBUtilities.getBroadcastAddressAndPort()))
-        {
-            Optional<InetAddressAndPort> streamingSource = streamCandidates.stream().filter(FailureDetector.instance::isAlive).findFirst();
-            if (!streamingSource.isPresent())
-                throw new IllegalStateException(String.format("Can not start range streaming as all candidates (%s) are down", streamCandidates));
-            streamPlan.requestRanges(streamingSource.get(),
-                                     SchemaConstants.METADATA_KEYSPACE_NAME,
-                                     new RangesAtEndpoint.Builder(FBUtilities.getBroadcastAddressAndPort()).add(finishJoin.replicaForStreaming()).build(),
-                                     new RangesAtEndpoint.Builder(FBUtilities.getBroadcastAddressAndPort()).build(),
-                                     DistributedMetadataLogKeyspace.TABLE_NAME);
-        }
-        else
-        {
-            streamPlan.transferRanges(finishJoin.getEndpoint(),
-                                      SchemaConstants.METADATA_KEYSPACE_NAME,
-                                      new RangesAtEndpoint.Builder(finishJoin.replicaForStreaming().endpoint()).add(finishJoin.replicaForStreaming()).build(),
-                                      DistributedMetadataLogKeyspace.TABLE_NAME);
-        }
-        streamPlan.execute().get();
-    }
-
-    private static void repairPaxosTopology()
-    {
-        Retry.Backoff retry = new Retry.Backoff(TCMMetrics.instance.repairPaxosTopologyRetries);
-        List<Supplier<Future<?>>> remaining = ActiveRepairService.instance().repairPaxosForTopologyChangeAsync(SchemaConstants.METADATA_KEYSPACE_NAME,
-                                                                                                               Collections.singletonList(entireRange),
-                                                                                                               "bootstrap");
-
-        while (!retry.reachedMax())
-        {
-            Map<Supplier<Future<?>>, Future<?>> tasks = new HashMap<>();
-            for (Supplier<Future<?>> supplier : remaining)
-                tasks.put(supplier, supplier.get());
-            remaining.clear();
-            logger.info("Performing paxos topology repair on:", remaining);
-
-            for (Map.Entry<Supplier<Future<?>>, Future<?>> e : tasks.entrySet())
-            {
-                try
-                {
-                    e.getValue().get();
-                }
-                catch (ExecutionException t)
-                {
-                    logger.error("Caught an exception while repairing paxos topology.", e);
-                    remaining.add(e.getKey());
-                }
-                catch (InterruptedException t)
-                {
-                    return;
-                }
-            }
-
-            if (remaining.isEmpty())
-                return;
-
-            retry.maybeSleep();
-        }
-        logger.error(String.format("Added node as a CMS, but failed to repair paxos topology after this operation."));
-    }
-
     @Override
     public SequenceState executeNext()
     {
         try
         {
-            streamRanges();
+            ReconfigureCMS.streamRanges(finishJoin.replicaForStreaming(), streamCandidates);
             commit(finishJoin);
         }
         catch (Throwable t)
@@ -235,7 +153,7 @@ public class AddToCMS extends InProgressSequence<AddToCMS>
     }
 
     @Override
-    protected NodeId nodeId()
+    protected InProgressSequences.SequenceKey sequenceKey()
     {
         return toAdd;
     }
@@ -284,7 +202,7 @@ public class AddToCMS extends InProgressSequence<AddToCMS>
             Epoch barrier = Epoch.serializer.deserialize(in, version);
             FinishAddToCMS finish = FinishAddToCMS.serializer.deserialize(in, version);
             int streamCandidatesSize = in.readInt();
-            List<InetAddressAndPort> streamCandidates = new ArrayList<>();
+            Set<InetAddressAndPort> streamCandidates = new HashSet<>();
 
             for (int i = 0; i < streamCandidatesSize; i++)
                 streamCandidates.add(InetAddressAndPort.MetadataSerializer.serializer.deserialize(in, version));

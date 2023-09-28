@@ -19,17 +19,33 @@
 package org.apache.cassandra.tcm;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.schema.DistributedSchema;
+import org.apache.cassandra.schema.KeyspaceMetadata;
+import org.apache.cassandra.schema.KeyspaceParams;
+import org.apache.cassandra.schema.Keyspaces;
+import org.apache.cassandra.schema.ReplicationParams;
+import org.apache.cassandra.schema.SchemaConstants;
+import org.apache.cassandra.schema.Tables;
 import org.apache.cassandra.tcm.log.Entry;
 import org.apache.cassandra.tcm.log.LocalLog;
 import org.apache.cassandra.tcm.log.LogStorage;
+import org.apache.cassandra.tcm.membership.Directory;
 import org.apache.cassandra.tcm.ownership.UniformRangePlacement;
+
+import static org.apache.cassandra.schema.DistributedMetadataLogKeyspace.Log;
 
 public class StubClusterMetadataService extends ClusterMetadataService
 {
 
     public static StubClusterMetadataService forClientTools()
     {
-        return new StubClusterMetadataService(new ClusterMetadata(DatabaseDescriptor.getPartitioner()));
+        KeyspaceMetadata ks = KeyspaceMetadata.create(SchemaConstants.METADATA_KEYSPACE_NAME,
+                                                      new KeyspaceParams(true,
+                                                                         ReplicationParams.local().asMeta()),
+                                                      Tables.of(Log));
+        return new StubClusterMetadataService(new ClusterMetadata(DatabaseDescriptor.getPartitioner(),
+                                                                  Directory.EMPTY,
+                                                                  new DistributedSchema(Keyspaces.of(ks))));
     }
 
     public static StubClusterMetadataService forTesting()

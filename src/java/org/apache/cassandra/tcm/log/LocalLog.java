@@ -55,7 +55,6 @@ import org.apache.cassandra.tcm.listeners.SchemaListener;
 import org.apache.cassandra.tcm.listeners.UpgradeMigrationListener;
 import org.apache.cassandra.tcm.transformations.cms.PreInitialize;
 import org.apache.cassandra.tcm.transformations.ForceSnapshot;
-import org.apache.cassandra.schema.ReplicationParams;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.utils.Closeable;
 import org.apache.cassandra.utils.FBUtilities;
@@ -121,7 +120,8 @@ public abstract class LocalLog implements Closeable
         Transformation transform = PreInitialize.withFirstCMS(addr);
         append(new Entry(Entry.Id.NONE, FIRST, transform));
         waitForHighestConsecutive();
-        assert metadata().epoch.is(Epoch.FIRST) : ClusterMetadata.current().epoch + " " + ClusterMetadata.current().placements.get(ReplicationParams.meta());
+        metadata = metadata();
+        assert metadata.epoch.is(Epoch.FIRST) : String.format("Epoch: %s. CMS: %s", metadata.epoch, metadata.fullCMSMembers());
     }
 
     public ClusterMetadata metadata()

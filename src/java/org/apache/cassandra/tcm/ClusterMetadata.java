@@ -91,8 +91,10 @@ public class ClusterMetadata
     public final LockedRanges lockedRanges;
     public final InProgressSequences inProgressSequences;
     public final ImmutableMap<ExtensionKey<?,?>, ExtensionValue<?>> extensions;
-    private final Set<Replica> fullCMSReplicas;
-    private final Set<InetAddressAndPort> fullCMSEndpoints;
+
+    // These two fields are lazy but only for the test purposes, since their computation requires initialization of the log ks
+    private Set<Replica> fullCMSReplicas;
+    private Set<InetAddressAndPort> fullCMSEndpoints;
 
     public ClusterMetadata(IPartitioner partitioner)
     {
@@ -148,18 +150,19 @@ public class ClusterMetadata
         this.lockedRanges = lockedRanges;
         this.inProgressSequences = inProgressSequences;
         this.extensions = ImmutableMap.copyOf(extensions);
-
-        this.fullCMSReplicas = ImmutableSet.copyOf(placements.get(ReplicationParams.meta()).reads.byEndpoint().flattenValues());
-        this.fullCMSEndpoints = ImmutableSet.copyOf(placements.get(ReplicationParams.meta()).reads.byEndpoint().keySet());
     }
 
     public Set<InetAddressAndPort> fullCMSMembers()
     {
+        if (fullCMSEndpoints == null)
+            this.fullCMSEndpoints = ImmutableSet.copyOf(placements.get(ReplicationParams.meta(this)).reads.byEndpoint().keySet());
         return fullCMSEndpoints;
     }
 
     public Set<Replica> fullCMSMembersAsReplicas()
     {
+        if (fullCMSReplicas == null)
+            this.fullCMSReplicas = ImmutableSet.copyOf(placements.get(ReplicationParams.meta(this)).reads.byEndpoint().flattenValues());
         return fullCMSReplicas;
     }
 

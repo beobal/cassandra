@@ -79,7 +79,7 @@ public abstract class ApplyPlacementDeltas implements Transformation
         if (unlock)
             next = next.with(prev.lockedRanges.unlock(lockKey));
 
-        return success(next, prev.lockedRanges.locked.get(lockKey));
+        return Transformation.success(next, prev.lockedRanges.locked.get(lockKey));
     }
 
     @Override

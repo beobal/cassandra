@@ -116,7 +116,6 @@ import org.apache.cassandra.net.MessageFlag;
 import org.apache.cassandra.net.MessagingService;
 import org.apache.cassandra.net.RequestCallback;
 import org.apache.cassandra.net.Verb;
-import org.apache.cassandra.schema.DistributedMetadataLogKeyspace;
 import org.apache.cassandra.schema.PartitionDenylist;
 import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.SchemaConstants;
@@ -316,10 +315,10 @@ public class StorageProxy implements StorageProxyMBean
         {
             denylistMetrics.incrementWritesRejected();
             throw new InvalidRequestException(String.format("Unable to CAS write to denylisted partition [0x%s] in %s/%s",
-                                                            key.toString(), keyspaceName, cfName));
+                                                            key, keyspaceName, cfName));
         }
 
-        return (Paxos.useV2() || keyspaceName.equals(DistributedMetadataLogKeyspace.metadata().name))
+        return (Paxos.useV2() || keyspaceName.equals(SchemaConstants.METADATA_KEYSPACE_NAME))
                 ? Paxos.cas(key, request, consistencyForPaxos, consistencyForCommit, clientState)
                 : legacyCas(keyspaceName, cfName, key, request, consistencyForPaxos, consistencyForCommit, clientState, nowInSeconds, queryStartNanoTime);
     }
@@ -1841,7 +1840,7 @@ public class StorageProxy implements StorageProxyMBean
     private static PartitionIterator readWithPaxos(SinglePartitionReadCommand.Group group, ConsistencyLevel consistencyLevel, long queryStartNanoTime)
     throws InvalidRequestException, UnavailableException, ReadFailureException, ReadTimeoutException
     {
-        return (Paxos.useV2() || group.metadata().keyspace.equals(DistributedMetadataLogKeyspace.metadata().name))
+        return (Paxos.useV2() || group.metadata().keyspace.equals(SchemaConstants.METADATA_KEYSPACE_NAME))
                 ? Paxos.read(group, consistencyLevel)
                 : legacyReadWithPaxos(group, consistencyLevel, queryStartNanoTime);
     }

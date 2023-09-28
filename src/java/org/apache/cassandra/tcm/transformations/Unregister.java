@@ -62,7 +62,7 @@ public class Unregister implements Transformation
         ClusterMetadata.Transformer next = prev.transformer()
                                            .unregister(nodeId);
 
-        return success(next, LockedRanges.AffectedRanges.EMPTY);
+        return Transformation.success(next, LockedRanges.AffectedRanges.EMPTY);
     }
 
     @VisibleForTesting

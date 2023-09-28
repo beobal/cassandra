@@ -126,7 +126,7 @@ public class BootstrapAndReplace extends InProgressSequence<BootstrapAndReplace>
             return ProgressBarrier.immediate();
         ClusterMetadata metadata = ClusterMetadata.current();
         InetAddressAndPort replaced = metadata.directory.getNodeAddresses(startReplace.replaced()).broadcastAddress;
-        return new ProgressBarrier(latestModification, metadata.directory.location(nodeId()), metadata.lockedRanges.locked.get(lockKey), e -> !e.equals(replaced));
+        return new ProgressBarrier(latestModification, metadata.directory.location(startReplace.nodeId()), metadata.lockedRanges.locked.get(lockKey), e -> !e.equals(replaced));
     }
 
     public Transformation.Kind nextStep()
@@ -294,7 +294,7 @@ public class BootstrapAndReplace extends InProgressSequence<BootstrapAndReplace>
     }
 
     @Override
-    protected NodeId nodeId()
+    protected InProgressSequences.SequenceKey sequenceKey()
     {
         return startReplace.nodeId();
     }
