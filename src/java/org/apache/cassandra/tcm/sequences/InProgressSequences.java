@@ -123,7 +123,7 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
         if (contains(key))
         {
             throw new Transformation.RejectedTransformationException(String.format("Can not add a new in-progress sequence for %s, since there's already one assosicated with it: %s",
-                                                                                   key,
+                                                                                                        key,
                                                                                    get(key)));
         }
 
@@ -138,32 +138,32 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
         return new InProgressSequences(lastModified, builder.build());
     }
 
-    public InProgressSequences with(SequenceKey key, Function<InProgressSequence<?>, InProgressSequence<?>> update)
+    public <T2, T1 extends InProgressSequence<T2>> InProgressSequences with(SequenceKey key, Function<T1, T1> update)
     {
         ImmutableMap.Builder<SequenceKey, InProgressSequence<?>> builder = ImmutableMap.builder();
 
         for (Map.Entry<SequenceKey, InProgressSequence<?>> e : state.entrySet())
         {
             if (e.getKey().equals(key))
-                builder.put(e.getKey(), update.apply(e.getValue()));
+                builder.put(e.getKey(), update.apply((T1) e.getValue()));
             else
                 builder.put(e.getKey(), e.getValue());
         }
         return new InProgressSequences(lastModified, builder.build());
     }
 
-    public InProgressSequences without(SequenceKey keyd)
+    public InProgressSequences without(SequenceKey key)
     {
         ImmutableMap.Builder<SequenceKey, InProgressSequence<?>> builder = ImmutableMap.builder();
         boolean removed = false;
         for (Map.Entry<SequenceKey, InProgressSequence<?>> e : state.entrySet())
         {
-            if (e.getKey().equals(keyd))
+            if (e.getKey().equals(key))
                 removed = true;
             else
                 builder.put(e.getKey(), e.getValue());
         }
-        assert removed : String.format("Expected to remove an in-progress sequence for %s, but it wasn't found in in-progress sequences", keyd);
+        assert removed : String.format("Expected to remove an in-progress sequence for %s, but it wasn't found in in-progress sequences", key);
         return new InProgressSequences(lastModified, builder.build());
 
     }
@@ -187,6 +187,7 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
 
     public enum Kind
     {
+        @Deprecated
         JOIN_OWNERSHIP_GROUP(AddToCMS.serializer),
 
         JOIN(BootstrapAndJoin.serializer),

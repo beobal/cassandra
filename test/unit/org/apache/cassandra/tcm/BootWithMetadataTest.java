@@ -24,12 +24,11 @@ import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Random;
 import java.util.Set;
+import java.util.function.Predicate;
 
 import org.junit.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,44 +37,31 @@ import org.apache.cassandra.config.CassandraRelevantProperties;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.Murmur3Partitioner;
-import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.io.util.FileOutputStreamPlus;
 import org.apache.cassandra.tcm.membership.Directory;
 import org.apache.cassandra.tcm.membership.Location;
+import org.apache.cassandra.tcm.membership.MembershipUtils;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.membership.NodeVersion;
 import org.apache.cassandra.tcm.ownership.DataPlacements;
-import org.apache.cassandra.tcm.ownership.PlacementDeltas;
 import org.apache.cassandra.tcm.sequences.AddToCMS;
-import org.apache.cassandra.tcm.sequences.BootstrapAndJoin;
-import org.apache.cassandra.tcm.sequences.BootstrapAndReplace;
 import org.apache.cassandra.tcm.sequences.InProgressSequences;
-import org.apache.cassandra.tcm.sequences.LockedRanges;
-import org.apache.cassandra.tcm.sequences.Move;
-import org.apache.cassandra.tcm.sequences.UnbootstrapAndLeave;
-import org.apache.cassandra.tcm.sequences.UnbootstrapStreams;
 import org.apache.cassandra.tcm.serialization.VerboseMetadataSerializer;
-import org.apache.cassandra.tcm.transformations.PrepareJoin;
-import org.apache.cassandra.tcm.transformations.PrepareLeave;
-import org.apache.cassandra.tcm.transformations.PrepareMove;
-import org.apache.cassandra.tcm.transformations.PrepareReplace;
 import org.apache.cassandra.tcm.transformations.cms.FinishAddToCMS;
 import org.apache.cassandra.tools.TransformClusterMetadataHelper;
 import org.apache.cassandra.utils.FBUtilities;
 
-import static org.apache.cassandra.tcm.Transformation.Kind.MID_JOIN;
-import static org.apache.cassandra.tcm.Transformation.Kind.MID_LEAVE;
-import static org.apache.cassandra.tcm.Transformation.Kind.MID_MOVE;
-import static org.apache.cassandra.tcm.Transformation.Kind.MID_REPLACE;
 import static org.apache.cassandra.tcm.membership.MembershipUtils.nodeAddresses;
 import static org.apache.cassandra.tcm.membership.MembershipUtils.randomEndpoint;
-import static org.apache.cassandra.tcm.ownership.OwnershipUtils.randomDeltas;
 import static org.apache.cassandra.tcm.ownership.OwnershipUtils.randomPlacements;
 import static org.apache.cassandra.tcm.ownership.OwnershipUtils.randomTokens;
-import static org.apache.cassandra.tcm.ownership.OwnershipUtils.ranges;
+import static org.apache.cassandra.tcm.sequences.SequencesUtils.bootstrapAndJoin;
+import static org.apache.cassandra.tcm.sequences.SequencesUtils.bootstrapAndReplace;
 import static org.apache.cassandra.tcm.sequences.SequencesUtils.epoch;
 import static org.apache.cassandra.tcm.sequences.SequencesUtils.lockedRanges;
+import static org.apache.cassandra.tcm.sequences.SequencesUtils.move;
+import static org.apache.cassandra.tcm.sequences.SequencesUtils.unbootstrapAndLeave;
 import static org.junit.Assert.assertEquals;
 
 public class BootWithMetadataTest
@@ -144,11 +130,11 @@ public class BootWithMetadataTest
         t = t.with(lockedRanges(placements, random));
 
         InProgressSequences seq = first.inProgressSequences;
-        seq = addSequence(seq, bootstrapAndJoin(partitioner, random));
-        seq = addSequence(seq, bootstrapAndReplace(partitioner, random));
-        seq = addSequence(seq, unbootstrapAndLeave(partitioner, random));
-        seq = addSequence(seq, move(partitioner, random));
-        seq = addSequence(seq, addToCMS(random));
+        seq = addSequence(seq, bootstrapAndJoin(partitioner, random, seq::contains));
+        seq = addSequence(seq, bootstrapAndReplace(partitioner, random, seq::contains));
+        seq = addSequence(seq, unbootstrapAndLeave(partitioner, random, seq::contains));
+        seq = addSequence(seq, move(partitioner, random, seq::contains));
+        seq = addSequence(seq, addToCMS(random, seq::contains));
         t = t.with(seq);
         ClusterMetadata toWrite = t.build().metadata.forceEpoch(epoch).forcePeriod(999);
 
@@ -184,93 +170,15 @@ public class BootWithMetadataTest
         return sequences.with(seq.sequenceKey(), seq);
     }
 
-    private AddToCMS addToCMS(Random random)
+    private AddToCMS addToCMS(Random random, Predicate<NodeId> alreadyInUse)
     {
+        NodeId node = MembershipUtils.node(random);
+        while (alreadyInUse.test(node))
+            node = MembershipUtils.node(random);
+
         return new AddToCMS(epoch(random),
-                            node(random),
+                            node,
                             Collections.singleton(randomEndpoint(random)),
                             new FinishAddToCMS(randomEndpoint(random)));
     }
-
-    private UnbootstrapAndLeave unbootstrapAndLeave(IPartitioner partitioner, Random random)
-    {
-        NodeId node = node(random);
-        Epoch epoch = epoch(random);
-        Set<Token> tokens = randomTokens(10, partitioner, random);
-        List<Range<Token>> ranges = ranges(tokens, partitioner);
-        PlacementDeltas deltas = randomDeltas(ranges, random);
-        LockedRanges.Key key = LockedRanges.keyFor(epoch);
-        return new UnbootstrapAndLeave(epoch,
-                                       key,
-                                       MID_LEAVE,
-                                       new PrepareLeave.StartLeave(node, deltas, key),
-                                       new PrepareLeave.MidLeave(node, deltas, key),
-                                       new PrepareLeave.FinishLeave(node, deltas, key),
-                                       new UnbootstrapStreams());
-    }
-
-    private BootstrapAndJoin bootstrapAndJoin(IPartitioner partitioner, Random random)
-    {
-        NodeId node = node(random);
-        Epoch epoch = epoch(random);
-        Set<Token> tokens = randomTokens(10, partitioner, random);
-        List<Range<Token>> ranges = ranges(tokens, partitioner);
-        PlacementDeltas deltas = randomDeltas(ranges, random);
-        LockedRanges.Key key = LockedRanges.keyFor(epoch);
-        return new BootstrapAndJoin(epoch,
-                                    key,
-                                    MID_JOIN,
-                                    deltas,
-                                    new PrepareJoin.StartJoin(node, deltas, key),
-                                    new PrepareJoin.MidJoin(node, deltas, key),
-                                    new PrepareJoin.FinishJoin(node, tokens, deltas, key),
-                                    true,
-                                    true);
-    }
-
-    private BootstrapAndReplace bootstrapAndReplace(IPartitioner partitioner, Random random)
-    {
-        NodeId nodeA = node(random);
-        NodeId nodeB = node(random);
-        Epoch epoch = epoch(random);
-        Set<Token> tokens = randomTokens(10, partitioner, random);
-        List<Range<Token>> ranges = ranges(tokens, partitioner);
-        PlacementDeltas deltas = randomDeltas(ranges, random);
-        LockedRanges.Key key = LockedRanges.keyFor(epoch);
-        return new BootstrapAndReplace(epoch,
-                                    key,
-                                    MID_REPLACE,
-                                    tokens,
-                                    new PrepareReplace.StartReplace(nodeA, nodeB, deltas, key),
-                                    new PrepareReplace.MidReplace(nodeA, nodeB, deltas, key),
-                                    new PrepareReplace.FinishReplace(nodeA, nodeB, deltas, key),
-                                    true,
-                                    true);
-    }
-
-    private Move move(IPartitioner partitioner, Random random)
-    {
-        NodeId node = node(random);
-        Epoch epoch = epoch(random);
-        Set<Token> tokens = randomTokens(10, partitioner, random);
-        List<Range<Token>> ranges = ranges(tokens, partitioner);
-        PlacementDeltas deltas = randomDeltas(ranges, random);
-        LockedRanges.Key key = LockedRanges.keyFor(epoch);
-        return new Move(epoch,
-                        tokens,
-                        key,
-                        MID_MOVE,
-                        deltas,
-                        new PrepareMove.StartMove(node, deltas, key),
-                        new PrepareMove.MidMove(node, deltas, key),
-                        new PrepareMove.FinishMove(node, tokens, deltas, key),
-                        true);
-
-    }
-
-    private static NodeId node(Random r)
-    {
-        return new NodeId(r.nextInt(1000));
-    }
-
 }

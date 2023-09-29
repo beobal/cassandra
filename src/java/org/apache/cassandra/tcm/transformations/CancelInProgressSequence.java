@@ -57,10 +57,6 @@ public class CancelInProgressSequence implements Transformation
             return new Rejected(INVALID, String.format("No in-progress sequence found for node id %s at epoch %s",
                                                        nodeId, prev.epoch));
 
-        // TODO unlock - requires IPS to have/provide locked ranges - or maybe this is just part of cancel?
-        // Doesn't really need to remove the sequence here, could encapsulate that in cancel() - makes renaming
-        // it more important b/c it's really a "recipe" or plan for reverting affects - maybe rename to
-        // "revert(Applied)Effects"?
         ClusterMetadata.Transformer transformer = sequence.cancel(prev)
                                                           .with(prev.inProgressSequences.without(nodeId));
         return Transformation.success(transformer, LockedRanges.AffectedRanges.EMPTY);

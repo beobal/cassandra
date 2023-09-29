@@ -32,6 +32,7 @@ import org.apache.cassandra.locator.NetworkTopologyStrategy;
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
+import org.apache.cassandra.tcm.InProgressSequence;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.Directory;
 import org.apache.cassandra.tcm.membership.NodeId;
@@ -39,6 +40,7 @@ import org.apache.cassandra.tcm.membership.NodeState;
 import org.apache.cassandra.tcm.ownership.PlacementDeltas;
 import org.apache.cassandra.tcm.ownership.PlacementProvider;
 import org.apache.cassandra.tcm.ownership.PlacementTransitionPlan;
+import org.apache.cassandra.tcm.sequences.InProgressSequences;
 import org.apache.cassandra.tcm.sequences.LeaveStreams;
 import org.apache.cassandra.tcm.sequences.LockedRanges;
 import org.apache.cassandra.tcm.sequences.UnbootstrapAndLeave;
@@ -70,6 +72,35 @@ public class PrepareLeave implements Transformation
         this.force = force;
         this.placementProvider = placementProvider;
         this.streamKind = streamKind;
+    }
+
+    /**
+     * Helper method encapsulating retry logic
+     */
+    public static UnbootstrapAndLeave commit(ClusterMetadataService clusterMetadataService,
+                                             NodeId leaving,
+                                             boolean force,
+                                             PlacementProvider placementProvider,
+                                             LeaveStreams.Kind streamKind,
+                                             InProgressSequences.Kind sequenceKind)
+    {
+        return clusterMetadataService.commit(new PrepareLeave(leaving,
+                                                              force,
+                                                              placementProvider,
+                                                              streamKind),
+                                             (metadata) -> (UnbootstrapAndLeave) metadata.inProgressSequences.get(leaving),
+                                             (metadata, code, reason) -> {
+                                                 InProgressSequence<?> sequence = metadata.inProgressSequences.get(leaving);
+
+                                                 // We might have discovered a sequence we ourselves committed but got no response for
+                                                 if (sequence == null || sequence.kind() != sequenceKind)
+                                                 {
+                                                     throw new IllegalStateException(String.format("Can not commit event to metadata service: %s. Interrupting %s sequence.",
+                                                                                                   reason,
+                                                                                                   sequenceKind.toString().toLowerCase()));
+                                                 }
+                                                 return (UnbootstrapAndLeave) sequence;
+                                             });
     }
 
     @Override
@@ -122,13 +153,10 @@ public class PrepareLeave implements Transformation
         MidLeave mid = new MidLeave(leaving, midDelta, unlockKey);
         FinishLeave leave = new FinishLeave(leaving, finishDelta, unlockKey);
 
-        UnbootstrapAndLeave plan = new UnbootstrapAndLeave(prev.nextEpoch(),
-                                                           unlockKey,
-                                                           Kind.START_LEAVE,
-                                                           start,
-                                                           mid,
-                                                           leave,
-                                                           streamKind.supplier.get());
+        UnbootstrapAndLeave plan = UnbootstrapAndLeave.newSequence(prev.nextEpoch(),
+                                                                   unlockKey,
+                                                                   start, mid, leave,
+                                                                   streamKind.supplier.get());
 
         // note: we throw away the state with the leaving node's tokens removed. It's only
         // used to produce the operation plan.
@@ -247,7 +275,7 @@ public class PrepareLeave implements Transformation
         public ClusterMetadata.Transformer transform(ClusterMetadata prev, ClusterMetadata.Transformer transformer)
         {
             return transformer
-                   .with(prev.inProgressSequences.with(nodeId, (plan) -> plan.advance(prev.nextEpoch())))
+                   .with(prev.inProgressSequences.with(nodeId, (UnbootstrapAndLeave plan) -> plan.advance(prev.nextEpoch())))
                    .withNodeState(nodeId, NodeState.LEAVING);
         }
 

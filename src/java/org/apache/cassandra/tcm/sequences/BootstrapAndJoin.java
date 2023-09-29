@@ -60,16 +60,19 @@ import org.apache.cassandra.utils.concurrent.Future;
 import org.apache.cassandra.utils.vint.VIntCoding;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static org.apache.cassandra.tcm.Transformation.Kind.FINISH_JOIN;
+import static org.apache.cassandra.tcm.Transformation.Kind.MID_JOIN;
+import static org.apache.cassandra.tcm.Transformation.Kind.START_JOIN;
+import static org.apache.cassandra.tcm.sequences.InProgressSequences.Kind.JOIN;
 import static org.apache.cassandra.tcm.sequences.SequenceState.continuable;
 import static org.apache.cassandra.tcm.sequences.SequenceState.error;
 import static org.apache.cassandra.tcm.sequences.SequenceState.halted;
 
-public class BootstrapAndJoin extends InProgressSequence<BootstrapAndJoin>
+public class BootstrapAndJoin extends InProgressSequence<Epoch>
 {
     private static final Logger logger = LoggerFactory.getLogger(BootstrapAndJoin.class);
     public static final Serializer serializer = new Serializer();
 
-    public final Epoch latestModification;
     public final LockedRanges.Key lockKey;
     public final PlacementDeltas toSplitRanges;
     public final PrepareJoin.StartJoin startJoin;
@@ -80,93 +83,96 @@ public class BootstrapAndJoin extends InProgressSequence<BootstrapAndJoin>
     public final boolean finishJoiningRing;
     public final boolean streamData;
 
-    public BootstrapAndJoin(Epoch latestModification,
-                            LockedRanges.Key lockKey,
-                            Transformation.Kind next,
-                            PlacementDeltas toSplitRanges,
-                            PrepareJoin.StartJoin startJoin,
-                            PrepareJoin.MidJoin midJoin,
-                            PrepareJoin.FinishJoin finishJoin,
-                            boolean finishJoiningRing,
-                            boolean streamData)
+    public static BootstrapAndJoin newSequence(Epoch preparedAt,
+                                               LockedRanges.Key lockKey,
+                                               PlacementDeltas toSplitRanges,
+                                               PrepareJoin.StartJoin startJoin,
+                                               PrepareJoin.MidJoin midJoin,
+                                               PrepareJoin.FinishJoin finishJoin,
+                                               boolean finishJoiningRing,
+                                               boolean streamData)
     {
-        this.latestModification = latestModification;
-        this.lockKey = lockKey;
-        this.next = next;
+        return new BootstrapAndJoin(preparedAt,
+                                    lockKey,
+                                    toSplitRanges,
+                                    START_JOIN,
+                                    startJoin, midJoin, finishJoin,
+                                    finishJoiningRing, streamData);
+    }
 
+    /**
+     * Used by factory method for external callers and by Serializer
+     */
+    @VisibleForTesting
+    BootstrapAndJoin(Epoch latestModification,
+                     LockedRanges.Key lockKey,
+                     PlacementDeltas toSplitRanges,
+                     Transformation.Kind next,
+                     PrepareJoin.StartJoin startJoin,
+                     PrepareJoin.MidJoin midJoin,
+                     PrepareJoin.FinishJoin finishJoin,
+                     boolean finishJoiningRing,
+                     boolean streamData)
+    {
+        super(nextToIndex(next), latestModification);
+        this.lockKey = lockKey;
         this.toSplitRanges = toSplitRanges;
+        this.next = next;
         this.startJoin = startJoin;
         this.midJoin = midJoin;
         this.finishJoin = finishJoin;
-
         this.finishJoiningRing = finishJoiningRing;
         this.streamData = streamData;
     }
 
-    // TODO this is reused by BootstrapAndReplace, should we move it somewhere common?
-    public static boolean bootstrap(final Collection<Token> tokens,
-                                    long bootstrapTimeoutMillis,
-                                    ClusterMetadata metadata,
-                                    InetAddressAndPort beingReplaced,
-                                    MovementMap movements,
-                                    MovementMap strictMovements)
+    /**
+     * Used by advance to move forward in the sequence after execution
+     */
+    private BootstrapAndJoin(BootstrapAndJoin current, Epoch latestModification)
     {
-        SystemKeyspace.updateLocalTokens(tokens);
-        assert beingReplaced == null || strictMovements == null : "Can't have strict movements during replacements";
+        super(current.idx + 1, latestModification);
+        this.next = indexToNext(current.idx + 1);
+        this.lockKey = current.lockKey;
+        this.toSplitRanges = current.toSplitRanges;
+        this.startJoin = current.startJoin;
+        this.midJoin = current.midJoin;
+        this.finishJoin = current.finishJoin;
+        this.finishJoiningRing = current.finishJoiningRing;
+        this.streamData = current.streamData;
+    }
 
-        if (CassandraRelevantProperties.RESET_BOOTSTRAP_PROGRESS.getBoolean())
-        {
-            logger.info("Resetting bootstrap progress to start fresh");
-            SystemKeyspace.resetAvailableStreamedRanges();
-        }
-        Future<StreamState> bootstrapStream = StorageService.instance.startBootstrap(metadata, beingReplaced, movements, strictMovements);
-        try
-        {
-            if (bootstrapTimeoutMillis > 0)
-                bootstrapStream.get(bootstrapTimeoutMillis, MILLISECONDS);
-            else
-                bootstrapStream.get();
-
-            StorageService.instance.markViewsAsBuilt();
-            logger.info("Bootstrap completed for tokens {}", tokens);
-            return true;
-        }
-        catch (Throwable e)
-        {
-            JVMStabilityInspector.inspectThrowable(e);
-            logger.error("Error while waiting on bootstrap to complete. Bootstrap will have to be restarted.", e);
-            return false;
-        }
+    @Override
+    public BootstrapAndJoin advance(Epoch waitForWatermark)
+    {
+        return new BootstrapAndJoin(this, waitForWatermark);
     }
 
     @Override
     public ProgressBarrier barrier()
     {
-        if (next == Transformation.Kind.START_JOIN)
+        // There is no requirement to wait for peers to sync before starting the sequence
+        if (next == START_JOIN)
             return ProgressBarrier.immediate();
         ClusterMetadata metadata = ClusterMetadata.current();
         return new ProgressBarrier(latestModification, metadata.directory.location(startJoin.nodeId()), metadata.lockedRanges.locked.get(lockKey));
     }
 
     @Override
-    public Transformation.Kind nextStep()
-    {
-        return next;
-    }
-
-    @Override
-    public BootstrapAndJoin advance(Epoch waitForWatermark)
-    {
-        return new BootstrapAndJoin(waitForWatermark, lockKey, stepFollowing(next),
-                                    toSplitRanges, startJoin, midJoin, finishJoin,
-                                    finishJoiningRing, streamData);
-    }
-
-
-    @Override
     public InProgressSequences.Kind kind()
     {
-        return InProgressSequences.Kind.JOIN;
+        return JOIN;
+    }
+
+    @Override
+    protected InProgressSequences.SequenceKey sequenceKey()
+    {
+        return startJoin.nodeId();
+    }
+
+    @Override
+    public boolean atFinalStep()
+    {
+        return next == FINISH_JOIN;
     }
 
     @Override
@@ -263,39 +269,6 @@ public class BootstrapAndJoin extends InProgressSequence<BootstrapAndJoin>
         return continuable();
     }
 
-    @VisibleForTesting
-    public Pair<MovementMap, MovementMap> getMovementMaps(ClusterMetadata metadata)
-    {
-        MovementMap movementMap = movementMap(metadata.directory.endpoint(startJoin.nodeId()), metadata.placements, startJoin.delta());
-        MovementMap strictMovementMap = toStrict(movementMap, finishJoin.delta());
-        return Pair.create(movementMap, strictMovementMap);
-    }
-
-    @Override
-    protected Transformation.Kind stepFollowing(Transformation.Kind kind)
-    {
-        if (kind == null)
-            return null;
-
-        switch (kind)
-        {
-            case START_JOIN:
-                return Transformation.Kind.MID_JOIN;
-            case MID_JOIN:
-                return Transformation.Kind.FINISH_JOIN;
-            case FINISH_JOIN:
-                return null;
-            default:
-                throw new IllegalStateException(String.format("Step %s is not a part of %s sequence", kind, kind()));
-        }
-    }
-
-    @Override
-    protected InProgressSequences.SequenceKey sequenceKey()
-    {
-        return startJoin.nodeId();
-    }
-
     @Override
     public ClusterMetadata.Transformer cancel(ClusterMetadata metadata)
     {
@@ -322,8 +295,52 @@ public class BootstrapAndJoin extends InProgressSequence<BootstrapAndJoin>
 
     public BootstrapAndJoin finishJoiningRing()
     {
-        return new BootstrapAndJoin(latestModification, lockKey, next, toSplitRanges, startJoin, midJoin, finishJoin,
+        return new BootstrapAndJoin(latestModification, lockKey, toSplitRanges,
+                                    next, startJoin, midJoin, finishJoin,
                                     true, streamData);
+    }
+
+    @VisibleForTesting
+    public Pair<MovementMap, MovementMap> getMovementMaps(ClusterMetadata metadata)
+    {
+        MovementMap movementMap = movementMap(metadata.directory.endpoint(startJoin.nodeId()), metadata.placements, startJoin.delta());
+        MovementMap strictMovementMap = toStrict(movementMap, finishJoin.delta());
+        return Pair.create(movementMap, strictMovementMap);
+    }
+
+    // TODO this is reused by BootstrapAndReplace, should we move it somewhere common?
+    public static boolean bootstrap(final Collection<Token> tokens,
+                                    long bootstrapTimeoutMillis,
+                                    ClusterMetadata metadata,
+                                    InetAddressAndPort beingReplaced,
+                                    MovementMap movements,
+                                    MovementMap strictMovements)
+    {
+        SystemKeyspace.updateLocalTokens(tokens);
+        assert beingReplaced == null || strictMovements == null : "Can't have strict movements during replacements";
+
+        if (CassandraRelevantProperties.RESET_BOOTSTRAP_PROGRESS.getBoolean())
+        {
+            logger.info("Resetting bootstrap progress to start fresh");
+            SystemKeyspace.resetAvailableStreamedRanges();
+        }
+        Future<StreamState> bootstrapStream = StorageService.instance.startBootstrap(metadata, beingReplaced, movements, strictMovements);
+        try
+        {
+            if (bootstrapTimeoutMillis > 0)
+                bootstrapStream.get(bootstrapTimeoutMillis, MILLISECONDS);
+            else
+                bootstrapStream.get();
+            StorageService.instance.markViewsAsBuilt();
+            logger.info("Bootstrap completed for tokens {}", tokens);
+            return true;
+        }
+        catch (Throwable e)
+        {
+            JVMStabilityInspector.inspectThrowable(e);
+            logger.error("Error while waiting on bootstrap to complete. Bootstrap will have to be restarted.", e);
+            return false;
+        }
     }
 
     private static MovementMap movementMap(InetAddressAndPort joining, DataPlacements placements, PlacementDeltas startDelta)
@@ -364,6 +381,36 @@ public class BootstrapAndJoin extends InProgressSequence<BootstrapAndJoin>
         return movementMapBuilder.build();
     }
 
+    private static int nextToIndex(Transformation.Kind next)
+    {
+        switch (next)
+        {
+            case START_JOIN:
+                return 0;
+            case MID_JOIN:
+                return 1;
+            case FINISH_JOIN:
+                return 2;
+            default:
+                throw new IllegalStateException(String.format("Step %s is invalid for sequence %s ", next, JOIN));
+        }
+    }
+
+    private static Transformation.Kind indexToNext(int index)
+    {
+        switch (index)
+        {
+            case 0:
+                return START_JOIN;
+            case 1:
+                return MID_JOIN;
+            case 2:
+                return FINISH_JOIN;
+            default:
+                throw new IllegalStateException(String.format("Step %s is invalid for sequence %s ", index, JOIN));
+        }
+    }
+
     public String toString()
     {
         return "BootstrapAndJoinPlan{" +
@@ -385,13 +432,13 @@ public class BootstrapAndJoin extends InProgressSequence<BootstrapAndJoin>
         BootstrapAndJoin that = (BootstrapAndJoin) o;
         return finishJoiningRing == that.finishJoiningRing &&
                streamData == that.streamData &&
+               next == that.next &&
                Objects.equals(latestModification, that.latestModification) &&
                Objects.equals(lockKey, that.lockKey) &&
                Objects.equals(toSplitRanges, that.toSplitRanges) &&
                Objects.equals(startJoin, that.startJoin) &&
                Objects.equals(midJoin, that.midJoin) &&
-               Objects.equals(finishJoin, that.finishJoin) &&
-               next == that.next;
+               Objects.equals(finishJoin, that.finishJoin);
     }
 
     @Override
@@ -431,7 +478,7 @@ public class BootstrapAndJoin extends InProgressSequence<BootstrapAndJoin>
             PrepareJoin.MidJoin midJoin = PrepareJoin.MidJoin.serializer.deserialize(in, version);
             PrepareJoin.FinishJoin finishJoin = PrepareJoin.FinishJoin.serializer.deserialize(in, version);
 
-            return new BootstrapAndJoin(lastModified, lockKey, next, toSplitRanges, startJoin, midJoin, finishJoin, finishJoiningRing, streamData);
+            return new BootstrapAndJoin(lastModified, lockKey, toSplitRanges, next, startJoin, midJoin, finishJoin, finishJoiningRing, streamData);
         }
 
         public long serializedSize(InProgressSequence<?> t, Version version)

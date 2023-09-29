@@ -20,7 +20,6 @@ package org.apache.cassandra.tcm.sequences;
 
 import java.io.IOException;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
@@ -28,6 +27,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Iterables;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,11 +53,9 @@ import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.streaming.StreamOperation;
 import org.apache.cassandra.streaming.StreamPlan;
 import org.apache.cassandra.tcm.ClusterMetadata;
-import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.InProgressSequence;
 import org.apache.cassandra.tcm.Transformation;
-import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.membership.NodeState;
 import org.apache.cassandra.tcm.ownership.DataPlacements;
 import org.apache.cassandra.tcm.ownership.MovementMap;
@@ -70,114 +68,117 @@ import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.JVMStabilityInspector;
 import org.apache.cassandra.utils.vint.VIntCoding;
 
+import static org.apache.cassandra.tcm.Transformation.Kind.FINISH_MOVE;
+import static org.apache.cassandra.tcm.Transformation.Kind.MID_MOVE;
+import static org.apache.cassandra.tcm.Transformation.Kind.START_MOVE;
+import static org.apache.cassandra.tcm.sequences.InProgressSequences.Kind.MOVE;
 import static org.apache.cassandra.tcm.sequences.SequenceState.continuable;
 import static org.apache.cassandra.tcm.sequences.SequenceState.error;
 
-public class Move extends InProgressSequence<Move>
+public class Move extends InProgressSequence<Epoch>
 {
     private static final Logger logger = LoggerFactory.getLogger(Move.class);
     public static final Serializer serializer = new Serializer();
 
-    public final Epoch latestModification;
     public final Collection<Token> tokens;
     public final LockedRanges.Key lockKey;
-    public final Transformation.Kind next;
-
     public final PlacementDeltas toSplitRanges;
     public final PrepareMove.StartMove startMove;
     public final PrepareMove.MidMove midMove;
     public final PrepareMove.FinishMove finishMove;
     public final boolean streamData;
+    public final Transformation.Kind next;
 
-
-    public Move(Epoch latestModification,
-                Collection<Token> tokens,
-                LockedRanges.Key lockKey,
-                Transformation.Kind next,
-                PlacementDeltas toSplitRanges,
-                PrepareMove.StartMove startMove,
-                PrepareMove.MidMove midMove,
-                PrepareMove.FinishMove finishMove,
-                boolean streamData)
+    public static Move newSequence(Epoch preparedAt,
+                                   LockedRanges.Key lockKey,
+                                   Collection<Token> tokens,
+                                   PlacementDeltas toSplitRanges,
+                                   PrepareMove.StartMove startMove,
+                                   PrepareMove.MidMove midMove,
+                                   PrepareMove.FinishMove finishMove,
+                                   boolean streamData)
     {
-        this.latestModification = latestModification;
-        this.tokens = tokens;
+        return new Move(preparedAt,
+                        lockKey,
+                        START_MOVE,
+                        tokens,
+                        toSplitRanges,
+                        startMove, midMove, finishMove,
+                        streamData);
+    }
+
+    /**
+     * Used by factory method for external callers and by Serializer
+     */
+    @VisibleForTesting
+    Move(Epoch latestModification,
+         LockedRanges.Key lockKey,
+         Transformation.Kind next,
+         Collection<Token> tokens,
+         PlacementDeltas toSplitRanges,
+         PrepareMove.StartMove startMove,
+         PrepareMove.MidMove midMove,
+         PrepareMove.FinishMove finishMove,
+         boolean streamData)
+    {
+        super(nextToIndex(next), latestModification);
         this.lockKey = lockKey;
         this.next = next;
+        this.tokens = tokens;
         this.toSplitRanges = toSplitRanges;
         this.startMove = startMove;
         this.midMove = midMove;
         this.finishMove = finishMove;
-
         this.streamData = streamData;
     }
 
     /**
-     * move the node to new token or find a new token to boot to according to load
-     *
-     * @param newToken new token to boot to, or if null, find balanced token to boot to
+     * Used by advance to move forward in the sequence after execution
      */
-    public static void move(Token newToken)
+    private Move(Move current, Epoch latestModification)
     {
-        if (ClusterMetadataService.instance().isMigrating() || ClusterMetadataService.state() == ClusterMetadataService.State.GOSSIP)
-            throw new IllegalStateException("This cluster is migrating to cluster metadata, can't move until that is done.");
-
-        if (newToken == null)
-            throw new IllegalArgumentException("Can't move to the undefined (null) token.");
-
-        if (ClusterMetadata.current().tokenMap.tokens().contains(newToken))
-            throw new IllegalArgumentException(String.format("target token %s is already owned by another node.", newToken));
-
-        // address of the current node
-        ClusterMetadata metadata = ClusterMetadata.current();
-        NodeId self = metadata.myNodeId();
-        // This doesn't make any sense in a vnodes environment.
-        if (metadata.tokenMap.tokens(self).size() > 1)
-        {
-            logger.error("Invalid request to move(Token); This node has more than one token and cannot be moved thusly.");
-            throw new UnsupportedOperationException("This node has more than one token and cannot be moved thusly.");
-        }
-
-        ClusterMetadataService.instance().commit(new PrepareMove(self,
-                                                                 Collections.singleton(newToken),
-                                                                 ClusterMetadataService.instance().placementProvider(),
-                                                                 true),
-                                                 (metadata_) -> null,
-                                                 (metadata_, code, reason) -> {
-                                                     InProgressSequence<?> sequence = metadata_.inProgressSequences.get(self);
-                                                     // We might have discovered a startup sequence we ourselves committed but got no response for
-                                                     if (sequence == null || sequence.kind() != InProgressSequences.Kind.MOVE)
-                                                     {
-                                                         throw new IllegalStateException(String.format("Can not commit event to metadata service: %s. Interrupting leave sequence.",
-                                                                                                       reason));
-                                                     }
-                                                     return null;
-                                                 });
-        InProgressSequences.finishInProgressSequences(self);
-
-        if (logger.isDebugEnabled())
-            logger.debug("Successfully moved to new token {}", StorageService.instance.getLocalTokens().iterator().next());
+        super(current.idx + 1, latestModification);
+        this.next = indexToNext(current.idx + 1);
+        this.lockKey = current.lockKey;
+        this.tokens = current.tokens;
+        this.toSplitRanges = current.toSplitRanges;
+        this.startMove = current.startMove;
+        this.midMove = current.midMove;
+        this.finishMove = current.finishMove;
+        this.streamData = current.streamData;
     }
 
     @Override
-    public InProgressSequences.Kind kind()
+    public Move advance(Epoch waitForWatermark)
     {
-        return InProgressSequences.Kind.MOVE;
+        return new Move(this, waitForWatermark);
     }
 
     @Override
     public ProgressBarrier barrier()
     {
-        if (next == Transformation.Kind.START_MOVE)
+        if (next == START_MOVE)
             return ProgressBarrier.immediate();
         ClusterMetadata metadata = ClusterMetadata.current();
         return new ProgressBarrier(latestModification, metadata.directory.location(startMove.nodeId()), metadata.lockedRanges.locked.get(lockKey));
     }
 
     @Override
-    public Transformation.Kind nextStep()
+    public InProgressSequences.Kind kind()
     {
-        return next;
+        return MOVE;
+    }
+
+    @Override
+    protected InProgressSequences.SequenceKey sequenceKey()
+    {
+        return startMove.nodeId();
+    }
+
+    @Override
+    public boolean atFinalStep()
+    {
+        return next == FINISH_MOVE;
     }
 
     @Override
@@ -283,30 +284,29 @@ public class Move extends InProgressSequence<Move>
         return continuable();
     }
 
-
     @Override
-    protected Transformation.Kind stepFollowing(Transformation.Kind kind)
+    public ClusterMetadata.Transformer cancel(ClusterMetadata metadata)
     {
-        if (kind == null)
-            return null;
+        DataPlacements placements = metadata.placements;
 
-        switch (kind)
+        switch (next)
         {
-            case START_MOVE:
-                return Transformation.Kind.MID_MOVE;
-            case MID_MOVE:
-                return Transformation.Kind.FINISH_MOVE;
             case FINISH_MOVE:
-                return null;
+                placements = midMove.inverseDelta().apply(metadata.nextEpoch(), placements);
+            case MID_MOVE:
+                placements = startMove.inverseDelta().apply(metadata.nextEpoch(), placements);
+            case START_MOVE:
+                placements = toSplitRanges.invert().apply(metadata.nextEpoch(), placements);
+                break;
             default:
-                throw new IllegalStateException(String.format("Step %s is not a part of %s sequence", kind, kind()));
+                throw new IllegalStateException("Can't revert move from " + next);
         }
-    }
 
-    @Override
-    protected InProgressSequences.SequenceKey sequenceKey()
-    {
-        return startMove.nodeId();
+        LockedRanges newLockedRanges = metadata.lockedRanges.unlock(lockKey);
+        return metadata.transformer()
+                       .withNodeState(startMove.nodeId(), NodeState.JOINED)
+                       .with(placements)
+                       .with(newLockedRanges);
     }
 
     /**
@@ -442,39 +442,50 @@ public class Move extends InProgressSequence<Move>
         });
         return builder.build();
     }
-
-    @Override
-    public ClusterMetadata.Transformer cancel(ClusterMetadata metadata)
+    private static int nextToIndex(Transformation.Kind next)
     {
-        DataPlacements placements = metadata.placements;
-
         switch (next)
         {
-            case FINISH_MOVE:
-                placements = midMove.inverseDelta().apply(metadata.nextEpoch(), placements);
-            case MID_MOVE:
-                placements = startMove.inverseDelta().apply(metadata.nextEpoch(), placements);
             case START_MOVE:
-                placements = toSplitRanges.invert().apply(metadata.nextEpoch(), placements);
-                break;
+                return 0;
+            case MID_MOVE:
+                return 1;
+            case FINISH_MOVE:
+                return 2;
             default:
-                throw new IllegalStateException("Can't revert move from " + next);
+                throw new IllegalStateException(String.format("Step %s is invalid for sequence %s ", next, MOVE));
         }
-
-        LockedRanges newLockedRanges = metadata.lockedRanges.unlock(lockKey);
-        return metadata.transformer()
-                       .withNodeState(startMove.nodeId(), NodeState.JOINED)
-                       .with(placements)
-                       .with(newLockedRanges);
     }
 
-    public Move advance(Epoch waitForWatermark)
+    private static Transformation.Kind indexToNext(int index)
     {
-        return new Move(waitForWatermark,
-                        tokens,
-                        lockKey, stepFollowing(next),
-                        toSplitRanges, startMove, midMove, finishMove,
-                        streamData);
+        switch (index)
+        {
+            case 0:
+                return START_MOVE;
+            case 1:
+                return MID_MOVE;
+            case 2:
+                return FINISH_MOVE;
+            default:
+                throw new IllegalStateException(String.format("Step %s is invalid for sequence %s ", index, MOVE));
+        }
+    }
+
+    @Override
+    public String toString()
+    {
+        return "Move{" +
+               "latestModification=" + latestModification +
+               ", tokens=" + tokens +
+               ", lockKey=" + lockKey +
+               ", toSplitRanges=" + toSplitRanges +
+               ", startMove=" + startMove +
+               ", midMove=" + midMove +
+               ", finishMove=" + finishMove +
+               ", streamData=" + streamData +
+               ", next=" + next +
+               '}';
     }
 
     @Override
@@ -484,10 +495,10 @@ public class Move extends InProgressSequence<Move>
         if (!(o instanceof Move)) return false;
         Move move = (Move) o;
         return streamData == move.streamData &&
+               next == move.next &&
                Objects.equals(latestModification, move.latestModification) &&
                Objects.equals(tokens, move.tokens) &&
                Objects.equals(lockKey, move.lockKey) &&
-               next == move.next &&
                Objects.equals(toSplitRanges, move.toSplitRanges) &&
                Objects.equals(startMove, move.startMove) &&
                Objects.equals(midMove, move.midMove) &&
@@ -539,7 +550,7 @@ public class Move extends InProgressSequence<Move>
             IPartitioner partitioner = ClusterMetadata.current().partitioner;
             for (int i = 0; i < numTokens; i++)
                 tokens.add(Token.metadataSerializer.deserialize(in, partitioner, version));
-            return new Move(barrier, tokens, lockKey, next,
+            return new Move(barrier, lockKey, next, tokens,
                             toSplitRanges, startMove, midMove, finishMove, streamData);
         }
 

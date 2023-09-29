@@ -18,14 +18,32 @@
 
 package org.apache.cassandra.tcm.transformations.cms;
 
+import java.util.HashSet;
+import java.util.Set;
+
 import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.locator.RangesByEndpoint;
+import org.apache.cassandra.locator.Replica;
+import org.apache.cassandra.schema.ReplicationParams;
 import org.apache.cassandra.tcm.ClusterMetadata;
+import org.apache.cassandra.tcm.InProgressSequence;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.NodeId;
+import org.apache.cassandra.tcm.ownership.DataPlacement;
+import org.apache.cassandra.tcm.ownership.EntireRange;
 import org.apache.cassandra.tcm.sequences.AddToCMS;
 import org.apache.cassandra.tcm.sequences.ReconfigureCMS;
 import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializer;
 
+import static org.apache.cassandra.exceptions.ExceptionCode.INVALID;
+import static org.apache.cassandra.tcm.ownership.EntireRange.entireRange;
+
+/**
+ * @deprecated in favour of ReconfigureCMS
+ * This class along with AddToCMS, FinishAddToCMS & RemoveFromCMS, contain a high degree of duplication with their intended
+ * replacements ReconfigureCMS and AdvanceCMSReconfiguration. This shouldn't be a big problem as the intention is to
+ * remove this superceded version asap.
+ */
 @Deprecated
 public class StartAddToCMS extends BaseMembershipTransformation
 {
@@ -52,18 +70,42 @@ public class StartAddToCMS extends BaseMembershipTransformation
     public Result execute(ClusterMetadata prev)
     {
         NodeId nodeId = prev.directory.peerId(endpoint);
+        InProgressSequence<?> sequence = prev.inProgressSequences.get(nodeId);
+        if (sequence != null)
+            return new Rejected(INVALID, String.format("Cannot add node to CMS, since it already has an active in-progress sequence %s", sequence));
+        if (prev.inProgressSequences.get(ReconfigureCMS.SequenceKey.instance) != null)
+            return new Rejected(INVALID, String.format("Cannot add node to CMS as a CMS reconfiguration is currently active"));
 
-        return ReconfigureCMS.executeStartAdd(prev, nodeId, (inProgressSequences, streamCandidates) -> {
-            AddToCMS joinSequence = new AddToCMS(prev.nextEpoch(), nodeId, streamCandidates, new FinishAddToCMS(endpoint));
+        Replica replica = new Replica(endpoint, entireRange, true);
+        ReplicationParams metaParams = ReplicationParams.meta(prev);
+        RangesByEndpoint readReplicas = prev.placements.get(metaParams).reads.byEndpoint();
+        RangesByEndpoint writeReplicas = prev.placements.get(metaParams).writes.byEndpoint();
 
-            return inProgressSequences.with(nodeId, joinSequence);
-        });
+        if (readReplicas.containsKey(endpoint) || writeReplicas.containsKey(endpoint))
+            return new Transformation.Rejected(INVALID, "Endpoint is already a member of CMS");
+
+        ClusterMetadata.Transformer transformer = prev.transformer();
+        DataPlacement.Builder builder = prev.placements.get(metaParams).unbuild()
+                                                       .withWriteReplica(prev.nextEpoch(), replica);
+
+        transformer.with(prev.placements.unbuild().with(metaParams, builder.build()).build());
+
+        Set<InetAddressAndPort> streamCandidates = new HashSet<>();
+        for (Replica r : prev.placements.get(metaParams).reads.byEndpoint().flattenValues())
+        {
+            if (!replica.equals(r))
+                streamCandidates.add(r.endpoint());
+        }
+
+        AddToCMS joinSequence = new AddToCMS(prev.nextEpoch(), nodeId, streamCandidates, new FinishAddToCMS(endpoint));
+        transformer = transformer.with(prev.inProgressSequences.with(nodeId, joinSequence));
+        return Transformation.success(transformer, EntireRange.affectedRanges(prev));
     }
 
     @Override
     public String toString()
     {
-        return "StartAddMember{" +
+        return "StartAddToCMS{" +
                "endpoint=" + endpoint +
                ", replica=" + replica +
                '}';

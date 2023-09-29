@@ -52,4 +52,9 @@ public class MembershipUtils
             throw new RuntimeException(e);
         }
     }
+
+    public static NodeId node(Random r)
+    {
+        return new NodeId(r.nextInt(1000));
+    }
 }

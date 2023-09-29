@@ -21,12 +21,6 @@ package org.apache.cassandra.distributed.test;
 import java.util.Collections;
 
 import com.google.common.collect.ImmutableList;
-
-import org.apache.cassandra.tcm.ClusterMetadata;
-import org.apache.cassandra.tcm.membership.NodeId;
-import org.apache.cassandra.tcm.sequences.UnbootstrapAndLeave;
-import org.apache.cassandra.tcm.transformations.Unregister;
-import org.apache.cassandra.utils.concurrent.Condition;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -44,6 +38,11 @@ import org.apache.cassandra.gms.FailureDetector;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.schema.SchemaConstants;
 import org.apache.cassandra.service.StorageService;
+import org.apache.cassandra.tcm.ClusterMetadata;
+import org.apache.cassandra.tcm.membership.NodeId;
+import org.apache.cassandra.tcm.sequences.SingleNodeSequences;
+import org.apache.cassandra.tcm.transformations.Unregister;
+import org.apache.cassandra.utils.concurrent.Condition;
 import org.apache.cassandra.utils.progress.ProgressEventType;
 
 import static java.util.concurrent.TimeUnit.MINUTES;
@@ -202,7 +201,7 @@ public class UpdateSystemAuthAfterDCExpansionTest extends TestBaseImpl
                 NodeId nodeId = new NodeId(node2hostId);
                 InetAddressAndPort endpoint = ClusterMetadata.current().directory.endpoint(nodeId);
                 FailureDetector.instance.forceConviction(endpoint);
-                UnbootstrapAndLeave.removeNode(nodeId, true);
+                SingleNodeSequences.removeNode(nodeId, true);
                 Unregister.unregister(nodeId);
             });
 

@@ -26,6 +26,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.StreamSupport;
 
+import com.google.common.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,17 +62,20 @@ import org.apache.cassandra.utils.JVMStabilityInspector;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.vint.VIntCoding;
 
+import static org.apache.cassandra.tcm.Transformation.Kind.FINISH_REPLACE;
+import static org.apache.cassandra.tcm.Transformation.Kind.MID_REPLACE;
+import static org.apache.cassandra.tcm.Transformation.Kind.START_REPLACE;
 import static org.apache.cassandra.tcm.sequences.BootstrapAndJoin.bootstrap;
+import static org.apache.cassandra.tcm.sequences.InProgressSequences.Kind.REPLACE;
 import static org.apache.cassandra.tcm.sequences.SequenceState.continuable;
 import static org.apache.cassandra.tcm.sequences.SequenceState.error;
 import static org.apache.cassandra.tcm.sequences.SequenceState.halted;
 
-public class BootstrapAndReplace extends InProgressSequence<BootstrapAndReplace>
+public class BootstrapAndReplace extends InProgressSequence<Epoch>
 {
     private static final Logger logger = LoggerFactory.getLogger(BootstrapAndReplace.class);
     public static final Serializer serializer = new Serializer();
 
-    public final Epoch latestModification;
     public final LockedRanges.Key lockKey;
     public final Set<Token> bootstrapTokens;
     public final PrepareReplace.StartReplace startReplace;
@@ -82,56 +86,97 @@ public class BootstrapAndReplace extends InProgressSequence<BootstrapAndReplace>
     public final boolean finishJoiningRing;
     public final boolean streamData;
 
-    public BootstrapAndReplace(Epoch latestModification,
-                               LockedRanges.Key lockKey,
-                               Transformation.Kind next,
-                               Set<Token> bootstrapTokens,
-                               PrepareReplace.StartReplace startReplace,
-                               PrepareReplace.MidReplace midReplace,
-                               PrepareReplace.FinishReplace finishReplace,
-                               boolean finishJoiningRing,
-                               boolean streamData)
+    public static BootstrapAndReplace newSequence(Epoch preparedAt,
+                                                  LockedRanges.Key lockKey,
+                                                  Set<Token> bootstrapTokens,
+                                                  PrepareReplace.StartReplace startReplace,
+                                                  PrepareReplace.MidReplace midReplace,
+                                                  PrepareReplace.FinishReplace finishReplace,
+                                                  boolean finishJoiningRing,
+                                                  boolean streamData)
     {
-        this.latestModification = latestModification;
+        return new BootstrapAndReplace(preparedAt,
+                                       lockKey,
+                                       bootstrapTokens,
+                                       START_REPLACE,
+                                       startReplace, midReplace, finishReplace,
+                                       finishJoiningRing, streamData);
+    }
+
+    /**
+     * Used by factory method for external callers and by Serializer
+     */
+    @VisibleForTesting
+    BootstrapAndReplace(Epoch latestModification,
+                        LockedRanges.Key lockKey,
+                        Set<Token> bootstrapTokens,
+                        Transformation.Kind next,
+                        PrepareReplace.StartReplace startReplace,
+                        PrepareReplace.MidReplace midReplace,
+                        PrepareReplace.FinishReplace finishReplace,
+                        boolean finishJoiningRing,
+                        boolean streamData)
+    {
+        super(nextToIndex(next), latestModification);
         this.lockKey = lockKey;
         this.bootstrapTokens = bootstrapTokens;
+        this.next = next;
         this.startReplace = startReplace;
         this.midReplace = midReplace;
         this.finishReplace = finishReplace;
-        this.next = next;
         this.finishJoiningRing = finishJoiningRing;
         this.streamData = streamData;
+    }
+
+    /**
+     * Used by advance to move forward in the sequence after execution
+     */
+    private BootstrapAndReplace(BootstrapAndReplace current, Epoch latestModification)
+    {
+        super(current.idx + 1, latestModification);
+        this.next = indexToNext(current.idx + 1);
+        this.lockKey = current.lockKey;
+        this.bootstrapTokens = current.bootstrapTokens;
+        this.startReplace = current.startReplace;
+        this.midReplace = current.midReplace;
+        this.finishReplace = current.finishReplace;
+        this.finishJoiningRing = current.finishJoiningRing;
+        this.streamData = current.streamData;
     }
 
     @Override
     public BootstrapAndReplace advance(Epoch waitFor)
     {
-        return new BootstrapAndReplace(waitFor,
-                                       lockKey,
-                                       stepFollowing(next),
-                                       bootstrapTokens,
-                                       startReplace, midReplace, finishReplace,
-                                       finishJoiningRing,
-                                       streamData);
+        return new BootstrapAndReplace(this, waitFor);
     }
 
-    public InProgressSequences.Kind kind()
-    {
-        return InProgressSequences.Kind.REPLACE;
-    }
-
+    @Override
     public ProgressBarrier barrier()
     {
-        if (next == Transformation.Kind.START_REPLACE)
+        // There is no requirement to wait for peers to sync before starting the sequence
+        if (next == START_REPLACE)
             return ProgressBarrier.immediate();
         ClusterMetadata metadata = ClusterMetadata.current();
         InetAddressAndPort replaced = metadata.directory.getNodeAddresses(startReplace.replaced()).broadcastAddress;
         return new ProgressBarrier(latestModification, metadata.directory.location(startReplace.nodeId()), metadata.lockedRanges.locked.get(lockKey), e -> !e.equals(replaced));
     }
 
-    public Transformation.Kind nextStep()
+    @Override
+    public InProgressSequences.Kind kind()
     {
-        return next;
+        return REPLACE;
+    }
+
+    @Override
+    public boolean atFinalStep()
+    {
+        return next == Transformation.Kind.FINISH_REPLACE;
+    }
+
+    @Override
+    protected InProgressSequences.SequenceKey sequenceKey()
+    {
+        return startReplace.nodeId();
     }
 
     @Override
@@ -220,36 +265,6 @@ public class BootstrapAndReplace extends InProgressSequence<BootstrapAndReplace>
         return continuable();
     }
 
-    /**
-     * startDelta.writes.additions contains the ranges we need to stream
-     * for each of those ranges, add all possible endpoints (except for the replica we're replacing) to the movement map
-     *
-     * keys in the map are the ranges the replacement node needs to stream, values are the potential endpoints.
-     */
-    private MovementMap movementMap(InetAddressAndPort beingReplaced, PlacementDeltas startDelta)
-    {
-        MovementMap.Builder movementMapBuilder = MovementMap.builder();
-        DataPlacements placements = ClusterMetadata.current().placements;
-        startDelta.forEach((params, delta) -> {
-            EndpointsByReplica.Builder movements = new EndpointsByReplica.Builder();
-            DataPlacement originalPlacements = placements.get(params);
-            delta.writes.additions.flattenValues().forEach((destination) -> {
-                originalPlacements.reads.forRange(destination.range())
-                                        .get().stream()
-                                        .filter(r -> !r.endpoint().equals(beingReplaced))
-                                        .forEach(source -> movements.put(destination, source));
-            });
-            movementMapBuilder.put(params, movements.build());
-        });
-        return movementMapBuilder.build();
-    }
-
-    public BootstrapAndReplace finishJoiningRing()
-    {
-        return new BootstrapAndReplace(latestModification, lockKey, next, bootstrapTokens, startReplace, midReplace, finishReplace,
-                                    true, streamData);
-    }
-
     @Override
     public ClusterMetadata.Transformer cancel(ClusterMetadata metadata)
     {
@@ -269,34 +284,70 @@ public class BootstrapAndReplace extends InProgressSequence<BootstrapAndReplace>
 
         LockedRanges newLockedRanges = metadata.lockedRanges.unlock(lockKey);
         return metadata.transformer()
-                      .withNodeState(startReplace.replacement(), NodeState.REGISTERED)
-                      .with(placements)
-                      .with(newLockedRanges);
+                       .withNodeState(startReplace.replacement(), NodeState.REGISTERED)
+                       .with(placements)
+                       .with(newLockedRanges);
     }
 
-    @Override
-    protected Transformation.Kind stepFollowing(Transformation.Kind kind)
+    public BootstrapAndReplace finishJoiningRing()
     {
-        if (kind == null)
-            return null;
+        return new BootstrapAndReplace(latestModification, lockKey, bootstrapTokens,
+                                       next, startReplace, midReplace, finishReplace,
+                                       true, streamData);
+    }
 
-        switch (kind)
+    /**
+     * startDelta.writes.additions contains the ranges we need to stream
+     * for each of those ranges, add all possible endpoints (except for the replica we're replacing) to the movement map
+     *
+     * keys in the map are the ranges the replacement node needs to stream, values are the potential endpoints.
+     */
+    private static MovementMap movementMap(InetAddressAndPort beingReplaced, PlacementDeltas startDelta)
+    {
+        MovementMap.Builder movementMapBuilder = MovementMap.builder();
+        DataPlacements placements = ClusterMetadata.current().placements;
+        startDelta.forEach((params, delta) -> {
+            EndpointsByReplica.Builder movements = new EndpointsByReplica.Builder();
+            DataPlacement originalPlacements = placements.get(params);
+            delta.writes.additions.flattenValues().forEach((destination) -> {
+                originalPlacements.reads.forRange(destination.range())
+                                        .get().stream()
+                                        .filter(r -> !r.endpoint().equals(beingReplaced))
+                                        .forEach(source -> movements.put(destination, source));
+            });
+            movementMapBuilder.put(params, movements.build());
+        });
+        return movementMapBuilder.build();
+    }
+
+    private static int nextToIndex(Transformation.Kind next)
+    {
+        switch (next)
         {
             case START_REPLACE:
-                return Transformation.Kind.MID_REPLACE;
+                return 0;
             case MID_REPLACE:
-                return Transformation.Kind.FINISH_REPLACE;
+                return 1;
             case FINISH_REPLACE:
-                return null;
+                return 2;
             default:
-                throw new IllegalStateException(String.format("Step %s is not a part of %s sequence", kind, kind()));
+                throw new IllegalStateException(String.format("Step %s is invalid for sequence %s ", next, REPLACE));
         }
     }
 
-    @Override
-    protected InProgressSequences.SequenceKey sequenceKey()
+    private static Transformation.Kind indexToNext(int index)
     {
-        return startReplace.nodeId();
+        switch (index)
+        {
+            case 0:
+                return START_REPLACE;
+            case 1:
+                return MID_REPLACE;
+            case 2:
+                return FINISH_REPLACE;
+            default:
+                throw new IllegalStateException(String.format("Step %s is invalid for sequence %s ", index, REPLACE));
+        }
     }
 
     public String toString()
@@ -321,12 +372,13 @@ public class BootstrapAndReplace extends InProgressSequence<BootstrapAndReplace>
         BootstrapAndReplace that = (BootstrapAndReplace) o;
         return finishJoiningRing == that.finishJoiningRing &&
                streamData == that.streamData &&
+               next == that.next &&
                Objects.equals(latestModification, that.latestModification) &&
                Objects.equals(lockKey, that.lockKey) &&
                Objects.equals(bootstrapTokens, that.bootstrapTokens) &&
                Objects.equals(startReplace, that.startReplace) &&
                Objects.equals(midReplace, that.midReplace) &&
-               Objects.equals(finishReplace, that.finishReplace) && next == that.next;
+               Objects.equals(finishReplace, that.finishReplace);
     }
 
     @Override
@@ -398,7 +450,7 @@ public class BootstrapAndReplace extends InProgressSequence<BootstrapAndReplace>
             PrepareReplace.MidReplace midReplace = PrepareReplace.MidReplace.serializer.deserialize(in, version);
             PrepareReplace.FinishReplace finishReplace = PrepareReplace.FinishReplace.serializer.deserialize(in, version);
 
-            return new BootstrapAndReplace(barrier, lockKey, next, tokens, startReplace, midReplace, finishReplace, finishJoiningRing, streamData);
+            return new BootstrapAndReplace(barrier, lockKey, tokens, next, startReplace, midReplace, finishReplace, finishJoiningRing, streamData);
         }
 
         public long serializedSize(InProgressSequence<?> t, Version version)

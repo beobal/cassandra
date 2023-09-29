@@ -62,7 +62,18 @@ import org.apache.cassandra.distributed.shared.WithProperties;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.net.Verb;
 import org.apache.cassandra.schema.ReplicationParams;
-import org.apache.cassandra.simulator.*;
+import org.apache.cassandra.simulator.Action;
+import org.apache.cassandra.simulator.ActionList;
+import org.apache.cassandra.simulator.ActionSchedule;
+import org.apache.cassandra.simulator.Actions;
+import org.apache.cassandra.simulator.ClusterSimulation;
+import org.apache.cassandra.simulator.Debug;
+import org.apache.cassandra.simulator.FutureActionScheduler;
+import org.apache.cassandra.simulator.OrderOn;
+import org.apache.cassandra.simulator.RandomSource;
+import org.apache.cassandra.simulator.RunnableActionScheduler;
+import org.apache.cassandra.simulator.Simulation;
+import org.apache.cassandra.simulator.SimulatorUtils;
 import org.apache.cassandra.simulator.cluster.ClusterActionListener.NoOpListener;
 import org.apache.cassandra.simulator.cluster.ClusterActions;
 import org.apache.cassandra.simulator.cluster.ClusterActions.Options;
@@ -78,13 +89,12 @@ import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.Startup;
 import org.apache.cassandra.tcm.membership.NodeState;
-import org.apache.cassandra.tcm.sequences.UnbootstrapAndLeave;
+import org.apache.cassandra.tcm.sequences.SingleNodeSequences;
 import org.apache.cassandra.tcm.transformations.PrepareJoin;
 import org.apache.cassandra.utils.CloseableIterator;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.apache.cassandra.distributed.api.ConsistencyLevel.ALL;
-import static org.apache.cassandra.net.Verb.*;
 import static org.apache.cassandra.simulator.ActionSchedule.Mode.TIME_LIMITED;
 import static org.apache.cassandra.simulator.ActionSchedule.Mode.UNLIMITED;
 import static org.apache.cassandra.simulator.cluster.ClusterActions.Options.noActions;
@@ -358,16 +368,23 @@ public class HarrySimulatorTest
      */
     public static Map<Verb, FutureActionScheduler> networkSchedulers(int nodes, SimulatedTime time, RandomSource random)
     {
-        Set<Verb> extremelyLossy = new HashSet<>(Arrays.asList(TCM_COMMIT_REQ, TCM_REPLICATION, TCM_NOTIFY_REQ,
-                                                               TCM_FETCH_CMS_LOG_REQ, TCM_FETCH_PEER_LOG_REQ,
-                                                               TCM_INIT_MIG_RSP, TCM_INIT_MIG_REQ, TCM_ABORT_MIG,
-                                                               TCM_DISCOVER_RSP, TCM_DISCOVER_REQ));
+        Set<Verb> extremelyLossy = new HashSet<>(Arrays.asList(Verb.TCM_ABORT_MIG, Verb.TCM_REPLICATION,
+                                                               Verb.TCM_COMMIT_REQ, Verb.TCM_NOTIFY_REQ,
+                                                               Verb.TCM_FETCH_CMS_LOG_REQ, Verb.TCM_FETCH_PEER_LOG_REQ,
+                                                               Verb.TCM_INIT_MIG_REQ, Verb.TCM_INIT_MIG_RSP,
+                                                               Verb.TCM_DISCOVER_REQ, Verb.TCM_DISCOVER_RSP));
 
-        Set<Verb> somewhatSlow = new HashSet<>(Arrays.asList(BATCH_STORE_REQ, BATCH_STORE_RSP));
+        Set<Verb> somewhatSlow = new HashSet<>(Arrays.asList(Verb.BATCH_STORE_REQ, Verb.BATCH_STORE_RSP));
 
-        Set<Verb> somewhatLossy = new HashSet<>(Arrays.asList(TCM_CURRENT_EPOCH_REQ, PAXOS2_COMMIT_REMOTE_REQ, PAXOS2_COMMIT_REMOTE_RSP, PAXOS2_PREPARE_RSP, PAXOS2_PREPARE_REQ, PAXOS2_PROPOSE_RSP, PAXOS2_PROPOSE_REQ,
-                                                              PAXOS_PREPARE_RSP, PAXOS_PREPARE_REQ, PAXOS_PROPOSE_RSP, PAXOS_PROPOSE_REQ, PAXOS_COMMIT_RSP, PAXOS_COMMIT_REQ,
-                                                              TCM_NOTIFY_RSP, TCM_FETCH_CMS_LOG_RSP, TCM_FETCH_PEER_LOG_RSP, TCM_COMMIT_RSP));
+        Set<Verb> somewhatLossy = new HashSet<>(Arrays.asList(Verb.TCM_CURRENT_EPOCH_REQ,
+                                                              Verb.TCM_NOTIFY_RSP, Verb.TCM_FETCH_CMS_LOG_RSP,
+                                                              Verb.TCM_FETCH_PEER_LOG_RSP, Verb.TCM_COMMIT_RSP,
+                                                              Verb.PAXOS2_COMMIT_REMOTE_REQ, Verb.PAXOS2_COMMIT_REMOTE_RSP,
+                                                              Verb.PAXOS2_PREPARE_REQ, Verb.PAXOS2_PREPARE_RSP,
+                                                              Verb.PAXOS2_PROPOSE_REQ, Verb.PAXOS2_PROPOSE_RSP,
+                                                              Verb.PAXOS_PREPARE_REQ, Verb.PAXOS_PREPARE_RSP,
+                                                              Verb.PAXOS_PROPOSE_RSP, Verb.PAXOS_PROPOSE_REQ,
+                                                              Verb.PAXOS_COMMIT_REQ, Verb.PAXOS_COMMIT_RSP));
 
         Map<Verb, FutureActionScheduler> schedulers = new HashMap<>();
         for (Verb verb : Verb.values())
@@ -444,7 +461,7 @@ public class HarrySimulatorTest
         IIsolatedExecutor.SerializableRunnable runnable = () -> {
             try
             {
-                UnbootstrapAndLeave.decommission(false, false);
+                SingleNodeSequences.decommission(false, false);
             }
             catch (Throwable t)
             {

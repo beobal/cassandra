@@ -74,13 +74,6 @@ import com.google.common.collect.Ordering;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.RateLimiter;
 import com.google.common.util.concurrent.Uninterruptibles;
-
-import org.apache.cassandra.tcm.membership.NodeId;
-import org.apache.cassandra.tcm.sequences.Move;
-import org.apache.cassandra.tcm.sequences.UnbootstrapAndLeave;
-import org.apache.cassandra.tcm.transformations.Assassinate;
-import org.apache.cassandra.utils.progress.ProgressEvent;
-import org.apache.cassandra.utils.progress.ProgressEventType;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -121,10 +114,9 @@ import org.apache.cassandra.dht.BootStrapper;
 import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.OwnedRanges;
 import org.apache.cassandra.dht.Range;
-import org.apache.cassandra.dht.Token.TokenFactory;
-import org.apache.cassandra.hints.HintsService;
 import org.apache.cassandra.dht.StreamStateStore;
 import org.apache.cassandra.dht.Token;
+import org.apache.cassandra.dht.Token.TokenFactory;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.exceptions.UnavailableException;
@@ -137,6 +129,7 @@ import org.apache.cassandra.gms.FailureDetector;
 import org.apache.cassandra.gms.Gossiper;
 import org.apache.cassandra.gms.IEndpointStateChangeSubscriber;
 import org.apache.cassandra.gms.VersionedValue;
+import org.apache.cassandra.hints.HintsService;
 import org.apache.cassandra.index.IndexStatusManager;
 import org.apache.cassandra.io.sstable.IScrubber;
 import org.apache.cassandra.io.sstable.IVerifier;
@@ -194,6 +187,7 @@ import org.apache.cassandra.tcm.compatibility.GossipHelper;
 import org.apache.cassandra.tcm.compatibility.TokenRingUtils;
 import org.apache.cassandra.tcm.membership.Directory;
 import org.apache.cassandra.tcm.membership.NodeAddresses;
+import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.membership.NodeState;
 import org.apache.cassandra.tcm.migration.GossipCMSListener;
 import org.apache.cassandra.tcm.ownership.MovementMap;
@@ -202,10 +196,12 @@ import org.apache.cassandra.tcm.ownership.VersionedEndpoints;
 import org.apache.cassandra.tcm.sequences.BootstrapAndJoin;
 import org.apache.cassandra.tcm.sequences.BootstrapAndReplace;
 import org.apache.cassandra.tcm.sequences.InProgressSequences;
+import org.apache.cassandra.tcm.sequences.SingleNodeSequences;
+import org.apache.cassandra.tcm.transformations.Assassinate;
 import org.apache.cassandra.tcm.transformations.CancelInProgressSequence;
-import org.apache.cassandra.tcm.transformations.Unregister;
 import org.apache.cassandra.tcm.transformations.Register;
 import org.apache.cassandra.tcm.transformations.Startup;
+import org.apache.cassandra.tcm.transformations.Unregister;
 import org.apache.cassandra.transport.ClientResourceLimits;
 import org.apache.cassandra.transport.ProtocolVersion;
 import org.apache.cassandra.utils.Clock;
@@ -222,6 +218,8 @@ import org.apache.cassandra.utils.concurrent.Future;
 import org.apache.cassandra.utils.concurrent.FutureCombiner;
 import org.apache.cassandra.utils.concurrent.ImmediateFuture;
 import org.apache.cassandra.utils.logging.LoggingSupportFactory;
+import org.apache.cassandra.utils.progress.ProgressEvent;
+import org.apache.cassandra.utils.progress.ProgressEventType;
 import org.apache.cassandra.utils.progress.ProgressListener;
 import org.apache.cassandra.utils.progress.jmx.JMXBroadcastExecutor;
 import org.apache.cassandra.utils.progress.jmx.JMXProgressSupport;
@@ -234,6 +232,7 @@ import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
+import static java.util.stream.Collectors.toSet;
 import static org.apache.cassandra.config.CassandraRelevantProperties.CONSISTENT_RANGE_MOVEMENT;
 import static org.apache.cassandra.config.CassandraRelevantProperties.DRAIN_EXECUTOR_TIMEOUT_MS;
 import static org.apache.cassandra.config.CassandraRelevantProperties.JOIN_RING;
@@ -241,7 +240,6 @@ import static org.apache.cassandra.config.CassandraRelevantProperties.PAXOS_REPA
 import static org.apache.cassandra.config.CassandraRelevantProperties.PAXOS_REPAIR_ON_TOPOLOGY_CHANGE_RETRY_DELAY_SECONDS;
 import static org.apache.cassandra.config.CassandraRelevantProperties.REPLACE_ADDRESS_FIRST_BOOT;
 import static org.apache.cassandra.config.CassandraRelevantProperties.TEST_WRITE_SURVEY;
-import static java.util.stream.Collectors.toSet;
 import static org.apache.cassandra.index.SecondaryIndexManager.getIndexName;
 import static org.apache.cassandra.index.SecondaryIndexManager.isIndexColumnFamily;
 import static org.apache.cassandra.schema.SchemaConstants.isLocalSystemKeyspace;
@@ -251,13 +249,11 @@ import static org.apache.cassandra.service.StorageService.Mode.DECOMMISSIONED;
 import static org.apache.cassandra.service.StorageService.Mode.DECOMMISSION_FAILED;
 import static org.apache.cassandra.service.StorageService.Mode.JOINING_FAILED;
 import static org.apache.cassandra.service.StorageService.Mode.NORMAL;
-import static org.apache.cassandra.utils.Clock.Global.currentTimeMillis;
-import static org.apache.cassandra.tcm.Transformation.Kind.FINISH_JOIN;
-import static org.apache.cassandra.tcm.Transformation.Kind.FINISH_REPLACE;
 import static org.apache.cassandra.tcm.membership.NodeState.BOOTSTRAPPING;
 import static org.apache.cassandra.tcm.membership.NodeState.BOOT_REPLACING;
 import static org.apache.cassandra.tcm.membership.NodeState.JOINED;
 import static org.apache.cassandra.tcm.membership.NodeState.MOVING;
+import static org.apache.cassandra.utils.Clock.Global.currentTimeMillis;
 import static org.apache.cassandra.utils.FBUtilities.getBroadcastAddressAndPort;
 import static org.apache.cassandra.utils.FBUtilities.now;
 
@@ -994,9 +990,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
         if (sequence == null && metadata.directory.peerState(id) == JOINED)
             return true;
-        if (sequence instanceof BootstrapAndJoin && sequence.nextStep() == FINISH_JOIN)
-            return true;
-        if (sequence instanceof BootstrapAndReplace && sequence.nextStep() == FINISH_REPLACE)
+        if ((sequence.kind() == InProgressSequences.Kind.JOIN || sequence.kind() == InProgressSequences.Kind.REPLACE) && sequence.atFinalStep())
             return true;
 
         return false;
@@ -1026,10 +1020,10 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         InProgressSequence<?> sequence = metadata.inProgressSequences.get(id);
 
         // Double check the conditions we verified in readyToFinishJoiningRing
-        if (!(sequence instanceof BootstrapAndJoin) && !(sequence instanceof BootstrapAndReplace))
+        if (sequence.kind() != InProgressSequences.Kind.JOIN && sequence.kind() != InProgressSequences.Kind.REPLACE)
             throw new IllegalStateException("Can not finish joining ring as join sequence has not been started");
 
-        if (sequence.nextStep() != FINISH_JOIN && sequence.nextStep() != FINISH_REPLACE)
+        if (!sequence.atFinalStep())
             throw new IllegalStateException("Can not finish joining ring, sequence is in an incorrect state. " +
                                             "If no progress is made, cancel the join process for this node and retry");
 
@@ -3477,7 +3471,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
     public void decommission(boolean force)
     {
-        UnbootstrapAndLeave.decommission(true, force);
+        SingleNodeSequences.decommission(true, force);
     }
 
     public void shutdownNetworking()
@@ -3550,7 +3544,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         {
             throw new IllegalArgumentException(e.getMessage());
         }
-        Move.move(getTokenFactory().fromString(newToken));
+        SingleNodeSequences.move(getTokenFactory().fromString(newToken));
     }
 
     public String getRemovalStatus()
@@ -3617,7 +3611,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     public void removeNode(String hostIdString, boolean force)
     {
         NodeId toRemove = NodeId.fromString(hostIdString);
-        UnbootstrapAndLeave.removeNode(toRemove, force);
+        SingleNodeSequences.removeNode(toRemove, force);
     }
 
     public void assassinateEndpoint(String address)

@@ -34,7 +34,6 @@ import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.InProgressSequence;
-import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializer;
 import org.apache.cassandra.tcm.serialization.Version;
@@ -48,14 +47,24 @@ import static org.apache.cassandra.tcm.sequences.SequenceState.continuable;
 
 /**
  * Add this or another node as a member of CMS.
+ * This sequence is unlike other implementations in that it has no 'prepare' phase. The real first step of the
+ * logical sequence, implemented by StartAddToCMS, is always executed first before the AddToCMS sequence itself
+ * is constructed. In fact, StartAddToCMS could be considered to perform the 'prepare' phase as well as the
+ * first step, which is to add the candidate as a write-only member of the CMS. Only once this has succeeded
+ * does the sequence start in earnest, performing streaming for the global log tables before executing the
+ * second and final logical step of promoting the candidate to a full read/write member of the CMS.
+ *
+ * @deprecated in favour of ReconfigureCMS
+ * This class along with AddToCMS & RemoveFromCMS, contain a high degree of duplication with their intended
+ * replacements ReconfigureCMS and AdvanceCMSReconfiguration. This shouldn't be a big problem as the intention is to
+ * remove this superceded version asap.
  */
 @Deprecated
-public class AddToCMS extends InProgressSequence<AddToCMS>
+public class AddToCMS extends InProgressSequence<Epoch>
 {
     private static final Logger logger = LoggerFactory.getLogger(AddToCMS.class);
     public static Serializer serializer = new Serializer();
 
-    private final Epoch latestModification;
     private final NodeId toAdd;
     private final Set<InetAddressAndPort> streamCandidates;
     private final FinishAddToCMS finishJoin;
@@ -93,10 +102,13 @@ public class AddToCMS extends InProgressSequence<AddToCMS>
         ReconfigureCMS.repairPaxosTopology();
     }
 
-    public AddToCMS(Epoch latestModification, NodeId toAdd, Set<InetAddressAndPort> streamCandidates, FinishAddToCMS join)
+    public AddToCMS(Epoch latestModification,
+                    NodeId toAdd,
+                    Set<InetAddressAndPort> streamCandidates,
+                    FinishAddToCMS join)
     {
+        super(0, latestModification);
         this.toAdd = toAdd;
-        this.latestModification = latestModification;
         this.streamCandidates = streamCandidates;
         this.finishJoin = join;
     }
@@ -105,12 +117,6 @@ public class AddToCMS extends InProgressSequence<AddToCMS>
     public ProgressBarrier barrier()
     {
         return ProgressBarrier.immediate();
-    }
-
-    @Override
-    public Transformation.Kind nextStep()
-    {
-        return finishJoin.kind();
     }
 
     @Override
@@ -136,23 +142,6 @@ public class AddToCMS extends InProgressSequence<AddToCMS>
     }
 
     @Override
-    protected Transformation.Kind stepFollowing(Transformation.Kind kind)
-    {
-        if (kind == null)
-            return null;
-
-        switch (kind)
-        {
-            case START_ADD_TO_CMS:
-                return Transformation.Kind.FINISH_ADD_TO_CMS;
-            case FINISH_ADD_TO_CMS:
-                return null;
-            default:
-                throw new IllegalStateException(String.format("Step %s is not a part of %s sequence", kind, kind()));
-        }
-    }
-
-    @Override
     protected InProgressSequences.SequenceKey sequenceKey()
     {
         return toAdd;
@@ -162,6 +151,12 @@ public class AddToCMS extends InProgressSequence<AddToCMS>
     public InProgressSequences.Kind kind()
     {
         return JOIN_OWNERSHIP_GROUP;
+    }
+
+    @Override
+    public boolean atFinalStep()
+    {
+        return true;
     }
 
     @Override

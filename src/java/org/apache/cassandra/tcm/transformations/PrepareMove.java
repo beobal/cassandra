@@ -34,12 +34,14 @@ import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.cassandra.io.util.DataOutputPlus;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
+import org.apache.cassandra.tcm.InProgressSequence;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.membership.NodeState;
 import org.apache.cassandra.tcm.ownership.PlacementDeltas;
 import org.apache.cassandra.tcm.ownership.PlacementProvider;
 import org.apache.cassandra.tcm.ownership.PlacementTransitionPlan;
+import org.apache.cassandra.tcm.sequences.InProgressSequences;
 import org.apache.cassandra.tcm.sequences.LockedRanges;
 import org.apache.cassandra.tcm.sequences.Move;
 import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializer;
@@ -67,6 +69,28 @@ public class PrepareMove implements Transformation
         this.streamData = streamData;
     }
 
+    public static ClusterMetadata commit(ClusterMetadataService clusterMetadataService,
+                                         NodeId nodeId,
+                                         Set<Token> tokens,
+                                         PlacementProvider placementProvider,
+                                         boolean streamData)
+    {
+        return clusterMetadataService.commit(new PrepareMove(nodeId,
+                                                             tokens,
+                                                             placementProvider,
+                                                             streamData),
+                                                 (metadata) -> metadata,
+                                                 (metadata_, code, reason) -> {
+                                                     InProgressSequence<?> sequence = metadata_.inProgressSequences.get(nodeId);
+                                                     // We might have discovered a startup sequence we ourselves committed but got no response for
+                                                     if (sequence == null || sequence.kind() != InProgressSequences.Kind.MOVE)
+                                                     {
+                                                         throw new IllegalStateException(String.format("Can not commit event to metadata service: %s. Interrupting leave sequence.",
+                                                                                                       reason));
+                                                     }
+                                                     return null;
+                                                 });
+    }
     @Override
     public String toString()
     {
@@ -104,15 +128,14 @@ public class PrepareMove implements Transformation
         MidMove midMove = new MidMove(nodeId, transitionPlan.moveReads(), lockKey);
         FinishMove finishMove = new FinishMove(nodeId, tokens, transitionPlan.removeFromWrites(), lockKey);
 
-        Move sequence = new Move(prev.nextEpoch(),
-                                 tokens,
-                                 lockKey,
-                                 Kind.START_MOVE,
-                                 transitionPlan.toSplit,
-                                 startMove,
-                                 midMove,
-                                 finishMove,
-                                 false);
+        Move sequence = Move.newSequence(prev.nextEpoch(),
+                                         lockKey,
+                                         tokens,
+                                         transitionPlan.toSplit,
+                                         startMove,
+                                         midMove,
+                                         finishMove,
+                                         false);
 
         return Transformation.success(prev.transformer()
                                           .withNodeState(nodeId, NodeState.MOVING)

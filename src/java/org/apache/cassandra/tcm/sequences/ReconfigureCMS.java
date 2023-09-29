@@ -21,7 +21,6 @@ package org.apache.cassandra.tcm.sequences;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -39,7 +38,6 @@ import org.apache.cassandra.locator.EndpointsByReplica;
 import org.apache.cassandra.locator.EndpointsForRange;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.locator.RangesAtEndpoint;
-import org.apache.cassandra.locator.RangesByEndpoint;
 import org.apache.cassandra.locator.Replica;
 import org.apache.cassandra.metrics.TCMMetrics;
 import org.apache.cassandra.net.Message;
@@ -58,9 +56,7 @@ import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.InProgressSequence;
 import org.apache.cassandra.tcm.Retry;
-import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.NodeId;
-import org.apache.cassandra.tcm.ownership.DataPlacement;
 import org.apache.cassandra.tcm.ownership.EntireRange;
 import org.apache.cassandra.tcm.ownership.MovementMap;
 import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializer;
@@ -71,98 +67,110 @@ import org.apache.cassandra.tcm.transformations.cms.PrepareCMSReconfiguration;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.concurrent.Future;
 
-import static org.apache.cassandra.exceptions.ExceptionCode.INVALID;
 import static org.apache.cassandra.streaming.StreamOperation.RESTORE_REPLICA_COUNT;
 import static org.apache.cassandra.tcm.ownership.EntireRange.entireRange;
 
-public class ReconfigureCMS extends InProgressSequence<ReconfigureCMS>
+public class ReconfigureCMS extends InProgressSequence<AdvanceCMSReconfiguration>
 {
     public static final Serializer serializer = new Serializer();
     private static final Logger logger = LoggerFactory.getLogger(ReconfigureCMS.class);
 
     /**
-     * We store the state (lock key, diff, and active transition) in the transformation to make debugging simpler,
-     * since otherwise active transition, additions, and removals would have to be taken from ClusterMetadata, and
-     * `Enacted` log messages would be less useful.
+     * We store the state (lock key, diff, active transition, position in the logical sequence, latest epoch enacted
+     * as part of this sequence) in the singleton transformation itself. This simplifies access to that state by the
+     * transformation and makes its representation in `Enacted` log messages and the virtual log table more useful.
      */
     public final AdvanceCMSReconfiguration next;
 
-    public ReconfigureCMS(LockedRanges.Key lockKey, PrepareCMSReconfiguration.Diff diff, ReconfigureCMS.ActiveTransition active)
+    /**
+     * Factory method, called when intiating a sequence to reconfigure the membership of the CMS. Supplies Epoch.EMPTY
+     * as the progress barrier condition as an entirely new reconfiguration sequence has no prerequisite.
+     * @param lockKey token which prevents intersecting operations being run concurrently. Due to the scope and nature
+     *                of this particular operation this key always covers the entire cluster, effectively preventing
+     *                multiple CMS reconfigurations from being prepared concurrently. It is stored on the sequence
+     *                itself so that it can be released when the sequence completes or is cancelled.
+     * @param diff The set of add member / remove member operations that must be executed to transform the CMS
+     *             membership between the initial and desired states.
+     */
+    public static ReconfigureCMS newSequence(LockedRanges.Key lockKey, PrepareCMSReconfiguration.Diff diff)
     {
-        this(new AdvanceCMSReconfiguration(0, lockKey, diff, active));
+        return new ReconfigureCMS(new AdvanceCMSReconfiguration(0, Epoch.EMPTY, lockKey, diff, null));
     }
 
-    public ReconfigureCMS(AdvanceCMSReconfiguration next)
+    /**
+     * Called by the factory method and deserializer.
+     * The supplied transformation represents the next step in the logical sequence.
+     * @param next step to be executed next
+     */
+    private ReconfigureCMS(AdvanceCMSReconfiguration next)
     {
+        super(next.sequenceIndex, next.latestModification);
         this.next = next;
     }
 
-    public static Transformation.Result executeStartAdd(ClusterMetadata prev, NodeId nodeId, TransformFn<InProgressSequences, Set<InetAddressAndPort>> updateInProgressSequenes) throws Transformation.RejectedTransformationException
+    @Override
+    public ReconfigureCMS advance(AdvanceCMSReconfiguration next)
     {
-        InetAddressAndPort endpoint = prev.directory.endpoint(nodeId);
-        Replica replica = new Replica(endpoint, entireRange, true);
+        return new ReconfigureCMS(next);
+    }
 
-        ReplicationParams metaParams = ReplicationParams.meta(prev);
-        RangesByEndpoint readReplicas = prev.placements.get(metaParams).reads.byEndpoint();
-        RangesByEndpoint writeReplicas = prev.placements.get(metaParams).writes.byEndpoint();
+    @Override
+    public ProgressBarrier barrier()
+    {
+        ClusterMetadata metadata = ClusterMetadata.current();
+        return new ProgressBarrier(latestModification,
+                                   metadata.directory.location(metadata.myNodeId()),
+                                   EntireRange.affectedRanges(metadata));
+    }
 
-        if (readReplicas.containsKey(endpoint) || writeReplicas.containsKey(endpoint))
-            return new Transformation.Rejected(INVALID, "Endpoint is already a member of CMS");
+    @Override
+    public InProgressSequences.Kind kind()
+    {
+        return InProgressSequences.Kind.RECONFIGURE_CMS;
+    }
 
-        ClusterMetadata.Transformer transformer = prev.transformer();
-        DataPlacement.Builder builder = prev.placements.get(metaParams).unbuild()
-                                                       .withWriteReplica(prev.nextEpoch(), replica);
+    @Override
+    public boolean atFinalStep()
+    {
+        return next.isLast();
+    }
 
-        transformer.with(prev.placements.unbuild().with(metaParams, builder.build()).build());
+    @Override
+    protected SequenceKey sequenceKey()
+    {
+        return SequenceKey.instance;
+    }
 
-        Set<InetAddressAndPort> streamCandidates = new HashSet<>();
-        for (Replica r : prev.placements.get(metaParams).reads.byEndpoint().flattenValues())
+    @Override
+    public SequenceState executeNext()
+    {
+        ClusterMetadata metadata = ClusterMetadata.current();
+        InProgressSequence<?> inProgressSequence = metadata.inProgressSequences.get(SequenceKey.instance);
+        if (inProgressSequence.kind() != InProgressSequences.Kind.RECONFIGURE_CMS)
+            throw new IllegalStateException(String.format("Can not advance in-progress sequence, since its kind is %s, but not %s", inProgressSequence.kind(), InProgressSequences.Kind.RECONFIGURE_CMS));
+
+        ReconfigureCMS transitionCMS = (ReconfigureCMS) inProgressSequence;
+        try
         {
-            if (!replica.equals(r))
-                streamCandidates.add(r.endpoint());
+            if (transitionCMS.next.activeTransition != null)
+            {
+                // An active transition represents a joining member which has been added as a write replica, but must
+                // stream up to date distributed log tables before being able to serve reads & participate in quorums.
+                // If this is the case, do that streaming now.
+                ActiveTransition activeTransition = transitionCMS.next.activeTransition;
+                InetAddressAndPort endpoint = metadata.directory.endpoint(activeTransition.nodeId);
+                Replica replica = new Replica(endpoint, entireRange, true);
+                streamRanges(replica, activeTransition.streamCandidates);
+            }
+            // Commit the next step in the sequence
+            commit(transitionCMS.next);
+            return SequenceState.continuable();
         }
-
-        return Transformation.success(transformer.with(updateInProgressSequenes.apply(prev.inProgressSequences, streamCandidates)),
-                                      EntireRange.affectedRanges(prev));
-    }
-
-    public static Transformation.Result executeFinishAdd(ClusterMetadata prev, NodeId nodeId, TransformFn<InProgressSequences, InProgressSequences> updateInProgressSequenes) throws Transformation.RejectedTransformationException
-    {
-        ReplicationParams metaParams = ReplicationParams.meta(prev);
-        InetAddressAndPort endpoint = prev.directory.endpoint(nodeId);
-        Replica replica = new Replica(endpoint, entireRange, true);
-
-        ClusterMetadata.Transformer transformer = prev.transformer();
-        DataPlacement.Builder builder = prev.placements.get(metaParams)
-                                                       .unbuild()
-                                                       .withReadReplica(prev.nextEpoch(), replica);
-        transformer = transformer.with(prev.placements.unbuild().with(metaParams, builder.build()).build());
-
-        return Transformation.success(transformer.with(updateInProgressSequenes.apply(prev.inProgressSequences, null)),
-                                      EntireRange.affectedRanges(prev));
-    }
-
-    public static Transformation.Result executeRemove(ClusterMetadata prev, NodeId nodeId, TransformFn<InProgressSequences, InProgressSequences> updateInProgressSequenes) throws Transformation.RejectedTransformationException
-    {
-        ClusterMetadata.Transformer transformer = prev.transformer();
-        InetAddressAndPort endpoint = prev.directory.endpoint(nodeId);
-        Replica replica = new Replica(endpoint, entireRange, true);
-        ReplicationParams metaParams = ReplicationParams.meta(prev);
-
-        if (!prev.fullCMSMembers().contains(endpoint))
-            return new Transformation.Rejected(INVALID, String.format("%s is not currently a CMS member, cannot remove it", endpoint));
-
-        DataPlacement.Builder builder = prev.placements.get(metaParams).unbuild();
-        builder.reads.withoutReplica(prev.nextEpoch(), replica);
-        builder.writes.withoutReplica(prev.nextEpoch(), replica);
-        DataPlacement proposed = builder.build();
-
-        if (proposed.reads.byEndpoint().isEmpty() || proposed.writes.byEndpoint().isEmpty())
-            return new Transformation.Rejected(INVALID, String.format("Removing %s will leave no nodes in CMS", endpoint));
-
-        return Transformation.success(transformer.with(prev.placements.unbuild().with(metaParams, proposed).build())
-                                                 .with(updateInProgressSequenes.apply(prev.inProgressSequences, null)),
-                                      EntireRange.affectedRanges(prev));
+        catch (Throwable t)
+        {
+            logger.error("Could not finish adding the node to the Cluster Metadata Service", t);
+            return SequenceState.blocked();
+        }
     }
 
     public static void maybeReconfigureCMS(ClusterMetadata metadata, InetAddressAndPort toRemove)
@@ -264,7 +272,7 @@ public class ReconfigureCMS extends InProgressSequence<ReconfigureCMS>
             for (Supplier<Future<?>> supplier : remaining)
                 tasks.put(supplier, supplier.get());
             remaining.clear();
-            logger.info("Performing paxos topology repair on:", remaining);
+            logger.info("Performing paxos topology repair on: {}", remaining);
 
             for (Map.Entry<Supplier<Future<?>>, Future<?>> e : tasks.entrySet())
             {
@@ -274,7 +282,7 @@ public class ReconfigureCMS extends InProgressSequence<ReconfigureCMS>
                 }
                 catch (ExecutionException t)
                 {
-                    logger.error("Caught an exception while repairing paxos topology.", e);
+                    logger.error("Caught an exception while repairing paxos topology.", t);
                     remaining.add(e.getKey());
                 }
                 catch (InterruptedException t)
@@ -288,81 +296,8 @@ public class ReconfigureCMS extends InProgressSequence<ReconfigureCMS>
 
             retry.maybeSleep();
         }
-        logger.error(String.format("Added node as a CMS, but failed to repair paxos topology after this operation."));
+        logger.error("Added node as a CMS, but failed to repair paxos topology after this operation.");
     }
-
-    public InProgressSequences.Kind kind()
-    {
-        return InProgressSequences.Kind.RECONFIGURE_CMS;
-    }
-
-    public ProgressBarrier barrier()
-    {
-        return ProgressBarrier.immediate();
-    }
-
-    public Transformation.Kind nextStep()
-    {
-        return Transformation.Kind.ADVANCE_CMS_RECONFIGURATION;
-    }
-
-    @Override
-    public SequenceState executeNext()
-    {
-        ClusterMetadata metadata = ClusterMetadata.current();
-        InProgressSequence<?> inProgressSequence = metadata.inProgressSequences.get(SequenceKey.instance);
-        if (inProgressSequence.kind() != InProgressSequences.Kind.RECONFIGURE_CMS)
-            throw new IllegalStateException(String.format("Can not advance in-progress sequence, since its kind is %s, but not %s", inProgressSequence.kind(), InProgressSequences.Kind.RECONFIGURE_CMS));
-        ReconfigureCMS transitionCMS = (ReconfigureCMS) inProgressSequence;
-        try
-        {
-            if (transitionCMS.next.activeTransition != null)
-            {
-                ActiveTransition activeTransition = transitionCMS.next.activeTransition;
-                InetAddressAndPort endpoint = metadata.directory.endpoint(activeTransition.nodeId);
-                Replica replica = new Replica(endpoint, entireRange, true);
-                streamRanges(replica, transitionCMS.next.activeTransition.streamCandidates);
-            }
-
-            commit(transitionCMS.next);
-            metadata = ClusterMetadata.current();
-            new ProgressBarrier(metadata.epoch, metadata.directory.location(metadata.myNodeId()), EntireRange.affectedRanges(metadata)).await();
-            return SequenceState.continuable();
-        }
-        catch (Throwable t)
-        {
-            logger.error("Could not finish adding the node to the metadata ownership group", t);
-            return SequenceState.blocked();
-        }
-    }
-
-    public ReconfigureCMS advance(Epoch waitForWatermark)
-    {
-        throw new IllegalStateException("TransitionCMS advances im-progress sequences manually");
-    }
-
-    protected Transformation.Kind stepFollowing(Transformation.Kind kind)
-    {
-        int steps = 0;
-        if (next.activeTransition != null)
-            steps += 1;
-        if (!next.diff.additions.isEmpty())
-            steps += next.diff.additions.size() * 2;
-        if (!next.diff.removals.isEmpty())
-            steps += next.diff.removals.size();
-
-        if (steps > 1)
-            return Transformation.Kind.ADVANCE_CMS_RECONFIGURATION;
-        else
-            return null;
-    }
-
-    @Override
-    protected SequenceKey sequenceKey()
-    {
-        return SequenceKey.instance;
-    }
-
     public static class ActiveTransition
     {
         public final NodeId nodeId;
@@ -372,6 +307,15 @@ public class ReconfigureCMS extends InProgressSequence<ReconfigureCMS>
         {
             this.nodeId = nodeId;
             this.streamCandidates = Collections.unmodifiableSet(streamCandidates);
+        }
+
+        @Override
+        public String toString()
+        {
+            return "ActiveTransition{" +
+                   "nodeId=" + nodeId +
+                   ", streamCandidates=" + streamCandidates +
+                   '}';
         }
     }
 
@@ -407,6 +351,8 @@ public class ReconfigureCMS extends InProgressSequence<ReconfigureCMS>
 
             public void serialize(SequenceKey t, DataOutputPlus out, Version version) throws IOException
             {
+                // not actually serialized at only one reconfiguration sequence
+                // is permitted at a time so the key is a constant
             }
 
             public SequenceKey deserialize(DataInputPlus in, Version version) throws IOException
@@ -419,10 +365,5 @@ public class ReconfigureCMS extends InProgressSequence<ReconfigureCMS>
                 return 0;
             }
         }
-    }
-
-    public interface TransformFn<T1, T2>
-    {
-        T1 apply(T1 v1, T2 v2) throws Transformation.RejectedTransformationException;
     }
 }

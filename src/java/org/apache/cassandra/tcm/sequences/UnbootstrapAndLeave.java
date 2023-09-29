@@ -19,27 +19,23 @@
 package org.apache.cassandra.tcm.sequences;
 
 import java.io.IOException;
-import java.util.EnumSet;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 
+import com.google.common.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.gms.Gossiper;
 import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.cassandra.io.util.DataOutputPlus;
 import org.apache.cassandra.locator.DynamicEndpointSnitch;
-import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.tcm.ClusterMetadata;
-import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.InProgressSequence;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.Location;
-import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.membership.NodeState;
 import org.apache.cassandra.tcm.ownership.DataPlacements;
 import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializer;
@@ -48,17 +44,18 @@ import org.apache.cassandra.tcm.transformations.PrepareLeave;
 import org.apache.cassandra.utils.JVMStabilityInspector;
 import org.apache.cassandra.utils.vint.VIntCoding;
 
-import static org.apache.cassandra.tcm.membership.NodeState.LEAVING;
+import static org.apache.cassandra.tcm.Transformation.Kind.FINISH_LEAVE;
+import static org.apache.cassandra.tcm.Transformation.Kind.MID_LEAVE;
+import static org.apache.cassandra.tcm.Transformation.Kind.START_LEAVE;
+import static org.apache.cassandra.tcm.sequences.InProgressSequences.Kind.LEAVE;
 import static org.apache.cassandra.tcm.sequences.SequenceState.continuable;
 import static org.apache.cassandra.tcm.sequences.SequenceState.error;
-import static org.apache.cassandra.utils.FBUtilities.getBroadcastAddressAndPort;
 
-public class UnbootstrapAndLeave extends InProgressSequence<UnbootstrapAndLeave>
+public class UnbootstrapAndLeave extends InProgressSequence<Epoch>
 {
     private static final Logger logger = LoggerFactory.getLogger(UnbootstrapAndLeave.class);
     public static final Serializer serializer = new Serializer();
 
-    public final Epoch latestModification;
     public final LockedRanges.Key lockKey;
     public final Transformation.Kind next;
 
@@ -67,7 +64,25 @@ public class UnbootstrapAndLeave extends InProgressSequence<UnbootstrapAndLeave>
     public final PrepareLeave.FinishLeave finishLeave;
     private final LeaveStreams streams;
 
-    public UnbootstrapAndLeave(Epoch latestModification,
+    public static UnbootstrapAndLeave newSequence(Epoch preparedAt,
+                                                  LockedRanges.Key lockKey,
+                                                  PrepareLeave.StartLeave startLeave,
+                                                  PrepareLeave.MidLeave midLeave,
+                                                  PrepareLeave.FinishLeave finishLeave,
+                                                  LeaveStreams streams)
+    {
+        return new UnbootstrapAndLeave(preparedAt,
+                                       lockKey,
+                                       START_LEAVE,
+                                       startLeave, midLeave, finishLeave,
+                                       streams);
+    }
+
+    /**
+     * Used by factory method for external callers and by Serializer
+     */
+    @VisibleForTesting
+    UnbootstrapAndLeave(Epoch latestModification,
                                LockedRanges.Key lockKey,
                                Transformation.Kind next,
                                PrepareLeave.StartLeave startLeave,
@@ -75,7 +90,7 @@ public class UnbootstrapAndLeave extends InProgressSequence<UnbootstrapAndLeave>
                                PrepareLeave.FinishLeave finishLeave,
                                LeaveStreams streams)
     {
-        this.latestModification = latestModification;
+        super(nextToIndex(next), latestModification);
         this.lockKey = lockKey;
         this.next = next;
         this.startLeave = startLeave;
@@ -85,132 +100,23 @@ public class UnbootstrapAndLeave extends InProgressSequence<UnbootstrapAndLeave>
     }
 
     /**
-     * Entrypoint to begin node decommission process.
-     *
-     * @param shutdownNetworking if set to true, will also shut down networking on completion
-     * @param force if set to true, will decommission the node even if this would mean there will be not enough nodes
-     *              to satisfy replication factor
+     * Used by advance to move forward in the sequence after execution
      */
-    public static void decommission(boolean shutdownNetworking, boolean force)
+    private UnbootstrapAndLeave(UnbootstrapAndLeave current, Epoch latestModification)
     {
-        if (ClusterMetadataService.instance().isMigrating() || ClusterMetadataService.state() == ClusterMetadataService.State.GOSSIP)
-            throw new IllegalStateException("This cluster is migrating to cluster metadata, can't decommission until that is done.");
-
-        ClusterMetadata metadata = ClusterMetadata.current();
-
-        StorageService.Mode mode = StorageService.instance.operationMode();
-        if (!EnumSet.of(StorageService.Mode.LEAVING, StorageService.Mode.NORMAL).contains(mode))
-            throw new UnsupportedOperationException(String.format("Node in %s state; wait for status to become normal", mode));
-        logger.debug("DECOMMISSIONING");
-
-        NodeId self = metadata.myNodeId();
-
-        ReconfigureCMS.maybeReconfigureCMS(metadata, getBroadcastAddressAndPort());
-        InProgressSequence<?> inProgress = metadata.inProgressSequences.get(self);
-
-        if (inProgress == null)
-        {
-            logger.info("starting decom with {} {}", metadata.epoch, self);
-            ClusterMetadataService.instance().commit(new PrepareLeave(self,
-                                                                      force,
-                                                                      ClusterMetadataService.instance().placementProvider(),
-                                                                      LeaveStreams.Kind.UNBOOTSTRAP),
-                                                     (metadata_) -> null,
-                                                     (metadata_, code, reason) -> {
-                                                         InProgressSequence<?> sequence = metadata_.inProgressSequences.get(self);
-                                                         // We might have discovered a sequence we ourselves committed but got no response for
-                                                         if (sequence == null || sequence.kind() != InProgressSequences.Kind.LEAVE)
-                                                         {
-                                                             throw new IllegalStateException(String.format("Can not commit event to metadata service: %s. Interrupting leave sequence.",
-                                                                                                           reason));
-                                                         }
-                                                         return null;
-                                                     });
-        }
-        else if (!InProgressSequences.isLeave(inProgress))
-        {
-            throw new IllegalArgumentException("Can not decommission a node that has an in-progress sequence");
-        }
-
-        InProgressSequences.finishInProgressSequences(self);
-        if (shutdownNetworking)
-            StorageService.instance.shutdownNetworking();
-    }
-
-    /**
-     * Entrypoint to begin node removal process
-     *
-     * @param toRemove id of the node to remove
-     * @param force if set to true, will remove the node even if this would mean there will be not enough nodes
-     *              to satisfy replication factor
-     */
-    public static void removeNode(NodeId toRemove, boolean force)
-    {
-        ClusterMetadata metadata = ClusterMetadata.current();
-        if (toRemove.equals(metadata.myNodeId()))
-            throw new UnsupportedOperationException("Cannot remove self");
-        InetAddressAndPort endpoint = metadata.directory.endpoint(toRemove);
-        if (endpoint == null)
-            throw new UnsupportedOperationException("Host ID not found.");
-        if (Gossiper.instance.getLiveMembers().contains(endpoint))
-            throw new UnsupportedOperationException("Node " + endpoint + " is alive and owns this ID. Use decommission command to remove it from the ring");
-
-        NodeState removeState = metadata.directory.peerState(toRemove);
-        if (removeState == null)
-            throw new UnsupportedOperationException("Node to be removed is not a member of the token ring");
-        if (removeState == LEAVING)
-            logger.warn("Node {} is already leaving or being removed, continuing removal anyway", endpoint);
-
-        if (metadata.inProgressSequences.contains(toRemove))
-            throw new UnsupportedOperationException("Can not remove a node that has an in-progress sequence");
-
-        ReconfigureCMS.maybeReconfigureCMS(metadata, endpoint);
-
-        logger.info("starting removenode with {} {}", metadata.epoch, toRemove);
-
-        ClusterMetadataService.instance().commit(new PrepareLeave(toRemove,
-                                                                  force,
-                                                                  ClusterMetadataService.instance().placementProvider(),
-                                                                  LeaveStreams.Kind.REMOVENODE),
-                                                 (metadata_) -> null,
-                                                 (metadata_, code, reason) -> {
-                                                     InProgressSequence<?> sequence = metadata_.inProgressSequences.get(toRemove);
-                                                     // We might have discovered a startup sequence we ourselves committed but got no response for
-                                                     if (sequence == null || sequence.kind() != InProgressSequences.Kind.REMOVE)
-                                                     {
-                                                         throw new IllegalStateException(String.format("Can not commit event to metadata service: %s. Interrupting removenode sequence.",
-                                                                                                       reason));
-                                                     }
-                                                     return null;
-                                                 });
-        InProgressSequences.finishInProgressSequences(toRemove);
+        super(current.idx + 1, latestModification);
+        this.next = indexToNext(current.idx + 1);
+        this.lockKey = current.lockKey;
+        this.startLeave = current.startLeave;
+        this.midLeave = current.midLeave;
+        this.finishLeave = current.finishLeave;
+        this.streams = current.streams;
     }
 
     @Override
-    public UnbootstrapAndLeave advance(Epoch waitFor)
+    public UnbootstrapAndLeave advance(Epoch waitUntilAcknowledged)
     {
-        return new UnbootstrapAndLeave(waitFor, lockKey, stepFollowing(next),
-                                       startLeave, midLeave, finishLeave, streams);
-    }
-
-    @Override
-    public Transformation.Kind nextStep()
-    {
-        return next;
-    }
-
-    @Override
-    public InProgressSequences.Kind kind()
-    {
-        switch (streams.kind())
-        {
-            case UNBOOTSTRAP:
-                return InProgressSequences.Kind.LEAVE;
-            case REMOVENODE:
-                return InProgressSequences.Kind.REMOVE;
-            default:
-                throw new IllegalStateException("Invalid stream kind: "+streams.kind());
-        }
+        return new UnbootstrapAndLeave(this, waitUntilAcknowledged);
     }
 
     @Override
@@ -223,6 +129,32 @@ public class UnbootstrapAndLeave extends InProgressSequence<UnbootstrapAndLeave>
             return new ProgressBarrier(latestModification, location, affectedRanges, (e) -> !e.equals(metadata.directory.endpoint(startLeave.nodeId())));
         else
             return new ProgressBarrier(latestModification, location, affectedRanges);
+    }
+
+    @Override
+    public InProgressSequences.Kind kind()
+    {
+        switch (streams.kind())
+        {
+            case UNBOOTSTRAP:
+                return LEAVE;
+            case REMOVENODE:
+                return InProgressSequences.Kind.REMOVE;
+            default:
+                throw new IllegalStateException("Invalid stream kind: "+streams.kind());
+        }
+    }
+
+    @Override
+    protected InProgressSequences.SequenceKey sequenceKey()
+    {
+        return startLeave.nodeId();
+    }
+
+    @Override
+    public boolean atFinalStep()
+    {
+        return next == FINISH_LEAVE;
     }
 
     @Override
@@ -307,53 +239,40 @@ public class UnbootstrapAndLeave extends InProgressSequence<UnbootstrapAndLeave>
     }
 
     @Override
-    protected Transformation.Kind stepFollowing(Transformation.Kind kind)
-    {
-        if (kind == null)
-            return null;
-
-        switch (kind)
-        {
-            case START_LEAVE:
-                return Transformation.Kind.MID_LEAVE;
-            case MID_LEAVE:
-                return Transformation.Kind.FINISH_LEAVE;
-            case FINISH_LEAVE:
-                return null;
-            default:
-                throw new IllegalStateException(String.format("Step %s is not a part of %s sequence", kind, kind()));
-        }
-    }
-
-    @Override
-    protected InProgressSequences.SequenceKey sequenceKey()
-    {
-        return startLeave.nodeId();
-    }
-
     public String status()
     {
+        // Overridden to maintain compatibility with nodetool removenode output
         return String.format("step: %s, streams: %s", next, streams.status());
     }
 
-    @Override
-    public boolean equals(Object o)
+    private static int nextToIndex(Transformation.Kind next)
     {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        UnbootstrapAndLeave that = (UnbootstrapAndLeave) o;
-        return Objects.equals(startLeave, that.startLeave) &&
-               Objects.equals(midLeave, that.midLeave) &&
-               Objects.equals(finishLeave, that.finishLeave) &&
-               Objects.equals(latestModification, that.latestModification) &&
-               Objects.equals(lockKey, that.lockKey) &&
-               next == that.next;
+        switch (next)
+        {
+            case START_LEAVE:
+                return 0;
+            case MID_LEAVE:
+                return 1;
+            case FINISH_LEAVE:
+                return 2;
+            default:
+                throw new IllegalStateException(String.format("Step %s is invalid for sequence %s ", next, LEAVE));
+        }
     }
 
-    @Override
-    public int hashCode()
+    private static Transformation.Kind indexToNext(int index)
     {
-        return Objects.hash(startLeave, midLeave, finishLeave, latestModification, lockKey, next);
+        switch (index)
+        {
+            case 0:
+                return START_LEAVE;
+            case 1:
+                return MID_LEAVE;
+            case 2:
+                return FINISH_LEAVE;
+            default:
+                throw new IllegalStateException(String.format("Step %s is invalid for sequence %s ", index, LEAVE));
+        }
     }
 
     @Override
@@ -367,6 +286,26 @@ public class UnbootstrapAndLeave extends InProgressSequence<UnbootstrapAndLeave>
                ", finishLeave=" + finishLeave +
                ", next=" + next +
                '}';
+    }
+
+    @Override
+    public boolean equals(Object o)
+    {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        UnbootstrapAndLeave that = (UnbootstrapAndLeave) o;
+        return next == that.next &&
+               Objects.equals(startLeave, that.startLeave) &&
+               Objects.equals(midLeave, that.midLeave) &&
+               Objects.equals(finishLeave, that.finishLeave) &&
+               Objects.equals(latestModification, that.latestModification) &&
+               Objects.equals(lockKey, that.lockKey);
+    }
+
+    @Override
+    public int hashCode()
+    {
+        return Objects.hash(startLeave, midLeave, finishLeave, latestModification, lockKey, next);
     }
 
     public static class Serializer implements AsymmetricMetadataSerializer<InProgressSequence<?>, UnbootstrapAndLeave>

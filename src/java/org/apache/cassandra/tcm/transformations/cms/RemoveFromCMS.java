@@ -28,19 +28,28 @@ import org.apache.cassandra.db.TypeSizes;
 import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.cassandra.io.util.DataOutputPlus;
 import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.locator.Replica;
 import org.apache.cassandra.schema.ReplicationParams;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.InProgressSequence;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.ownership.DataPlacement;
+import org.apache.cassandra.tcm.ownership.EntireRange;
 import org.apache.cassandra.tcm.sequences.InProgressSequences;
 import org.apache.cassandra.tcm.sequences.ReconfigureCMS;
 import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializer;
 import org.apache.cassandra.tcm.serialization.Version;
 
 import static org.apache.cassandra.exceptions.ExceptionCode.INVALID;
+import static org.apache.cassandra.tcm.ownership.EntireRange.entireRange;
 
+/**
+ * @deprecated in favour of ReconfigureCMS
+ * This class along with AddToCMS, StartAddToCMS & FinishAddToCMS, contain a high degree of duplication with their intended
+ * replacements ReconfigureCMS and AdvanceCMSReconfiguration. This shouldn't be a big problem as the intention is to
+ * remove this superceded version asap.
+ */
 @Deprecated
 public class RemoveFromCMS extends BaseMembershipTransformation
 {
@@ -66,12 +75,17 @@ public class RemoveFromCMS extends BaseMembershipTransformation
     public Result execute(ClusterMetadata prev)
     {
         InProgressSequences sequences = prev.inProgressSequences;
+        if (sequences.get(ReconfigureCMS.SequenceKey.instance) != null)
+            return new Rejected(INVALID, String.format("Cannot remove %s from CMS as a CMS reconfiguration is currently active", endpoint));
+
+        if (!prev.fullCMSMembers().contains(endpoint))
+            return new Transformation.Rejected(INVALID, String.format("%s is not currently a CMS member, cannot remove it", endpoint));
+
         NodeId nodeId = prev.directory.peerId(endpoint);
         InProgressSequence<?> sequence = sequences.get(nodeId);
-
         // This is theoretically permissible, but feels unsafe
         if (sequence != null)
-            return new Transformation.Rejected(INVALID, "Can't remove node from CMS as there are ongoing range movements on it");
+            return new Transformation.Rejected(INVALID, String.format("Can't remove %s from CMS as there are ongoing range movements on it", endpoint));
 
         ReplicationParams metaParams = ReplicationParams.meta(prev);
         DataPlacement placements = prev.placements.get(metaParams);
@@ -95,7 +109,19 @@ public class RemoveFromCMS extends BaseMembershipTransformation
         if (minProposedSize == 0)
             return new Transformation.Rejected(INVALID, String.format("Removing %s from the CMS would leave no members in CMS.", endpoint));
 
-        return ReconfigureCMS.executeRemove(prev, prev.directory.peerId(endpoint), (i, ignored_)  -> i);
+        ClusterMetadata.Transformer transformer = prev.transformer();
+        Replica replica = new Replica(endpoint, entireRange, true);
+
+        DataPlacement.Builder builder = prev.placements.get(metaParams).unbuild();
+        builder.reads.withoutReplica(prev.nextEpoch(), replica);
+        builder.writes.withoutReplica(prev.nextEpoch(), replica);
+        DataPlacement proposed = builder.build();
+
+        if (proposed.reads.byEndpoint().isEmpty() || proposed.writes.byEndpoint().isEmpty())
+            return new Transformation.Rejected(INVALID, String.format("Removing %s will leave no nodes in CMS", endpoint));
+
+        return Transformation.success(transformer.with(prev.placements.unbuild().with(metaParams, proposed).build()),
+                                      EntireRange.affectedRanges(prev));
     }
 
     @Override
