@@ -130,8 +130,8 @@ public class InProgressSequenceCancellationTest
 
         BootstrapAndJoin plan = new BootstrapAndJoin(Epoch.EMPTY,
                                                      key,
-                                                     Transformation.Kind.FINISH_JOIN,
                                                      prepareDeltas,
+                                                     Transformation.Kind.FINISH_JOIN,
                                                      new PrepareJoin.StartJoin(nodeId, startDeltas, key),
                                                      new PrepareJoin.MidJoin(nodeId, midDeltas, key),
                                                      new PrepareJoin.FinishJoin(nodeId, tokens, finishDeltas, key),
@@ -277,8 +277,8 @@ public class InProgressSequenceCancellationTest
 
         BootstrapAndReplace plan = new BootstrapAndReplace(Epoch.EMPTY,
                                                            key,
-                                                           Transformation.Kind.FINISH_REPLACE,
                                                            tokens,
+                                                           Transformation.Kind.FINISH_REPLACE,
                                                            new PrepareReplace.StartReplace(replacedId, nodeId, startDeltas, key),
                                                            new PrepareReplace.MidReplace(replacedId, nodeId, midDeltas, key),
                                                            new PrepareReplace.FinishReplace(replacedId, nodeId, PlacementDeltas.empty(), key),

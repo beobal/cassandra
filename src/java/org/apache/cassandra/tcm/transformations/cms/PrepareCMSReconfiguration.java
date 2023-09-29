@@ -59,8 +59,9 @@ public class PrepareCMSReconfiguration
         if (tmp.isEmpty())
             return new Transformation.Rejected(INVALID, String.format("Applying diff %s to %s would leave CMS empty", cms, diff));
 
-        ClusterMetadata.Transformer transformer = prev.transformer().with(prev.inProgressSequences.with(ReconfigureCMS.SequenceKey.instance,
-                                                                                                        new ReconfigureCMS(lockKey, diff, null)))
+        ClusterMetadata.Transformer transformer = prev.transformer()
+                                                      .with(prev.inProgressSequences.with(ReconfigureCMS.SequenceKey.instance,
+                                                                                          ReconfigureCMS.newSequence(lockKey, diff)))
                                                       .with(prev.lockedRanges.lock(lockKey, LockedRanges.AffectedRanges.singleton(ReplicationParams.meta(prev), entireRange)));
         return Transformation.success(transform.apply(transformer), LockedRanges.AffectedRanges.EMPTY);
     }

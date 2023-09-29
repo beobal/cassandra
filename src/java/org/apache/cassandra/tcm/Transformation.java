@@ -197,8 +197,11 @@ public interface Transformation
 
         CANCEL_SEQUENCE(() -> CancelInProgressSequence.serializer),
 
+        @Deprecated
         START_ADD_TO_CMS(() -> StartAddToCMS.serializer),
+        @Deprecated
         FINISH_ADD_TO_CMS(() -> FinishAddToCMS.serializer),
+        @Deprecated
         REMOVE_FROM_CMS(() -> RemoveFromCMS.serializer),
 
         STARTUP(() -> Startup.serializer),

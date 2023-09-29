@@ -43,7 +43,6 @@ import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializer;
 import org.apache.cassandra.tcm.serialization.Version;
 
 import static org.apache.cassandra.exceptions.ExceptionCode.INVALID;
-import static org.apache.cassandra.tcm.Transformation.Kind.START_REPLACE;
 
 public class PrepareReplace implements Transformation
 {
@@ -133,13 +132,11 @@ public class PrepareReplace implements Transformation
         FinishReplace finish = new FinishReplace(replaced, replacement, removeOldNodeFromWrites.build(), unlockKey);
 
         Set<Token> tokens = new HashSet<>(prev.tokenMap.tokens(replaced));
-        BootstrapAndReplace plan = new BootstrapAndReplace(prev.nextEpoch(),
-                                                           unlockKey,
-                                                           START_REPLACE,
-                                                           tokens,
-                                                           start, mid, finish,
-                                                           joinTokenRing,
-                                                           streamData);
+        BootstrapAndReplace plan = BootstrapAndReplace.newSequence(prev.nextEpoch(),
+                                                                   unlockKey,
+                                                                   tokens,
+                                                                   start, mid, finish,
+                                                                   joinTokenRing, streamData);
 
         LockedRanges newLockedRanges = lockedRanges.lock(unlockKey, rangesToLock);
         ClusterMetadata.Transformer proposed = prev.transformer()
@@ -272,7 +269,7 @@ public class PrepareReplace implements Transformation
         public ClusterMetadata.Transformer transform(ClusterMetadata prev, ClusterMetadata.Transformer transformer)
         {
             return transformer.withNodeState(replacement(), NodeState.BOOT_REPLACING)
-                              .with(prev.inProgressSequences.with(nodeId, (plan) -> plan.advance(prev.nextEpoch())));
+                              .with(prev.inProgressSequences.with(nodeId, (BootstrapAndReplace plan) -> plan.advance(prev.nextEpoch())));
         }
 
         @Override

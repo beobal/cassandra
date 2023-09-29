@@ -31,19 +31,19 @@ import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.cassandra.io.util.DataOutputPlus;
-import org.apache.cassandra.tcm.Transformation;
-import org.apache.cassandra.tcm.ClusterMetadataService;
-import org.apache.cassandra.tcm.membership.NodeState;
-import org.apache.cassandra.tcm.sequences.BootstrapAndJoin;
-import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializer;
-import org.apache.cassandra.tcm.serialization.Version;
 import org.apache.cassandra.tcm.ClusterMetadata;
-import org.apache.cassandra.tcm.ownership.DataPlacements;
-import org.apache.cassandra.tcm.sequences.LockedRanges;
+import org.apache.cassandra.tcm.ClusterMetadataService;
+import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.NodeId;
+import org.apache.cassandra.tcm.membership.NodeState;
+import org.apache.cassandra.tcm.ownership.DataPlacements;
 import org.apache.cassandra.tcm.ownership.PlacementDeltas;
 import org.apache.cassandra.tcm.ownership.PlacementProvider;
 import org.apache.cassandra.tcm.ownership.PlacementTransitionPlan;
+import org.apache.cassandra.tcm.sequences.BootstrapAndJoin;
+import org.apache.cassandra.tcm.sequences.LockedRanges;
+import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializer;
+import org.apache.cassandra.tcm.serialization.Version;
 
 import static org.apache.cassandra.exceptions.ExceptionCode.INVALID;
 
@@ -151,13 +151,11 @@ public class PrepareJoin implements Transformation
         MidJoin midJoin = new MidJoin(nodeId, transitionPlan.moveReads(), lockKey);
         FinishJoin finishJoin = new FinishJoin(nodeId, tokens, transitionPlan.removeFromWrites(), lockKey);
 
-        BootstrapAndJoin plan = new BootstrapAndJoin(prev.epoch.nextEpoch(),
-                                                     lockKey,
-                                                     Kind.START_JOIN,
-                                                     transitionPlan.toSplit,
-                                                     startJoin, midJoin, finishJoin,
-                                                     joinTokenRing,
-                                                     streamData);
+        BootstrapAndJoin plan = BootstrapAndJoin.newSequence(prev.nextEpoch(),
+                                                             lockKey,
+                                                             transitionPlan.toSplit,
+                                                             startJoin, midJoin, finishJoin,
+                                                             joinTokenRing, streamData);
 
         LockedRanges newLockedRanges = prev.lockedRanges.lock(lockKey, rangesToLock);
         DataPlacements startingPlacements = transitionPlan.toSplit.apply(prev.nextEpoch(), prev.placements);
@@ -243,7 +241,7 @@ public class PrepareJoin implements Transformation
         public ClusterMetadata.Transformer transform(ClusterMetadata prev, ClusterMetadata.Transformer transformer)
         {
             return transformer.withNodeState(nodeId, NodeState.BOOTSTRAPPING)
-                              .with(prev.inProgressSequences.with(nodeId, (plan) -> plan.advance(prev.nextEpoch())));
+                              .with(prev.inProgressSequences.with(nodeId, (BootstrapAndJoin plan) -> plan.advance(prev.nextEpoch())));
         }
 
         public static final class Serializer extends SerializerBase<StartJoin>
@@ -273,7 +271,7 @@ public class PrepareJoin implements Transformation
         @Override
         public ClusterMetadata.Transformer transform(ClusterMetadata prev, ClusterMetadata.Transformer transformer)
         {
-            return transformer.with(prev.inProgressSequences.with(nodeId, (plan) -> plan.advance(prev.nextEpoch())));
+            return transformer.with(prev.inProgressSequences.with(nodeId, (BootstrapAndJoin plan) -> plan.advance(prev.nextEpoch())));
         }
 
         public static final class Serializer extends SerializerBase<MidJoin>
@@ -302,6 +300,7 @@ public class PrepareJoin implements Transformation
             return Kind.FINISH_JOIN;
         }
 
+        @Override
         public ClusterMetadata.Transformer transform(ClusterMetadata prev, ClusterMetadata.Transformer transformer)
         {
             return transformer.join(nodeId)

@@ -18,6 +18,7 @@
 
 package org.apache.cassandra.distributed.test.log;
 
+import java.util.Random;
 import java.util.concurrent.Callable;
 import java.util.function.BiFunction;
 
@@ -25,12 +26,17 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import org.apache.cassandra.distributed.Cluster;
+import org.apache.cassandra.distributed.Constants;
+import org.apache.cassandra.distributed.api.Feature;
 import org.apache.cassandra.distributed.api.IInstanceConfig;
 import org.apache.cassandra.distributed.api.IInvokableInstance;
+import org.apache.cassandra.distributed.api.IMessage;
+import org.apache.cassandra.distributed.api.IMessageFilters;
 import org.apache.cassandra.distributed.api.TokenSupplier;
 import org.apache.cassandra.distributed.shared.ClusterUtils;
 import org.apache.cassandra.distributed.shared.NetworkTopology;
 import org.apache.cassandra.distributed.shared.WithProperties;
+import org.apache.cassandra.net.Verb;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
@@ -275,9 +281,38 @@ public class InProgressSequenceCoordinationTest extends FuzzTestBase
                 }
                 catch (Throwable t)
                 {
-                    Assert.assertTrue(t.getMessage().contains("since there's already one assosicated with it"));
+                    Assert.assertTrue(t.getMessage().contains("since it already has an active in-progress sequence"));
                 }
             });
+        }
+    }
+
+    @Test
+    public void inProgressSequenceRetryTest() throws Throwable
+    {
+        try (Cluster cluster = builder().withNodes(1)
+                                        .withTokenSupplier(TokenSupplier.evenlyDistributedTokens(2))
+                                        .withNodeIdTopology(NetworkTopology.singleDcNetworkTopology(2, "dc0", "rack0"))
+                                        .withConfig((config) -> config.with(Feature.NETWORK, Feature.GOSSIP).set("request_timeout_in_ms", "1000"))
+                                        .start())
+        {
+            cluster.filters()
+                   .inbound()
+                   .messagesMatching(new IMessageFilters.Matcher()
+            {
+                final Random rng = new Random(1);
+                public boolean matches(int i, int i1, IMessage msg)
+                {
+                    if (msg.verb() != Verb.TCM_COMMIT_REQ.id)
+                        return false;
+                    return rng.nextBoolean();
+                }
+            }).drop().on();
+            IInstanceConfig config = cluster.newInstanceConfig()
+                                            .set("auto_bootstrap", true)
+                                            .set(Constants.KEY_DTEST_FULL_STARTUP, true);
+            IInvokableInstance newInstance = cluster.bootstrap(config);
+            newInstance.startup();
         }
     }
 
@@ -343,8 +378,8 @@ public class InProgressSequenceCoordinationTest extends FuzzTestBase
                 return state;
 
             if (!state.equals(expectations[index]))
-                throw new IllegalStateException(String.format("Unexpected outcome for %s@%s; Expected: %s, Actual: %s",
-                                                              sequence.kind(), sequence.nextStep(), expectations[index], state));
+                throw new IllegalStateException(String.format("Unexpected outcome for %s step %s; Expected: %s, Actual: %s",
+                                                              sequence.kind(), sequence.idx, expectations[index], state));
 
             if (++index == expectations.length)
             {

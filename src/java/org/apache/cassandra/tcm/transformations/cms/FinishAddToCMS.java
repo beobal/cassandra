@@ -20,17 +20,26 @@ package org.apache.cassandra.tcm.transformations.cms;
 
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.locator.Replica;
+import org.apache.cassandra.schema.ReplicationParams;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.InProgressSequence;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.NodeId;
+import org.apache.cassandra.tcm.ownership.DataPlacement;
+import org.apache.cassandra.tcm.ownership.EntireRange;
 import org.apache.cassandra.tcm.sequences.AddToCMS;
 import org.apache.cassandra.tcm.sequences.InProgressSequences;
-import org.apache.cassandra.tcm.sequences.ReconfigureCMS;
 import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializer;
 
 import static org.apache.cassandra.exceptions.ExceptionCode.INVALID;
+import static org.apache.cassandra.tcm.ownership.EntireRange.entireRange;
 
+/**
+ * @deprecated in favour of ReconfigureCMS
+ * This class along with AddToCMS, StartAddToCMS & RemoveFromCMS, contain a high degree of duplication with their intended
+ * replacements ReconfigureCMS and AdvanceCMSReconfiguration. This shouldn't be a big problem as the intention is to
+ * remove this superceded version asap.
+ */
 @Deprecated
 public class FinishAddToCMS extends BaseMembershipTransformation
 {
@@ -71,9 +80,17 @@ public class FinishAddToCMS extends BaseMembershipTransformation
         if (!(sequence instanceof AddToCMS))
             return new Rejected(INVALID, "Can't execute finish join as cluster metadata contains a sequence of a different kind");
 
-        return ReconfigureCMS.executeFinishAdd(prev,
-                                               targetNode,
-                                               (inProgressSequences, ignore_) -> inProgressSequences.without(targetNode));
+        ReplicationParams metaParams = ReplicationParams.meta(prev);
+        InetAddressAndPort endpoint = prev.directory.endpoint(targetNode);
+        Replica replica = new Replica(endpoint, entireRange, true);
+
+        ClusterMetadata.Transformer transformer = prev.transformer();
+        DataPlacement.Builder builder = prev.placements.get(metaParams)
+                                                       .unbuild()
+                                                       .withReadReplica(prev.nextEpoch(), replica);
+        transformer = transformer.with(prev.placements.unbuild().with(metaParams, builder.build()).build())
+                                 .with(prev.inProgressSequences.without(targetNode));
+        return Transformation.success(transformer, EntireRange.affectedRanges(prev));
     }
 
     public String toString()

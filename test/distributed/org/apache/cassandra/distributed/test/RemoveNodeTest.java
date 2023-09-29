@@ -29,7 +29,7 @@ import org.apache.cassandra.net.Verb;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.membership.NodeState;
-import org.apache.cassandra.tcm.sequences.UnbootstrapAndLeave;
+import org.apache.cassandra.tcm.sequences.SingleNodeSequences;
 
 import static org.junit.Assert.assertTrue;
 
@@ -50,7 +50,8 @@ public class RemoveNodeTest extends TestBaseImpl
             Thread t = new Thread(() -> cluster.get(1).nodetoolResult("removenode", nodeId, "--force"));
             t.start();
             cluster.get(1).logs().watchFor("Committed StartLeave");
-            assertTrue(cluster.get(1).nodetoolResult("removenode", "status").getStdout().contains("MID_LEAVE"));
+            String stdout = cluster.get(1).nodetoolResult("removenode", "status").getStdout();
+            assertTrue(String.format("\"%s\" does not contain MID_LEAVE", stdout), stdout.contains("MID_LEAVE"));
 
             cluster.get(1).nodetoolResult("removenode", "abort", nodeId).asserts().success();
             cluster.get(2).logs().watchFor("Enacted CancelInProgressSequence");
@@ -84,7 +85,7 @@ public class RemoveNodeTest extends TestBaseImpl
                 NodeId nodeId = new NodeId(toRemove);
                 InetAddressAndPort endpoint = ClusterMetadata.current().directory.endpoint(nodeId);
                 FailureDetector.instance.forceConviction(endpoint);
-                UnbootstrapAndLeave.removeNode(nodeId, true);
+                SingleNodeSequences.removeNode(nodeId, true);
             });
 
             cluster.get(1).runOnInstance(() -> {
