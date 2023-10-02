@@ -26,6 +26,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import org.apache.cassandra.SchemaLoader;
+import org.apache.cassandra.ServerTestUtils;
 import org.apache.cassandra.Util;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.ColumnFamilyStore;
@@ -49,7 +50,7 @@ public class StorageServiceDrainTest
     @Before
     public void before() throws UnknownHostException
     {
-        DatabaseDescriptor.daemonInitialization();
+        ServerTestUtils.prepareServerNoRegister();
         DatabaseDescriptor.setTransientReplicationEnabledUnsafe(true);
 
         CommitLog.instance.start();
