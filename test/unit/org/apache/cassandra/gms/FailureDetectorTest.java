@@ -20,21 +20,20 @@ package org.apache.cassandra.gms;
 
 import java.net.UnknownHostException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import org.apache.cassandra.ServerTestUtils;
 import org.apache.cassandra.Util;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.commitlog.CommitLog;
-import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.RandomPartitioner;
 import org.apache.cassandra.dht.Token;
+import org.apache.cassandra.distributed.test.log.ClusterMetadataTestHelper;
 import org.apache.cassandra.locator.InetAddressAndPort;
-import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.tcm.ClusterMetadata;
 
 import static org.apache.cassandra.config.CassandraRelevantProperties.MAX_LOCAL_PAUSE_IN_MS;
@@ -45,21 +44,17 @@ public class FailureDetectorTest
     @BeforeClass
     public static void setup()
     {
+        DatabaseDescriptor.daemonInitialization();
+        DatabaseDescriptor.setPartitionerUnsafe(RandomPartitioner.instance);
         // slow unit tests can cause problems with FailureDetector's GC pause handling
         MAX_LOCAL_PAUSE_IN_MS.setLong(20000);
-
-        DatabaseDescriptor.daemonInitialization();
+        ServerTestUtils.prepareServerNoRegister();
         CommitLog.instance.start();
     }
 
     @Test
     public void testConvictAfterLeft() throws UnknownHostException
     {
-        StorageService ss = StorageService.instance;
-//        tmd.clearUnsafe();
-        IPartitioner partitioner = new RandomPartitioner();
-        VersionedValue.VersionedValueFactory valueFactory = new VersionedValue.VersionedValueFactory(partitioner);
-
         ArrayList<Token> endpointTokens = new ArrayList<>();
         ArrayList<Token> keyTokens = new ArrayList<>();
         List<InetAddressAndPort> hosts = new ArrayList<>();
@@ -75,12 +70,10 @@ public class FailureDetectorTest
 
         FailureDetector.instance.report(leftHost);
 
-        // trigger handleStateLeft in StorageService
-        ss.onChange(leftHost, ApplicationState.STATUS_WITH_PORT,
-                    valueFactory.left(Collections.singleton(endpointTokens.get(1)), Gossiper.computeExpireTime()));
+        ClusterMetadataTestHelper.removeEndpoint(leftHost, true);
 
         // confirm that handleStateLeft was called and leftEndpoint was removed from TokenMetadata
-        assertFalse("Left endpoint not removed from TokenMetadata", ClusterMetadata.current().directory.allAddresses().contains(leftHost));
+        assertFalse("Left endpoint not removed from ClusterMetadata", ClusterMetadata.current().directory.allJoinedEndpoints().contains(leftHost));
 
         // confirm the FD's history for leftHost didn't get wiped by status jump to LEFT
         FailureDetector.instance.interpret(leftHost);
