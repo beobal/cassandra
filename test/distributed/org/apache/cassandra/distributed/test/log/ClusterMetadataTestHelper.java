@@ -799,6 +799,11 @@ public class ClusterMetadataTestHelper
         addEndpoint(endpoint, tokens, "dc1", "rack1");
     }
 
+    public static void addEndpoint(InetAddressAndPort endpoint, Token t, Location location)
+    {
+        addEndpoint(endpoint, Collections.singleton(t), location.datacenter, location.rack);
+    }
+
     public static void addEndpoint(InetAddressAndPort endpoint, Token t, String dc, String rack)
     {
         addEndpoint(endpoint, Collections.singleton(t), dc, rack);

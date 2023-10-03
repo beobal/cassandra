@@ -77,7 +77,7 @@ public class GossipingPropertyFileSnitch extends AbstractNetworkTopologySnitch//
         NodeId nodeId = metadata.directory.peerId(endpoint);
         if (nodeId == null)
             return DEFAULT_DC;
-        return metadata.directory.location(nodeId).rack;
+        return metadata.directory.location(nodeId).datacenter;
     }
 
     /**

@@ -300,8 +300,8 @@ public class GossipHelper
     {
         EndpointState epstate = new EndpointState(new HeartBeatState(SystemKeyspace.incrementAndGetGeneration(), 0));
         VersionedValue.VersionedValueFactory vf = StorageService.instance.valueFactory;
-        epstate.addApplicationState(DC, vf.datacenter(DatabaseDescriptor.getEndpointSnitch().getLocalRack()));
-        epstate.addApplicationState(RACK, vf.rack(DatabaseDescriptor.getEndpointSnitch().getLocalRack()));
+        epstate.addApplicationState(DC, vf.datacenter(SystemKeyspace.getDatacenter()));
+        epstate.addApplicationState(RACK, vf.rack(SystemKeyspace.getRack()));
         UUID hostId = SystemKeyspace.getLocalHostId();
         if (null != hostId)
         {
