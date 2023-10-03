@@ -46,6 +46,7 @@ import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.service.ClientWarn;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.compatibility.TokenRingUtils;
+import org.apache.cassandra.tcm.membership.Location;
 import org.apache.cassandra.tcm.ownership.VersionedEndpoints;
 import org.apache.cassandra.utils.FBUtilities;
 
@@ -79,7 +80,7 @@ public class NetworkTopologyStrategyTest
     {
         IEndpointSnitch snitch = new PropertyFileSnitch();
         DatabaseDescriptor.setEndpointSnitch(snitch);
-        createDummyTokens(true, snitch);
+        createDummyTokens(true);
 
         ClusterMetadataTestHelper.createKeyspace("CREATE KEYSPACE " + KEYSPACE + " WITH REPLICATION = {" +
                                                  "   'class' : 'NetworkTopologyStrategy'," +
@@ -105,7 +106,7 @@ public class NetworkTopologyStrategyTest
     {
         IEndpointSnitch snitch = new PropertyFileSnitch();
         DatabaseDescriptor.setEndpointSnitch(snitch);
-        createDummyTokens(false, snitch);
+        createDummyTokens(false);
 
         Map<String, String> configOptions = new HashMap<>();
         configOptions.put("DC1", "3");
@@ -170,35 +171,36 @@ public class NetworkTopologyStrategyTest
         }
     }
 
-    public void createDummyTokens(boolean populateDC3, IEndpointSnitch snitch) throws UnknownHostException
+    public void createDummyTokens(boolean populateDC3) throws UnknownHostException
     {
+        Location l1 = new Location("DC1", "Rack1");
+        Location l2 = new Location("DC2", "Rack1");
+        Location l3 = new Location("DC3", "Rack1");
         // DC 1
-        tokenFactory("123", new byte[]{ 10, 0, 0, 10 }, snitch);
-        tokenFactory("234", new byte[]{ 10, 0, 0, 11 }, snitch);
-        tokenFactory("345", new byte[]{ 10, 0, 0, 12 }, snitch);
+        tokenFactory("123", new byte[]{ 10, 0, 0, 10 }, l1);
+        tokenFactory("234", new byte[]{ 10, 0, 0, 11 }, l1);
+        tokenFactory("345", new byte[]{ 10, 0, 0, 12 }, l1);
         // Tokens for DC 2
-        tokenFactory("789", new byte[]{ 10, 20, 114, 10 }, snitch);
-        tokenFactory("890", new byte[]{ 10, 20, 114, 11 }, snitch);
+        tokenFactory("789", new byte[]{ 10, 20, 114, 10 }, l2);
+        tokenFactory("890", new byte[]{ 10, 20, 114, 11 }, l2);
         //tokens for DC3
         if (populateDC3)
         {
-            tokenFactory("456", new byte[]{ 10, 21, 119, 13 }, snitch);
-            tokenFactory("567", new byte[]{ 10, 21, 119, 10 }, snitch);
+            tokenFactory("456", new byte[]{ 10, 21, 119, 13 }, l3);
+            tokenFactory("567", new byte[]{ 10, 21, 119, 10 }, l3);
         }
         // Extra Tokens
-        tokenFactory("90A", new byte[]{ 10, 0, 0, 13 }, snitch);
+        tokenFactory("90A", new byte[]{ 10, 0, 0, 13 }, l1);
         if (populateDC3)
-            tokenFactory("0AB", new byte[]{ 10, 21, 119, 14 }, snitch);
-        tokenFactory("ABC", new byte[]{ 10, 20, 114, 15 }, snitch);
+            tokenFactory("0AB", new byte[]{ 10, 21, 119, 14 }, l3);
+        tokenFactory("ABC", new byte[]{ 10, 20, 114, 15 }, l2);
     }
 
-    public void tokenFactory(String token, byte[] bytes, IEndpointSnitch snitch) throws UnknownHostException
+    public void tokenFactory(String token, byte[] bytes, Location location) throws UnknownHostException
     {
         InetAddressAndPort addr = InetAddressAndPort.getByAddress(bytes);
-        ClusterMetadataTestHelper.addEndpoint(addr, new StringToken(token), snitch.getDatacenter(addr), snitch.getRack(addr));
+        ClusterMetadataTestHelper.addEndpoint(addr, new StringToken(token), location);
     }
-
-
 
     @Test
     public void testCalculateEndpoints() throws UnknownHostException
