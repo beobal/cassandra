@@ -102,6 +102,7 @@ import org.apache.cassandra.net.MessagingServiceMBean;
 import org.apache.cassandra.service.ActiveRepairServiceMBean;
 import org.apache.cassandra.service.CacheService;
 import org.apache.cassandra.service.CacheServiceMBean;
+import org.apache.cassandra.tcm.CMSOperationsMBean;
 import org.apache.cassandra.service.GCInspector;
 import org.apache.cassandra.service.GCInspectorMXBean;
 import org.apache.cassandra.service.StorageProxy;
@@ -121,6 +122,8 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.Uninterruptibles;
+
+import org.apache.cassandra.tcm.CMSOperations;
 import org.apache.cassandra.tools.nodetool.GetTimeout;
 import org.apache.cassandra.utils.NativeLibrary;
 
@@ -148,6 +151,7 @@ public class NodeProbe implements AutoCloseable
     protected MBeanServerConnection mbeanServerConn;
     protected CompactionManagerMBean compactionProxy;
     protected StorageServiceMBean ssProxy;
+    protected CMSOperationsMBean cmsProxy;
     protected GossiperMBean gossProxy;
     protected MemoryMXBean memProxy;
     protected GCInspectorMXBean gcProxy;
@@ -260,6 +264,8 @@ public class NodeProbe implements AutoCloseable
         {
             ObjectName name = new ObjectName(ssObjName);
             ssProxy = JMX.newMBeanProxy(mbeanServerConn, name, StorageServiceMBean.class);
+            name = new ObjectName(CMSOperations.MBEAN_OBJECT_NAME);
+            cmsProxy = JMX.newMBeanProxy(mbeanServerConn, name, CMSOperationsMBean.class);
             name = new ObjectName(MessagingService.MBEAN_NAME);
             msProxy = JMX.newMBeanProxy(mbeanServerConn, name, MessagingServiceMBean.class);
             name = new ObjectName(StreamManagerMBean.OBJECT_NAME);
@@ -353,11 +359,6 @@ public class NodeProbe implements AutoCloseable
     public int forceKeyspaceCleanup(int jobs, String keyspaceName, String... tables) throws IOException, ExecutionException, InterruptedException
     {
         return ssProxy.forceKeyspaceCleanup(jobs, keyspaceName, tables);
-    }
-
-    public void sealPeriod()
-    {
-        ssProxy.sealPeriod();
     }
 
     public int scrub(boolean disableSnapshot, boolean skipCorrupted, boolean checkData, boolean reinsertOverflowedTTL, int jobs, String keyspaceName, String... tables) throws IOException, ExecutionException, InterruptedException
@@ -1018,11 +1019,6 @@ public class NodeProbe implements AutoCloseable
         ssProxy.removeNode(token, force);
     }
 
-    public void cancelInProgressSequences(String nodeId, String inProgressKind)
-    {
-        getStorageService().cancelInProgressSequences(nodeId, inProgressKind);
-    }
-
     public String getRemovalStatus(boolean withPort)
     {
         return withPort ? ssProxy.getRemovalStatusWithPort() : ssProxy.getRemovalStatus();
@@ -1229,8 +1225,14 @@ public class NodeProbe implements AutoCloseable
         return spProxy;
     }
 
-    public StorageServiceMBean getStorageService() {
+    public StorageServiceMBean getStorageService()
+    {
         return ssProxy;
+    }
+
+    public CMSOperationsMBean getCMSOperationsProxy()
+    {
+        return cmsProxy;
     }
 
     public GossiperMBean getGossProxy()

@@ -55,7 +55,7 @@ public class ReconfigureCMS extends NodeTool.NodeToolCmd
     {
         if (status)
         {
-            Map<String, List<String>> status = probe.getStorageService().reconfigureCMSStatus();
+            Map<String, List<String>> status = probe.getCMSOperationsProxy().reconfigureCMSStatus();
             if (status == null)
             {
                 System.out.println("No active reconfiguration");
@@ -72,7 +72,7 @@ public class ReconfigureCMS extends NodeTool.NodeToolCmd
             if (!args.isEmpty())
                 throw new IllegalArgumentException("Replication factor should not be set if previous operation is resumed");
 
-            probe.getStorageService().resumeReconfigureCms();
+            probe.getCMSOperationsProxy().resumeReconfigureCms();
             return;
         }
 
@@ -95,7 +95,7 @@ public class ReconfigureCMS extends NodeTool.NodeToolCmd
                 {
                     throw new IllegalArgumentException(String.format("Can not parse replication factor from %s", args.get(0)));
                 }
-                probe.getStorageService().reconfigureCMS(parsedRf, sync);
+                probe.getCMSOperationsProxy().reconfigureCMS(parsedRf, sync);
                 return;
             }
             else
@@ -117,6 +117,6 @@ public class ReconfigureCMS extends NodeTool.NodeToolCmd
             }
         }
 
-        probe.getStorageService().reconfigureCMS(parsedRfs, sync);
+        probe.getCMSOperationsProxy().reconfigureCMS(parsedRfs, sync);
     }
 }

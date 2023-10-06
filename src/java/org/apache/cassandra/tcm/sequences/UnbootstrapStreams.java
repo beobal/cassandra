@@ -18,7 +18,9 @@
 
 package org.apache.cassandra.tcm.sequences;
 
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
@@ -28,16 +30,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.batchlog.BatchlogManager;
+import org.apache.cassandra.db.SystemKeyspace;
 import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.locator.EndpointsByReplica;
 import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.locator.RangesAtEndpoint;
 import org.apache.cassandra.locator.RangesByEndpoint;
 import org.apache.cassandra.locator.Replica;
 import org.apache.cassandra.locator.SystemStrategy;
 import org.apache.cassandra.schema.Keyspaces;
 import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.service.StorageService;
+import org.apache.cassandra.streaming.StreamOperation;
+import org.apache.cassandra.streaming.StreamPlan;
 import org.apache.cassandra.streaming.StreamState;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.membership.NodeId;
@@ -153,7 +159,70 @@ public class UnbootstrapStreams implements LeaveStreams
                  .collect(Collectors.toMap(k -> k.name,
                                            k -> movements.get(k.params.replication)));
 
-        return () -> StorageService.instance.streamRanges(byKeyspace);
+        return () -> streamRanges(byKeyspace);
+    }
+
+    /**
+     * Send data to the endpoints that will be responsible for it in the future
+     *
+     * @param rangesToStreamByKeyspace keyspaces and data ranges with endpoints included for each
+     * @return async Future for whether stream was success
+     */
+    private static Future<StreamState> streamRanges(Map<String, EndpointsByReplica> rangesToStreamByKeyspace)
+    {
+        // First, we build a list of ranges to stream to each host, per table
+        Map<String, RangesByEndpoint> sessionsToStreamByKeyspace = new HashMap<>();
+
+        for (Map.Entry<String, EndpointsByReplica> entry : rangesToStreamByKeyspace.entrySet())
+        {
+            String keyspace = entry.getKey();
+            EndpointsByReplica rangesWithEndpoints = entry.getValue();
+
+            if (rangesWithEndpoints.isEmpty())
+                continue;
+
+            //Description is always Unbootstrap? Is that right?
+            Map<InetAddressAndPort, Set<Range<Token>>> transferredRangePerKeyspace = SystemKeyspace.getTransferredRanges("Unbootstrap",
+                                                                                                                         keyspace,
+                                                                                                                         ClusterMetadata.current().tokenMap.partitioner());
+            RangesByEndpoint.Builder replicasPerEndpoint = new RangesByEndpoint.Builder();
+            for (Map.Entry<Replica, Replica> endPointEntry : rangesWithEndpoints.flattenEntries())
+            {
+                Replica local = endPointEntry.getKey();
+                Replica remote = endPointEntry.getValue();
+                Set<Range<Token>> transferredRanges = transferredRangePerKeyspace.get(remote.endpoint());
+                if (transferredRanges != null && transferredRanges.contains(local.range()))
+                {
+                    logger.debug("Skipping transferred range {} of keyspace {}, endpoint {}", local, keyspace, remote);
+                    continue;
+                }
+
+                replicasPerEndpoint.put(remote.endpoint(), remote.decorateSubrange(local.range()));
+            }
+
+            sessionsToStreamByKeyspace.put(keyspace, replicasPerEndpoint.build());
+        }
+
+        StreamPlan streamPlan = new StreamPlan(StreamOperation.DECOMMISSION);
+
+        // Vinculate StreamStateStore to current StreamPlan to update transferred ranges per StreamSession
+        streamPlan.listeners(StorageService.instance.streamStateStore());
+
+        for (Map.Entry<String, RangesByEndpoint> entry : sessionsToStreamByKeyspace.entrySet())
+        {
+            String keyspaceName = entry.getKey();
+            RangesByEndpoint replicasPerEndpoint = entry.getValue();
+
+            for (Map.Entry<InetAddressAndPort, RangesAtEndpoint> rangesEntry : replicasPerEndpoint.asMap().entrySet())
+            {
+                RangesAtEndpoint replicas = rangesEntry.getValue();
+                InetAddressAndPort newEndpoint = rangesEntry.getKey();
+
+                // TODO each call to transferRanges re-flushes, this is potentially a lot of waste
+                streamPlan.transferRanges(newEndpoint, keyspaceName, replicas);
+            }
+        }
+        return streamPlan.execute();
     }
 
     // todo: add more details

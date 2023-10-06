@@ -42,7 +42,7 @@ import static org.apache.cassandra.locator.SimpleStrategy.REPLICATION_FACTOR;
 /**
  * CMS Placement Strategy is how CMS keeps the number of its members at a configured level, given current
  * cluster topolgy. It allows to add and remove CMS members when cluster topology changes. For example, during
- * node replacement or decomission.
+ * node replacement or decommission.
  */
 public interface CMSPlacementStrategy
 {

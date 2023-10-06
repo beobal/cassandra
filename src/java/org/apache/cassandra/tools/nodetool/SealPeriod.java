@@ -28,6 +28,6 @@ public class SealPeriod extends NodeToolCmd
     @Override
     public void execute(NodeProbe probe)
     {
-        probe.sealPeriod();
+        probe.getCMSOperationsProxy().sealPeriod();
     }
 }

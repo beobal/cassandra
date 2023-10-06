@@ -26,10 +26,10 @@ import org.apache.cassandra.distributed.shared.NetworkTopology;
 import org.apache.cassandra.gms.FailureDetector;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.net.Verb;
-import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.membership.NodeState;
+import org.apache.cassandra.tcm.sequences.UnbootstrapAndLeave;
 
 import static org.junit.Assert.assertTrue;
 
@@ -84,7 +84,7 @@ public class RemoveNodeTest extends TestBaseImpl
                 NodeId nodeId = new NodeId(toRemove);
                 InetAddressAndPort endpoint = ClusterMetadata.current().directory.endpoint(nodeId);
                 FailureDetector.instance.forceConviction(endpoint);
-                StorageService.instance.removeNode(nodeId, true);
+                UnbootstrapAndLeave.removeNode(nodeId, true);
             });
 
             cluster.get(1).runOnInstance(() -> {

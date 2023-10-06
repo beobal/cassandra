@@ -521,8 +521,6 @@ public interface StorageServiceMBean extends NotificationEmitter
 
     public void assassinateEndpoint(String addr);
 
-    public boolean cancelInProgressSequences(String sequenceOwner, String expectedSequenceKind);
-
     /**
      * Get the status of a token removal.
      */
@@ -1229,21 +1227,4 @@ public interface StorageServiceMBean extends NotificationEmitter
 
     public void setSkipStreamDiskSpaceCheck(boolean value);
     public boolean getSkipStreamDiskSpaceCheck();
-
-    public void initializeCMS(List<String> ignore);
-    public void resumeReconfigureCms();
-    public void reconfigureCMS(int rf, boolean sync);
-    public void reconfigureCMS(Map<String, Integer> rf, boolean sync);
-    public Map<String, List<String>> reconfigureCMSStatus();
-
-    public Map<String, String> describeCMS();
-    public void sealPeriod();
-
-    public void unsafeRevertClusterMetadata(long epoch);
-    public String dumpClusterMetadata(long epoch, long transformToEpoch, String version) throws IOException;
-    public String dumpClusterMetadata() throws IOException;
-    public void unsafeLoadClusterMetadata(String file) throws IOException;
-
-    public void setCommitsPaused(boolean paused);
-    public boolean getCommitsPaused();
 }

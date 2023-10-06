@@ -95,7 +95,7 @@ public class PrepareLeave implements Transformation
         ClusterMetadata proposed = prev.transformer().proposeRemoveNode(leaving).build().metadata;
 
         if (!force && !validateReplicationForDecommission(proposed))
-            return new Rejected(INVALID, "Not enough live nodes to maintain replication factor after decomission.");
+            return new Rejected(INVALID, "Not enough live nodes to maintain replication factor after decommission.");
 
         if (proposed.directory.isEmpty())
             return new Rejected(INVALID, "No peers registered, at least local node should be");
@@ -161,7 +161,7 @@ public class PrepareLeave implements Transformation
             else if (ksm.params.replication.isMeta())
             {
                 // TODO: usually we should not allow decommissioning of CMS node
-                // from what i understand this is not necessarily decomissioning of the cms node; every node has this ks now
+                // from what i understand this is not necessarily decommissioning of the cms node; every node has this ks now
                 continue;
             }
             else

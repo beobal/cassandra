@@ -34,7 +34,7 @@ import org.apache.cassandra.io.util.FileOutputStreamPlus;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.locator.Replica;
 import org.apache.cassandra.schema.ReplicationParams;
-import org.apache.cassandra.service.StorageService;
+import org.apache.cassandra.tcm.CMSOperations;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.membership.NodeVersion;
@@ -67,7 +67,7 @@ public class BootWithMetadataTest extends TestBaseImpl
             String filename = cluster.get(1).callOnInstance(() -> {
                 try
                 {
-                    return StorageService.instance.dumpClusterMetadata(resetEpoch, 1000, "V2");
+                    return CMSOperations.instance.dumpClusterMetadata(resetEpoch, 1000, "V2");
                 }
                 catch (IOException e)
                 {

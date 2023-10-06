@@ -51,7 +51,6 @@ import org.apache.cassandra.schema.DistributedMetadataLogKeyspace;
 import org.apache.cassandra.schema.ReplicationParams;
 import org.apache.cassandra.schema.SchemaConstants;
 import org.apache.cassandra.service.ActiveRepairService;
-import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.streaming.DataMovement;
 import org.apache.cassandra.streaming.PreviewKind;
 import org.apache.cassandra.streaming.StreamOperation;
@@ -185,7 +184,7 @@ public class ReconfigureCMS extends InProgressSequence<ReconfigureCMS>
                                                                                                    code, message));
                                                  });
 
-        StorageService.instance.finishInProgressSequences(SequenceKey.instance);
+        InProgressSequences.finishInProgressSequences(SequenceKey.instance);
         if (ClusterMetadata.current().isCMSMember(toRemove))
             throw new IllegalStateException(String.format("Could not remove %s from CMS", toRemove));
     }

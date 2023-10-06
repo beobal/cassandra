@@ -44,7 +44,7 @@ public class RemoveNode extends NodeToolCmd
             case "abort":
                 if (removeOperation.size() < 2)
                     probe.output().err.print("Abort requires the node id to abort the removal for.");
-                probe.cancelInProgressSequences(removeOperation.get(1), "REMOVE");
+                probe.getCMSOperationsProxy().cancelInProgressSequences(removeOperation.get(1), "REMOVE");
                 break;
             default:
                 boolean force = removeOperation.size() > 1 && removeOperation.get(1).equals("--force");

@@ -20,7 +20,9 @@ package org.apache.cassandra.tcm.transformations;
 
 import com.google.common.collect.ImmutableSet;
 
+import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.tcm.ClusterMetadata;
+import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.MetadataKey;
 import org.apache.cassandra.tcm.membership.NodeId;
@@ -44,6 +46,32 @@ public class Assassinate extends PrepareLeave
     public Assassinate(NodeId leaving, PlacementProvider placementProvider)
     {
         super(leaving, true, placementProvider, LeaveStreams.Kind.ASSASSINATE);
+    }
+
+    /**
+     * Force-remove endpoint from token map.
+     *
+     * @param endpoint endpoint to remove
+     */
+    public static void assassinateEndpoint(InetAddressAndPort endpoint)
+    {
+        ClusterMetadata metadata = ClusterMetadata.current();
+        // Gossip implementation of assassinate was a no-op. Preserving this behaviour.
+        if (!metadata.directory.isRegistered(endpoint))
+            return;
+
+        NodeId nodeId = metadata.directory.peerId(endpoint);
+        ClusterMetadataService.instance().commit(new Assassinate(nodeId,
+                                                                 ClusterMetadataService.instance().placementProvider()),
+                                                 (metadata_) -> null,
+                                                 (metadata_, code, reason) -> {
+                                                     if (metadata_.directory.peerIds().contains(nodeId))
+                                                     {
+                                                         throw new IllegalStateException(String.format("Can not commit event to metadata service: %s. Interrupting assassinate node.",
+                                                                                                       reason));
+                                                     }
+                                                     return null;
+                                                 });
     }
 
     @Override
