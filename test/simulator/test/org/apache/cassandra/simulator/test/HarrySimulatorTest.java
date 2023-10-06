@@ -62,7 +62,6 @@ import org.apache.cassandra.distributed.shared.WithProperties;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.net.Verb;
 import org.apache.cassandra.schema.ReplicationParams;
-import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.simulator.*;
 import org.apache.cassandra.simulator.cluster.ClusterActionListener.NoOpListener;
 import org.apache.cassandra.simulator.cluster.ClusterActions;
@@ -77,7 +76,9 @@ import org.apache.cassandra.simulator.systems.SimulatedTime;
 import org.apache.cassandra.simulator.utils.KindOfSequence;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
+import org.apache.cassandra.tcm.Startup;
 import org.apache.cassandra.tcm.membership.NodeState;
+import org.apache.cassandra.tcm.sequences.UnbootstrapAndLeave;
 import org.apache.cassandra.tcm.transformations.PrepareJoin;
 import org.apache.cassandra.utils.CloseableIterator;
 
@@ -205,7 +206,7 @@ public class HarrySimulatorTest
                          }
                          work.add(work(lazy(() -> validateAllLocal(simulation, simulation.nodeState.ring, rf))));
                          boolean tmp = shouldBootstrap;
-                         work.add(work(run(() -> System.out.printf("Finished %s of %d and data validation!\n", tmp ? "bootstrap" : "decomission", node))));
+                         work.add(work(run(() -> System.out.printf("Finished %s of %d and data validation!\n", tmp ? "bootstrap" : "decommission", node))));
                      }
                      work.add(work(run(() -> System.out.println("Finished!"))));
 
@@ -413,12 +414,14 @@ public class HarrySimulatorTest
         IIsolatedExecutor.SerializableRunnable runnable = () -> {
             try
             {
-                StorageService.instance.startup(() -> new PrepareJoin(ClusterMetadata.current().myNodeId(),
-                                                                      Collections.singleton(new Murmur3Partitioner.LongToken(token)),
-                                                                      ClusterMetadataService.instance().placementProvider(),
-                                                                      true,
-                                                                      true),
-                                                true);
+                Startup.startup(() -> new PrepareJoin(ClusterMetadata.current().myNodeId(),
+                                                      Collections.singleton(new Murmur3Partitioner.LongToken(token)),
+                                                      ClusterMetadataService.instance().placementProvider(),
+                                                      true,
+                                                      true),
+                                true,
+                                true,
+                                false);
             }
             catch (Throwable t)
             {
@@ -441,7 +444,7 @@ public class HarrySimulatorTest
         IIsolatedExecutor.SerializableRunnable runnable = () -> {
             try
             {
-            StorageService.instance.decommission(false, false);
+                UnbootstrapAndLeave.decommission(false, false);
             }
             catch (Throwable t)
             {
@@ -450,7 +453,7 @@ public class HarrySimulatorTest
             }
         };
 
-        return new SimulatedActionTask("Decomission Node",
+        return new SimulatedActionTask("Decommission Node",
                                        Action.Modifiers.NONE,
                                        Action.Modifiers.NONE,
                                        null,
@@ -701,7 +704,7 @@ public class HarrySimulatorTest
 
         public void decommission(int nodeId)
         {
-            System.out.printf("Marking %d as decomissioned%n", nodeId);
+            System.out.printf("Marking %d as decommissioned%n", nodeId);
             TokenPlacementModel.Node n = nodesLookup[nodeId - 1];
             int idx = Collections.binarySearch(ring, n);
             ring.remove(idx);

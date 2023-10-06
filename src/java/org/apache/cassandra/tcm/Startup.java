@@ -19,6 +19,7 @@ package org.apache.cassandra.tcm;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -26,6 +27,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import com.google.common.util.concurrent.Uninterruptibles;
 import org.slf4j.Logger;
@@ -37,26 +39,36 @@ import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.SystemKeyspace;
 import org.apache.cassandra.db.commitlog.CommitLog;
+import org.apache.cassandra.dht.BootStrapper;
 import org.apache.cassandra.gms.EndpointState;
 import org.apache.cassandra.gms.Gossiper;
 import org.apache.cassandra.gms.NewGossiper;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.net.MessagingService;
 import org.apache.cassandra.schema.DistributedSchema;
+import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.tcm.listeners.SchemaListener;
 import org.apache.cassandra.tcm.log.SystemKeyspaceStorage;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.membership.NodeState;
 import org.apache.cassandra.tcm.migration.Election;
 import org.apache.cassandra.tcm.ownership.UniformRangePlacement;
+import org.apache.cassandra.tcm.sequences.InProgressSequences;
+import org.apache.cassandra.tcm.sequences.ReconfigureCMS;
+import org.apache.cassandra.tcm.sequences.ReplaceSameAddress;
+import org.apache.cassandra.tcm.transformations.PrepareJoin;
+import org.apache.cassandra.tcm.transformations.PrepareReplace;
+import org.apache.cassandra.tcm.transformations.UnsafeJoin;
 import org.apache.cassandra.tcm.transformations.cms.Initialize;
 import org.apache.cassandra.utils.FBUtilities;
 
 import static org.apache.cassandra.tcm.ClusterMetadataService.State.LOCAL;
 import static org.apache.cassandra.tcm.compatibility.GossipHelper.emptyWithSchemaFromSystemTables;
 import static org.apache.cassandra.tcm.compatibility.GossipHelper.fromEndpointStates;
+import static org.apache.cassandra.tcm.membership.NodeState.JOINED;
+import static org.apache.cassandra.utils.FBUtilities.getBroadcastAddressAndPort;
 
-public class Startup
+ public class Startup
 {
     private static final Logger logger = LoggerFactory.getLogger(Startup.class);
 
@@ -259,6 +271,130 @@ public class Startup
         CassandraRelevantProperties.TCM_UNSAFE_BOOT_WITH_CLUSTERMETADATA.reset();
         assert ClusterMetadataService.state() == LOCAL;
         assert ClusterMetadataService.instance() != initial : "Aborting startup as temporary metadata service is still active";
+    }
+
+    public static void startup(boolean finishJoiningRing, boolean shouldBootstrap, boolean isReplacing)
+    {
+        startup(() -> getInitialTransformation(finishJoiningRing, shouldBootstrap, isReplacing), finishJoiningRing, shouldBootstrap, isReplacing);
+    }
+
+    /**
+     * Cassandra startup process:
+     *   * assume that startup could have been interrupted at any point in time, and attempt to finish any in-process
+     *     sequences
+     *   * after finishing an existing in-progress sequence, if any, we should jump to JOINED
+     *   * otherwise, we assume a fresh setup, in which case we grab a startup sequence (Join or Replace), and try to
+     *     bootstrap
+     *
+     * @param initialTransformation supplier of the Transformation which initiates the startup sequence
+     * @param finishJoiningRing if false, node is left in a survey mode, which means it will receive writes in all cases
+     *                          except if it is replacing the node with same address
+     * @param shouldBootstrap if true, bootstrap streaming will be executed
+     * @param isReplacing true, if the node is replacing some other node (with same or different address).
+     */
+    public static void startup(Supplier<Transformation> initialTransformation, boolean finishJoiningRing, boolean shouldBootstrap, boolean isReplacing)
+    {
+        ClusterMetadata metadata = ClusterMetadata.current();
+        NodeId self = metadata.myNodeId();
+
+        // finish in-progress sequences first
+        InProgressSequences.finishInProgressSequences(self);
+        metadata = ClusterMetadata.current();
+
+        switch (metadata.directory.peerState(self))
+        {
+            case REGISTERED:
+            case LEFT:
+                if (isReplacing)
+                    ReconfigureCMS.maybeReconfigureCMS(metadata, DatabaseDescriptor.getReplaceAddress());
+
+                ClusterMetadataService.instance().commit(initialTransformation.get(),
+                                                         (metadata_) -> null,
+                                                         (metadata_, code, reason) -> {
+                                                             // This could happen if `UNSAFE_JOIN` has been retried after it succeded but timed out
+                                                             if (ClusterMetadata.current().directory.peerState(self) == JOINED)
+                                                                 return null;
+
+                                                             InProgressSequence<?> sequence = metadata_.inProgressSequences.get(self);
+                                                             // We might have discovered a startup sequence we ourselves committed but got no response for
+                                                             if (sequence == null || !InProgressSequences.STARTUP_SEQUENCE_KINDS.contains(sequence.kind()))
+                                                             {
+                                                                 throw new IllegalStateException(String.format("Can not commit event to metadata service: \"%s\"(%s). Interrupting startup sequence.",
+                                                                                                               code, reason));
+                                                             }
+                                                             return null;
+                                                         });
+
+
+                InProgressSequences.finishInProgressSequences(self);
+                metadata = ClusterMetadata.current();
+
+                if (metadata.directory.peerState(self) == JOINED)
+                    SystemKeyspace.setBootstrapState(SystemKeyspace.BootstrapState.COMPLETED);
+                else
+                {
+                    logger.info("Did not finish joining the ring; node state is {}, bootstrap state is {}",
+                                metadata.directory.peerState(self),
+                                SystemKeyspace.getBootstrapState());
+                    break;
+                }
+            case JOINED:
+                if (StorageService.isReplacingSameAddress())
+                    ReplaceSameAddress.streamData(self, metadata, shouldBootstrap, finishJoiningRing);
+
+                // JOINED appears before BOOTSTRAPPING & BOOT_REPLACE so we can fall
+                // through when we start as REGISTERED/LEFT and complete a full startup
+                logger.info("{}", StorageService.Mode.NORMAL);
+                break;
+            case BOOTSTRAPPING:
+            case BOOT_REPLACING:
+                if (finishJoiningRing)
+                {
+                    throw new IllegalStateException("Expected to complete startup sequence, but did not. " +
+                                                    "Can't proceed from the state " + metadata.directory.peerState(self));
+                }
+                break;
+            default:
+                throw new IllegalStateException("Can't proceed from the state " + metadata.directory.peerState(self));
+        }
+    }
+
+    /**
+     * Returns:
+     *   * {@link PrepareReplace}, the first step of the multi-step replacement process sequence, if {@param finishJoiningRing} is true
+     *   * {@link UnsafeJoin}, a single-step join transformation, if {@param shouldBootstrap} is set to false, and the node is not
+     *     in a write survey mode (in other words {@param finishJoiningRing} is true. This mode is mostly used for testing, but can
+     *     also be used to quickly set up a fresh cluster.
+     *   * and {@link PrepareJoin}, the first step of the multi-step join process, otherwise.
+     */
+    private static Transformation getInitialTransformation(boolean finishJoiningRing, boolean shouldBootstrap, boolean isReplacing)
+    {
+        ClusterMetadata metadata = ClusterMetadata.current();
+        if (isReplacing)
+        {
+            InetAddressAndPort replacingEndpoint = DatabaseDescriptor.getReplaceAddress();
+            NodeId replaced = ClusterMetadata.current().directory.peerId(replacingEndpoint);
+;
+            return new PrepareReplace(replaced,
+                                      metadata.myNodeId(),
+                                      ClusterMetadataService.instance().placementProvider(),
+                                      finishJoiningRing,
+                                      shouldBootstrap);
+        }
+        else if (finishJoiningRing && !shouldBootstrap)
+        {
+            return new UnsafeJoin(metadata.myNodeId(),
+                                  new HashSet<>(BootStrapper.getBootstrapTokens(ClusterMetadata.current(), getBroadcastAddressAndPort())),
+                                  ClusterMetadataService.instance().placementProvider());
+        }
+        else
+        {
+            return new PrepareJoin(metadata.myNodeId(),
+                                   new HashSet<>(BootStrapper.getBootstrapTokens(ClusterMetadata.current(), getBroadcastAddressAndPort())),
+                                   ClusterMetadataService.instance().placementProvider(),
+                                   finishJoiningRing,
+                                   shouldBootstrap);
+        }
     }
 
     /**

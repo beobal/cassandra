@@ -19,6 +19,7 @@
 package org.apache.cassandra.tcm.sequences;
 
 import java.io.IOException;
+import java.util.EnumSet;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 
@@ -26,15 +27,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.gms.Gossiper;
 import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.cassandra.io.util.DataOutputPlus;
 import org.apache.cassandra.locator.DynamicEndpointSnitch;
+import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.tcm.ClusterMetadata;
+import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.InProgressSequence;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.Location;
+import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.membership.NodeState;
 import org.apache.cassandra.tcm.ownership.DataPlacements;
 import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializer;
@@ -43,8 +48,10 @@ import org.apache.cassandra.tcm.transformations.PrepareLeave;
 import org.apache.cassandra.utils.JVMStabilityInspector;
 import org.apache.cassandra.utils.vint.VIntCoding;
 
+import static org.apache.cassandra.tcm.membership.NodeState.LEAVING;
 import static org.apache.cassandra.tcm.sequences.SequenceState.continuable;
 import static org.apache.cassandra.tcm.sequences.SequenceState.error;
+import static org.apache.cassandra.utils.FBUtilities.getBroadcastAddressAndPort;
 
 public class UnbootstrapAndLeave extends InProgressSequence<UnbootstrapAndLeave>
 {
@@ -75,6 +82,108 @@ public class UnbootstrapAndLeave extends InProgressSequence<UnbootstrapAndLeave>
         this.midLeave = midLeave;
         this.finishLeave = finishLeave;
         this.streams = streams;
+    }
+
+    /**
+     * Entrypoint to begin node decommission process.
+     *
+     * @param shutdownNetworking if set to true, will also shut down networking on completion
+     * @param force if set to true, will decommission the node even if this would mean there will be not enough nodes
+     *              to satisfy replication factor
+     */
+    public static void decommission(boolean shutdownNetworking, boolean force)
+    {
+        if (ClusterMetadataService.instance().isMigrating() || ClusterMetadataService.state() == ClusterMetadataService.State.GOSSIP)
+            throw new IllegalStateException("This cluster is migrating to cluster metadata, can't decommission until that is done.");
+
+        ClusterMetadata metadata = ClusterMetadata.current();
+
+        StorageService.Mode mode = StorageService.instance.operationMode();
+        if (!EnumSet.of(StorageService.Mode.LEAVING, StorageService.Mode.NORMAL).contains(mode))
+            throw new UnsupportedOperationException(String.format("Node in %s state; wait for status to become normal", mode));
+        logger.debug("DECOMMISSIONING");
+
+        NodeId self = metadata.myNodeId();
+
+        ReconfigureCMS.maybeReconfigureCMS(metadata, getBroadcastAddressAndPort());
+        InProgressSequence<?> inProgress = metadata.inProgressSequences.get(self);
+
+        if (inProgress == null)
+        {
+            logger.info("starting decom with {} {}", metadata.epoch, self);
+            ClusterMetadataService.instance().commit(new PrepareLeave(self,
+                                                                      force,
+                                                                      ClusterMetadataService.instance().placementProvider(),
+                                                                      LeaveStreams.Kind.UNBOOTSTRAP),
+                                                     (metadata_) -> null,
+                                                     (metadata_, code, reason) -> {
+                                                         InProgressSequence<?> sequence = metadata_.inProgressSequences.get(self);
+                                                         // We might have discovered a sequence we ourselves committed but got no response for
+                                                         if (sequence == null || sequence.kind() != InProgressSequences.Kind.LEAVE)
+                                                         {
+                                                             throw new IllegalStateException(String.format("Can not commit event to metadata service: %s. Interrupting leave sequence.",
+                                                                                                           reason));
+                                                         }
+                                                         return null;
+                                                     });
+        }
+        else if (!InProgressSequences.isLeave(inProgress))
+        {
+            throw new IllegalArgumentException("Can not decommission a node that has an in-progress sequence");
+        }
+
+        InProgressSequences.finishInProgressSequences(self);
+        if (shutdownNetworking)
+            StorageService.instance.shutdownNetworking();
+    }
+
+    /**
+     * Entrypoint to begin node removal process
+     *
+     * @param toRemove id of the node to remove
+     * @param force if set to true, will remove the node even if this would mean there will be not enough nodes
+     *              to satisfy replication factor
+     */
+    public static void removeNode(NodeId toRemove, boolean force)
+    {
+        ClusterMetadata metadata = ClusterMetadata.current();
+        if (toRemove.equals(metadata.myNodeId()))
+            throw new UnsupportedOperationException("Cannot remove self");
+        InetAddressAndPort endpoint = metadata.directory.endpoint(toRemove);
+        if (endpoint == null)
+            throw new UnsupportedOperationException("Host ID not found.");
+        if (Gossiper.instance.getLiveMembers().contains(endpoint))
+            throw new UnsupportedOperationException("Node " + endpoint + " is alive and owns this ID. Use decommission command to remove it from the ring");
+
+        NodeState removeState = metadata.directory.peerState(toRemove);
+        if (removeState == null)
+            throw new UnsupportedOperationException("Node to be removed is not a member of the token ring");
+        if (removeState == LEAVING)
+            logger.warn("Node {} is already leaving or being removed, continuing removal anyway", endpoint);
+
+        if (metadata.inProgressSequences.contains(toRemove))
+            throw new UnsupportedOperationException("Can not remove a node that has an in-progress sequence");
+
+        ReconfigureCMS.maybeReconfigureCMS(metadata, endpoint);
+
+        logger.info("starting removenode with {} {}", metadata.epoch, toRemove);
+
+        ClusterMetadataService.instance().commit(new PrepareLeave(toRemove,
+                                                                  force,
+                                                                  ClusterMetadataService.instance().placementProvider(),
+                                                                  LeaveStreams.Kind.REMOVENODE),
+                                                 (metadata_) -> null,
+                                                 (metadata_, code, reason) -> {
+                                                     InProgressSequence<?> sequence = metadata_.inProgressSequences.get(toRemove);
+                                                     // We might have discovered a startup sequence we ourselves committed but got no response for
+                                                     if (sequence == null || sequence.kind() != InProgressSequences.Kind.REMOVE)
+                                                     {
+                                                         throw new IllegalStateException(String.format("Can not commit event to metadata service: %s. Interrupting removenode sequence.",
+                                                                                                       reason));
+                                                     }
+                                                     return null;
+                                                 });
+        InProgressSequences.finishInProgressSequences(toRemove);
     }
 
     @Override

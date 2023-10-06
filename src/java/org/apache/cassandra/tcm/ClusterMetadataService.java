@@ -46,7 +46,6 @@ import org.apache.cassandra.metrics.TCMMetrics;
 import org.apache.cassandra.net.IVerbHandler;
 import org.apache.cassandra.schema.DistributedSchema;
 import org.apache.cassandra.schema.ReplicationParams;
-import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.tcm.log.Entry;
 import org.apache.cassandra.tcm.log.LocalLog;
 import org.apache.cassandra.tcm.log.LogState;
@@ -58,6 +57,7 @@ import org.apache.cassandra.tcm.migration.Election;
 import org.apache.cassandra.tcm.migration.GossipProcessor;
 import org.apache.cassandra.tcm.ownership.PlacementProvider;
 import org.apache.cassandra.tcm.ownership.UniformRangePlacement;
+import org.apache.cassandra.tcm.sequences.InProgressSequences;
 import org.apache.cassandra.tcm.sequences.ReconfigureCMS;
 import org.apache.cassandra.tcm.serialization.VerboseMetadataSerializer;
 import org.apache.cassandra.tcm.serialization.Version;
@@ -356,7 +356,7 @@ public class ClusterMetadataService
                                                                                                    code, reason));
                                                  });
 
-        StorageService.instance.finishInProgressSequences(ReconfigureCMS.SequenceKey.instance);
+        InProgressSequences.finishInProgressSequences(ReconfigureCMS.SequenceKey.instance);
     }
 
     public boolean applyFromGossip(ClusterMetadata expected, ClusterMetadata updated)

@@ -34,6 +34,6 @@ public class InitializeCMS extends NodeTool.NodeToolCmd
     @Override
     protected void execute(NodeProbe probe)
     {
-        probe.getStorageService().initializeCMS(endpoint);
+        probe.getCMSOperationsProxy().initializeCMS(endpoint);
     }
 }

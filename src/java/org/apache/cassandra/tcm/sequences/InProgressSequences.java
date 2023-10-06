@@ -31,6 +31,8 @@ import com.google.common.collect.ImmutableSet;
 
 import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.cassandra.io.util.DataOutputPlus;
+import org.apache.cassandra.service.StorageService;
+import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.InProgressSequence;
 import org.apache.cassandra.tcm.MetadataValue;
@@ -56,6 +58,36 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
     {
         this.lastModified = lastModified;
         this.state = state;
+    }
+
+    public static void finishInProgressSequences(SequenceKey sequenceKey)
+    {
+        ClusterMetadata metadata = ClusterMetadata.current();
+        while (true)
+        {
+            InProgressSequence<?> sequence = metadata.inProgressSequences.get(sequenceKey);
+            if (sequence == null)
+                break;
+            if (isLeave(sequence))
+                StorageService.instance.maybeInitializeServices();
+            if (resume(sequence))
+                metadata = ClusterMetadata.current();
+            else
+                return;
+        }
+    }
+
+    public static boolean cancelInProgressSequences(String sequenceOwner, String expectedSequenceKind)
+    {
+        NodeId owner = NodeId.fromString(sequenceOwner);
+        InProgressSequence<?> seq = ClusterMetadata.current().inProgressSequences.get(owner);
+        if (seq == null)
+            throw new IllegalArgumentException("No in progress sequence for "+sequenceOwner);
+        Kind expectedKind = Kind.valueOf(expectedSequenceKind);
+        if (seq.kind() != expectedKind)
+            throw new IllegalArgumentException("No in progress sequence of kind " + expectedKind + " for " + owner + " (only " + seq.kind() +" in progress)");
+
+        return StorageService.cancelInProgressSequences(owner);
     }
 
     @Override

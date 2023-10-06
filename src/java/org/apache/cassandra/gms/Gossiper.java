@@ -66,6 +66,7 @@ import org.apache.cassandra.tcm.membership.Directory;
 import org.apache.cassandra.tcm.membership.Location;
 import org.apache.cassandra.tcm.membership.NodeAddresses;
 import org.apache.cassandra.tcm.membership.NodeVersion;
+import org.apache.cassandra.tcm.transformations.Assassinate;
 import org.apache.cassandra.utils.CassandraVersion;
 import org.apache.cassandra.utils.ExecutorUtils;
 import org.apache.cassandra.utils.MBeanWrapper;
@@ -717,7 +718,8 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean, 
      */
     public void assassinateEndpoint(String address) throws UnknownHostException
     {
-        StorageService.instance.assassinateEndpoint(address);
+        InetAddressAndPort endpoint = InetAddressAndPort.getByName(address);
+        Assassinate.assassinateEndpoint(endpoint);
     }
 
     public boolean isKnownEndpoint(InetAddressAndPort endpoint)

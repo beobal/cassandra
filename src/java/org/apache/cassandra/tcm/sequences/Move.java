@@ -20,6 +20,7 @@ package org.apache.cassandra.tcm.sequences;
 
 import java.io.IOException;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
@@ -52,9 +53,11 @@ import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.streaming.StreamOperation;
 import org.apache.cassandra.streaming.StreamPlan;
 import org.apache.cassandra.tcm.ClusterMetadata;
+import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.InProgressSequence;
 import org.apache.cassandra.tcm.Transformation;
+import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.membership.NodeState;
 import org.apache.cassandra.tcm.ownership.DataPlacements;
 import org.apache.cassandra.tcm.ownership.MovementMap;
@@ -107,6 +110,53 @@ public class Move extends InProgressSequence<Move>
         this.finishMove = finishMove;
 
         this.streamData = streamData;
+    }
+
+    /**
+     * move the node to new token or find a new token to boot to according to load
+     *
+     * @param newToken new token to boot to, or if null, find balanced token to boot to
+     */
+    public static void move(Token newToken)
+    {
+        if (ClusterMetadataService.instance().isMigrating() || ClusterMetadataService.state() == ClusterMetadataService.State.GOSSIP)
+            throw new IllegalStateException("This cluster is migrating to cluster metadata, can't move until that is done.");
+
+        if (newToken == null)
+            throw new IllegalArgumentException("Can't move to the undefined (null) token.");
+
+        if (ClusterMetadata.current().tokenMap.tokens().contains(newToken))
+            throw new IllegalArgumentException(String.format("target token %s is already owned by another node.", newToken));
+
+        // address of the current node
+        ClusterMetadata metadata = ClusterMetadata.current();
+        NodeId self = metadata.myNodeId();
+        // This doesn't make any sense in a vnodes environment.
+        if (metadata.tokenMap.tokens(self).size() > 1)
+        {
+            logger.error("Invalid request to move(Token); This node has more than one token and cannot be moved thusly.");
+            throw new UnsupportedOperationException("This node has more than one token and cannot be moved thusly.");
+        }
+
+        ClusterMetadataService.instance().commit(new PrepareMove(self,
+                                                                 Collections.singleton(newToken),
+                                                                 ClusterMetadataService.instance().placementProvider(),
+                                                                 true),
+                                                 (metadata_) -> null,
+                                                 (metadata_, code, reason) -> {
+                                                     InProgressSequence<?> sequence = metadata_.inProgressSequences.get(self);
+                                                     // We might have discovered a startup sequence we ourselves committed but got no response for
+                                                     if (sequence == null || sequence.kind() != InProgressSequences.Kind.MOVE)
+                                                     {
+                                                         throw new IllegalStateException(String.format("Can not commit event to metadata service: %s. Interrupting leave sequence.",
+                                                                                                       reason));
+                                                     }
+                                                     return null;
+                                                 });
+        InProgressSequences.finishInProgressSequences(self);
+
+        if (logger.isDebugEnabled())
+            logger.debug("Successfully moved to new token {}", StorageService.instance.getLocalTokens().iterator().next());
     }
 
     @Override

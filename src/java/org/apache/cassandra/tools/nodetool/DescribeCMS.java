@@ -30,7 +30,7 @@ public class DescribeCMS extends NodeTool.NodeToolCmd
     @Override
     protected void execute(NodeProbe probe)
     {
-        Map<String, String> info = probe.getStorageService().describeCMS();
+        Map<String, String> info = probe.getCMSOperationsProxy().describeCMS();
         System.out.printf("Cluster Metadata Service:%n");
         System.out.printf("Members: %s%n", info.get("MEMBERS"));
         System.out.printf("Is Member: %s%n", info.get("IS_MEMBER"));

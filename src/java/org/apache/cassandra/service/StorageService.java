@@ -49,7 +49,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
@@ -76,7 +75,10 @@ import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.RateLimiter;
 import com.google.common.util.concurrent.Uninterruptibles;
 
-import org.apache.cassandra.tcm.transformations.cms.AdvanceCMSReconfiguration;
+import org.apache.cassandra.tcm.membership.NodeId;
+import org.apache.cassandra.tcm.sequences.Move;
+import org.apache.cassandra.tcm.sequences.UnbootstrapAndLeave;
+import org.apache.cassandra.tcm.transformations.Assassinate;
 import org.apache.cassandra.utils.progress.ProgressEvent;
 import org.apache.cassandra.utils.progress.ProgressEventType;
 import org.apache.commons.lang3.StringUtils;
@@ -146,7 +148,6 @@ import org.apache.cassandra.io.util.PathUtils;
 import org.apache.cassandra.locator.AbstractReplicationStrategy;
 import org.apache.cassandra.locator.DynamicEndpointSnitch;
 import org.apache.cassandra.locator.EndpointsByRange;
-import org.apache.cassandra.locator.EndpointsByReplica;
 import org.apache.cassandra.locator.EndpointsForRange;
 import org.apache.cassandra.locator.EndpointsForToken;
 import org.apache.cassandra.locator.IEndpointSnitch;
@@ -184,22 +185,16 @@ import org.apache.cassandra.service.paxos.cleanup.PaxosTableRepairs;
 import org.apache.cassandra.service.snapshot.SnapshotManager;
 import org.apache.cassandra.service.snapshot.TableSnapshot;
 import org.apache.cassandra.streaming.StreamManager;
-import org.apache.cassandra.streaming.StreamOperation;
-import org.apache.cassandra.streaming.StreamPlan;
 import org.apache.cassandra.streaming.StreamResultFuture;
 import org.apache.cassandra.streaming.StreamState;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
-import org.apache.cassandra.tcm.Epoch;
-import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.InProgressSequence;
-import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.compatibility.GossipHelper;
 import org.apache.cassandra.tcm.compatibility.TokenRingUtils;
 import org.apache.cassandra.tcm.membership.Directory;
 import org.apache.cassandra.tcm.membership.NodeAddresses;
 import org.apache.cassandra.tcm.membership.NodeState;
-import org.apache.cassandra.tcm.membership.NodeVersion;
 import org.apache.cassandra.tcm.migration.GossipCMSListener;
 import org.apache.cassandra.tcm.ownership.MovementMap;
 import org.apache.cassandra.tcm.ownership.TokenMap;
@@ -207,19 +202,10 @@ import org.apache.cassandra.tcm.ownership.VersionedEndpoints;
 import org.apache.cassandra.tcm.sequences.BootstrapAndJoin;
 import org.apache.cassandra.tcm.sequences.BootstrapAndReplace;
 import org.apache.cassandra.tcm.sequences.InProgressSequences;
-import org.apache.cassandra.tcm.sequences.LeaveStreams;
-import org.apache.cassandra.tcm.sequences.ReconfigureCMS;
-import org.apache.cassandra.tcm.sequences.ReplaceSameAddress;
-import org.apache.cassandra.tcm.transformations.Assassinate;
 import org.apache.cassandra.tcm.transformations.CancelInProgressSequence;
-import org.apache.cassandra.tcm.transformations.PrepareJoin;
-import org.apache.cassandra.tcm.transformations.PrepareLeave;
-import org.apache.cassandra.tcm.transformations.PrepareMove;
-import org.apache.cassandra.tcm.transformations.PrepareReplace;
 import org.apache.cassandra.tcm.transformations.Unregister;
 import org.apache.cassandra.tcm.transformations.Register;
 import org.apache.cassandra.tcm.transformations.Startup;
-import org.apache.cassandra.tcm.transformations.UnsafeJoin;
 import org.apache.cassandra.transport.ClientResourceLimits;
 import org.apache.cassandra.transport.ProtocolVersion;
 import org.apache.cassandra.utils.Clock;
@@ -446,8 +432,6 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
     private final Set<InetAddressAndPort> replicatingNodes = Sets.newConcurrentHashSet();
     private CassandraDaemon daemon;
-
-    private InetAddressAndPort removingNode;
 
     /* we bootstrap but do NOT join the ring unless told to do so */
     private boolean isSurveyMode = TEST_WRITE_SURVEY.getBoolean(false);
@@ -851,110 +835,12 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         completeInitialization();
     }
 
-    // todo: move somewhere to sequences?
-    @VisibleForTesting
-    public void startup(Supplier<Transformation> startupSequence, boolean finishJoiningRing)
-    {
-        ClusterMetadata metadata = ClusterMetadata.current();
-        NodeId self = metadata.myNodeId();
-
-        // finish in-progress sequences first
-        finishInProgressSequences(self);
-        metadata = ClusterMetadata.current();
-
-        switch (metadata.directory.peerState(self))
-        {
-            case REGISTERED:
-            case LEFT:
-                if (isReplacing())
-                    ReconfigureCMS.maybeReconfigureCMS(metadata, DatabaseDescriptor.getReplaceAddress());
-
-                ClusterMetadataService.instance().commit(startupSequence.get(),
-                                                         (metadata_) -> null,
-                                                         (metadata_, code, reason) -> {
-                                                             // This could happen if `UNSAFE_JOIN` has been retried after it succeded but timed out
-                                                             if (ClusterMetadata.current().directory.peerState(self) == JOINED)
-                                                                 return null;
-
-                                                             InProgressSequence<?> sequence = metadata_.inProgressSequences.get(self);
-                                                             // We might have discovered a startup sequence we ourselves committed but got no response for
-                                                             if (sequence == null || !InProgressSequences.STARTUP_SEQUENCE_KINDS.contains(sequence.kind()))
-                                                             {
-                                                                 throw new IllegalStateException(String.format("Can not commit event to metadata service: \"%s\"(%s). Interrupting startup sequence.",
-                                                                                                               code, reason));
-                                                             }
-                                                             return null;
-                                                         });
-
-
-                finishInProgressSequences(self);
-
-                if (ClusterMetadata.current().directory.peerState(self) == JOINED)
-                    SystemKeyspace.setBootstrapState(SystemKeyspace.BootstrapState.COMPLETED);
-                else
-                {
-                    logger.info("Did not finish joining the ring; node state is {}, bootstrap state is {}",
-                                ClusterMetadata.current().directory.peerState(self),
-                                SystemKeyspace.getBootstrapState());
-                    break;
-                }
-            case JOINED:
-                if (isReplacingSameAddress())
-                    ReplaceSameAddress.streamData(self, metadata, shouldBootstrap(), finishJoiningRing);
-
-                // JOINED appears before BOOTSTRAPPING & BOOT_REPLACE so we can fall
-                // through when we start as REGISTERED/LEFT and complete a full startup
-                logger.info("{}", NORMAL);
-                break;
-            case BOOTSTRAPPING:
-            case BOOT_REPLACING:
-                if (finishJoiningRing)
-                {
-                    throw new IllegalStateException("Expected to complete startup sequence, but did not. " +
-                                                    "Can't proceed from the state " + metadata.directory.peerState(self));
-                }
-                break;
-            default:
-                throw new IllegalStateException("Can't proceed from the state " + metadata.directory.peerState(self));
-        }
-    }
-
     private void completeInitialization()
     {
         initialized = true;
     }
 
-    public void finishInProgressSequences(InProgressSequences.SequenceKey sequenceKey)
-    {
-        ClusterMetadata metadata = ClusterMetadata.current();
-        while (true)
-        {
-            InProgressSequence<?> sequence = metadata.inProgressSequences.get(sequenceKey);
-            if (sequence == null)
-                break;
-            if (InProgressSequences.isLeave(sequence))
-                maybeInitializeServices();
-            if (InProgressSequences.resume(sequence))
-                metadata = ClusterMetadata.current();
-            else
-                return;
-        }
-    }
-
-    public boolean cancelInProgressSequences(String sequenceOwner, String expectedSequenceKind)
-    {
-        NodeId owner = NodeId.fromString(sequenceOwner);
-        InProgressSequence<?> seq = ClusterMetadata.current().inProgressSequences.get(owner);
-        if (seq == null)
-            throw new IllegalArgumentException("No in progress sequence for "+sequenceOwner);
-        InProgressSequences.Kind expectedKind = InProgressSequences.Kind.valueOf(expectedSequenceKind);
-        if (seq.kind() != expectedKind)
-            throw new IllegalArgumentException("No in progress sequence of kind " + expectedKind + " for " + owner + " (only " + seq.kind() +" in progress)");
-
-        return cancelInProgressSequences(owner);
-    }
-
-    public boolean cancelInProgressSequences(NodeId sequenceOwner)
+    public static boolean cancelInProgressSequences(NodeId sequenceOwner)
     {
         return ClusterMetadataService.instance().commit(new CancelInProgressSequence(sequenceOwner),
                                                         metadata -> true,
@@ -970,7 +856,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     }
 
     private boolean servicesInitialized = false;
-    private void maybeInitializeServices()
+    public void maybeInitializeServices()
     {
         if (servicesInitialized)
             return;
@@ -982,38 +868,6 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         BatchlogManager.instance.start();
         startSnapshotManager();
         servicesInitialized = true;
-    }
-
-    private Transformation getStartupSequence(boolean finishJoiningRing, boolean shouldBootstrap)
-    {
-        ClusterMetadata metadata = ClusterMetadata.current();
-        if (isReplacing())
-        {
-            InetAddressAndPort replacingEndpoint = DatabaseDescriptor.getReplaceAddress();
-
-            NodeId replaced = ClusterMetadata.current().directory.peerId(replacingEndpoint);
-
-            return new PrepareReplace(replaced,
-                                      metadata.myNodeId(),
-                                      ClusterMetadataService.instance().placementProvider(),
-                                      finishJoiningRing,
-                                      shouldBootstrap);
-        }
-        else if (finishJoiningRing && !shouldBootstrap)
-        {
-            return new UnsafeJoin(metadata.myNodeId(),
-                                  new HashSet<>(BootStrapper.getBootstrapTokens(ClusterMetadata.current(), getBroadcastAddressAndPort())),
-                                  ClusterMetadataService.instance().placementProvider());
-        }
-        else
-        {
-            return new PrepareJoin(metadata.myNodeId(),
-                                   // TODO: use these tokens when setting up progess sequence
-                                   new HashSet<>(BootStrapper.getBootstrapTokens(ClusterMetadata.current(), getBroadcastAddressAndPort())),
-                                   ClusterMetadataService.instance().placementProvider(),
-                                   finishJoiningRing,
-                                   shouldBootstrap);
-        }
     }
 
     public boolean isReplacing()
@@ -1078,8 +932,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             }
             try
             {
-                boolean finishJoiningRing = !isSurveyMode;
-                startup(() -> getStartupSequence(finishJoiningRing, shouldBootstrap()), finishJoiningRing);
+                org.apache.cassandra.tcm.Startup.startup(!isSurveyMode, shouldBootstrap(), isReplacing());
             }
             catch (ConfigurationException e)
             {
@@ -1158,7 +1011,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         if (!(sequence instanceof BootstrapAndJoin) && !(sequence instanceof BootstrapAndReplace))
             throw new IllegalStateException("Can not resume bootstrap as join sequence has not been started");
         ongoingBootstrap.set(null);
-        finishInProgressSequences(id);
+        InProgressSequences.finishInProgressSequences(id);
         if (!isNativeTransportRunning())
             daemon.initializeClientTransports();
         daemon.start();
@@ -2210,11 +2063,6 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         {
             throw new AssertionError("Got invalid value for NET_VERSION application state: " + value.value);
         }
-    }
-
-    public void updateTopology()
-    {
-        logger.debug("Caller should be updated, updateTopology is no longer supported", new RuntimeException());
     }
 
     private void notifyRpcChange(InetAddressAndPort endpoint, boolean ready)
@@ -3629,50 +3477,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
     public void decommission(boolean force)
     {
-        decommission(force, true);
-    }
-
-    @VisibleForTesting
-    public void decommission(boolean force, boolean shutdownNetworking)
-    {
-        if (ClusterMetadataService.instance().isMigrating() || ClusterMetadataService.state() == ClusterMetadataService.State.GOSSIP)
-            throw new IllegalStateException("This cluster is migrating to cluster metadata, can't decommission until that is done.");
-        if (!EnumSet.of(Mode.LEAVING, NORMAL, DECOMMISSION_FAILED).contains(operationMode()))
-            throw new UnsupportedOperationException("Node in " + operationMode() + " state; wait for status to become normal");
-        logger.debug("DECOMMISSIONING");
-        ClusterMetadata metadata = ClusterMetadata.current();
-        NodeId self = metadata.myNodeId();
-
-        ReconfigureCMS.maybeReconfigureCMS(metadata, getBroadcastAddressAndPort());
-        InProgressSequence<?> inProgress = metadata.inProgressSequences.get(self);
-
-        if (inProgress == null)
-        {
-            logger.info("starting decom with {} {}", metadata.epoch, self);
-            ClusterMetadataService.instance().commit(new PrepareLeave(self,
-                                                                      force,
-                                                                      ClusterMetadataService.instance().placementProvider(),
-                                                                      LeaveStreams.Kind.UNBOOTSTRAP),
-                                                     (metadata_) -> null,
-                                                     (metadata_, code, reason) -> {
-                                                         InProgressSequence<?> sequence = metadata_.inProgressSequences.get(self);
-                                                         // We might have discovered a sequence we ourselves committed but got no response for
-                                                         if (sequence == null || sequence.kind() != InProgressSequences.Kind.LEAVE)
-                                                         {
-                                                             throw new IllegalStateException(String.format("Can not commit event to metadata service: %s. Interrupting leave sequence.",
-                                                                                                           reason));
-                                                         }
-                                                         return null;
-                                                     });
-        }
-        else if (!InProgressSequences.isLeave(inProgress))
-        {
-            throw new IllegalArgumentException("Can not decomission a node that has an in-progress sequence");
-        }
-
-        finishInProgressSequences(self);
-        if (shutdownNetworking)
-            shutdownNetworking();
+        UnbootstrapAndLeave.decommission(true, force);
     }
 
     public void shutdownNetworking()
@@ -3745,56 +3550,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         {
             throw new IllegalArgumentException(e.getMessage());
         }
-        move(getTokenFactory().fromString(newToken));
-    }
-
-    /**
-     * move the node to new token or find a new token to boot to according to load
-     *
-     * @param newToken new token to boot to, or if null, find balanced token to boot to
-     *
-     * @throws IOException on any I/O operation error
-     */
-    private void move(Token newToken)
-    {
-        if (ClusterMetadataService.instance().isMigrating() || ClusterMetadataService.state() == ClusterMetadataService.State.GOSSIP)
-            throw new IllegalStateException("This cluster is migrating to cluster metadata, can't move until that is done.");
-
-        if (newToken == null)
-            throw new IllegalArgumentException("Can't move to the undefined (null) token.");
-
-        if (ClusterMetadata.current().tokenMap.tokens().contains(newToken))
-            throw new IllegalArgumentException(String.format("target token %s is already owned by another node.", newToken));
-
-        // address of the current node
-        ClusterMetadata metadata = ClusterMetadata.current();
-        NodeId self = metadata.myNodeId();
-        // This doesn't make any sense in a vnodes environment.
-        if (metadata.tokenMap.tokens(self).size() > 1)
-        {
-            logger.error("Invalid request to move(Token); This node has more than one token and cannot be moved thusly.");
-            throw new UnsupportedOperationException("This node has more than one token and cannot be moved thusly.");
-        }
-
-        ClusterMetadataService.instance().commit(new PrepareMove(self,
-                                                                 Collections.singleton(newToken),
-                                                                 ClusterMetadataService.instance().placementProvider(),
-                                                                 true),
-                                                 (metadata_) -> null,
-                                                 (metadata_, code, reason) -> {
-                                                     InProgressSequence<?> sequence = metadata_.inProgressSequences.get(self);
-                                                     // We might have discovered a startup sequence we ourselves committed but got no response for
-                                                     if (sequence == null || sequence.kind() != InProgressSequences.Kind.MOVE)
-                                                     {
-                                                         throw new IllegalStateException(String.format("Can not commit event to metadata service: %s. Interrupting leave sequence.",
-                                                                                                       reason));
-                                                     }
-                                                     return null;
-                                                 });
-        finishInProgressSequences(self);
-
-        if (logger.isDebugEnabled())
-            logger.debug("Successfully moved to new token {}", getLocalTokens().iterator().next());
+        Move.move(getTokenFactory().fromString(newToken));
     }
 
     public String getRemovalStatus()
@@ -3861,49 +3617,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     public void removeNode(String hostIdString, boolean force)
     {
         NodeId toRemove = NodeId.fromString(hostIdString);
-        removeNode(toRemove, force);
-    }
-
-    public void removeNode(NodeId toRemove, boolean force)
-    {
-        ClusterMetadata metadata = ClusterMetadata.current();
-        if (toRemove.equals(metadata.myNodeId()))
-            throw new UnsupportedOperationException("Cannot remove self");
-        InetAddressAndPort endpoint = metadata.directory.endpoint(toRemove);
-        if (endpoint == null)
-            throw new UnsupportedOperationException("Host ID not found.");
-        if (Gossiper.instance.getLiveMembers().contains(endpoint))
-            throw new UnsupportedOperationException("Node " + endpoint + " is alive and owns this ID. Use decommission command to remove it from the ring");
-
-        NodeState removeState = metadata.directory.peerState(toRemove);
-        if (removeState == null)
-            throw new UnsupportedOperationException("Node to be removed is not a member of the token ring");
-        if (removeState == NodeState.LEAVING)
-            logger.warn("Node {} is already leaving or being removed, continuing removal anyway", endpoint);
-
-        if (metadata.inProgressSequences.contains(toRemove))
-            throw new UnsupportedOperationException("Can not remove a node that has an in-progress sequence");
-
-        ReconfigureCMS.maybeReconfigureCMS(metadata, endpoint);
-
-        logger.info("starting removenode with {} {}", metadata.epoch, toRemove);
-
-        ClusterMetadataService.instance().commit(new PrepareLeave(toRemove,
-                                                                  force,
-                                                                  ClusterMetadataService.instance().placementProvider(),
-                                                                  LeaveStreams.Kind.REMOVENODE),
-                                                 (metadata_) -> null,
-                                                 (metadata_, code, reason) -> {
-                                                     InProgressSequence<?> sequence = metadata_.inProgressSequences.get(toRemove);
-                                                     // We might have discovered a startup sequence we ourselves committed but got no response for
-                                                     if (sequence == null || sequence.kind() != InProgressSequences.Kind.REMOVE)
-                                                     {
-                                                         throw new IllegalStateException(String.format("Can not commit event to metadata service: %s. Interrupting removenode sequence.",
-                                                                                                       reason));
-                                                     }
-                                                     return null;
-                                                 });
-        finishInProgressSequences(toRemove);
+        UnbootstrapAndLeave.removeNode(toRemove, force);
     }
 
     public void assassinateEndpoint(String address)
@@ -3911,22 +3625,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         try
         {
             InetAddressAndPort endpoint = InetAddressAndPort.getByName(address);
-            ClusterMetadata metadata = ClusterMetadata.current();
-            // Gossip implementation of assassinate was a no-op. Preserving this behaviour.
-            if (!metadata.directory.isRegistered(endpoint))
-                return;
-            NodeId nodeId = metadata.directory.peerId(endpoint);
-            ClusterMetadataService.instance().commit(new Assassinate(nodeId,
-                                                                     ClusterMetadataService.instance().placementProvider()),
-                                                     (metadata_) -> null,
-                                                     (metadata_, code, reason) -> {
-                                                         if (metadata_.directory.peerIds().contains(nodeId))
-                                                         {
-                                                             throw new IllegalStateException(String.format("Can not commit event to metadata service: %s. Interrupting assassinate node.",
-                                                                                                           reason));
-                                                         }
-                                                         return null;
-                                                     });
+            Assassinate.assassinateEndpoint(endpoint);
         }
         catch (UnknownHostException e)
         {
@@ -4296,7 +3995,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         if (isDraining()) // when draining isShutdown is also true, so we check first to return a more accurate message
             throw new IllegalStateException(String.format("Unable to start %s because the node is draining.", service));
 
-        if (isShutdown()) // do not rely on operationMode in case it gets changed to decomissioned or other
+        if (isShutdown()) // do not rely on operationMode in case it gets changed to decommissioned or other
             throw new IllegalStateException(String.format("Unable to start %s because the node was drained.", service));
 
         if (!isNormal() && joinRing) // if the node is not joining the ring, it is gossipping-only member which is in STARTING state forever
@@ -4599,67 +4298,9 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         }
     }
 
-    /**
-     * Send data to the endpoints that will be responsible for it in the future
-     *
-     * @param rangesToStreamByKeyspace keyspaces and data ranges with endpoints included for each
-     * @return async Future for whether stream was success
-     */
-    public Future<StreamState> streamRanges(Map<String, EndpointsByReplica> rangesToStreamByKeyspace)
+    public StreamStateStore streamStateStore()
     {
-        // First, we build a list of ranges to stream to each host, per table
-        Map<String, RangesByEndpoint> sessionsToStreamByKeyspace = new HashMap<>();
-
-        for (Map.Entry<String, EndpointsByReplica> entry : rangesToStreamByKeyspace.entrySet())
-        {
-            String keyspace = entry.getKey();
-            EndpointsByReplica rangesWithEndpoints = entry.getValue();
-
-            if (rangesWithEndpoints.isEmpty())
-                continue;
-
-            //Description is always Unbootstrap? Is that right?
-            Map<InetAddressAndPort, Set<Range<Token>>> transferredRangePerKeyspace = SystemKeyspace.getTransferredRanges("Unbootstrap",
-                                                                                                                         keyspace,
-                                                                                                                         ClusterMetadata.current().tokenMap.partitioner());
-            RangesByEndpoint.Builder replicasPerEndpoint = new RangesByEndpoint.Builder();
-            for (Map.Entry<Replica, Replica> endPointEntry : rangesWithEndpoints.flattenEntries())
-            {
-                Replica local = endPointEntry.getKey();
-                Replica remote = endPointEntry.getValue();
-                Set<Range<Token>> transferredRanges = transferredRangePerKeyspace.get(remote.endpoint());
-                if (transferredRanges != null && transferredRanges.contains(local.range()))
-                {
-                    logger.debug("Skipping transferred range {} of keyspace {}, endpoint {}", local, keyspace, remote);
-                    continue;
-                }
-
-                replicasPerEndpoint.put(remote.endpoint(), remote.decorateSubrange(local.range()));
-            }
-
-            sessionsToStreamByKeyspace.put(keyspace, replicasPerEndpoint.build());
-        }
-
-        StreamPlan streamPlan = new StreamPlan(StreamOperation.DECOMMISSION);
-
-        // Vinculate StreamStateStore to current StreamPlan to update transferred ranges per StreamSession
-        streamPlan.listeners(streamStateStore);
-
-        for (Map.Entry<String, RangesByEndpoint> entry : sessionsToStreamByKeyspace.entrySet())
-        {
-            String keyspaceName = entry.getKey();
-            RangesByEndpoint replicasPerEndpoint = entry.getValue();
-
-            for (Map.Entry<InetAddressAndPort, RangesAtEndpoint> rangesEntry : replicasPerEndpoint.asMap().entrySet())
-            {
-                RangesAtEndpoint replicas = rangesEntry.getValue();
-                InetAddressAndPort newEndpoint = rangesEntry.getKey();
-
-                // TODO each call to transferRanges re-flushes, this is potentially a lot of waste
-                streamPlan.transferRanges(newEndpoint, keyspaceName, replicas);
-            }
-        }
-        return streamPlan.execute();
+        return streamStateStore;
     }
 
     public void bulkLoad(String directory)
@@ -5773,84 +5414,6 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     }
 
     @Override
-    public void initializeCMS(List<String> ignoredEndpoints)
-    {
-        ClusterMetadataService.instance().upgradeFromGossip(ignoredEndpoints);
-    }
-
-    @Override
-    public void resumeReconfigureCms()
-    {
-        StorageService.instance.finishInProgressSequences(ReconfigureCMS.SequenceKey.instance);
-    }
-
-    @Override
-    public void reconfigureCMS(int rf, boolean sync)
-    {
-        Runnable r = () -> ClusterMetadataService.instance().reconfigureCMS(ReplicationParams.simpleMeta(rf));
-        if (sync)
-            r.run();
-        else
-            ScheduledExecutors.nonPeriodicTasks.submit(r);
-    }
-
-    @Override
-    public Map<String, List<String>> reconfigureCMSStatus()
-    {
-        ClusterMetadata metadata = ClusterMetadata.current();
-        ReconfigureCMS sequence = (ReconfigureCMS) metadata.inProgressSequences.get(ReconfigureCMS.SequenceKey.instance);
-        if (sequence == null)
-             return null;
-
-        AdvanceCMSReconfiguration advance = sequence.next;
-        Map<String, List<String >> status = new LinkedHashMap<>(); // to preserve order
-        if (advance.activeTransition != null)
-            status.put("ACTIVE", Collections.singletonList(metadata.directory.endpoint(advance.activeTransition.nodeId).toString()));
-
-        if (!advance.diff.additions.isEmpty())
-            status.put("ADDITIONS", advance.diff.additions.stream()
-                                                          .map(metadata.directory::endpoint)
-                                                          .map(Object::toString)
-                                                          .collect(Collectors.toList()));
-
-        if (!advance.diff.removals.isEmpty())
-            status.put("REMOVALS", advance.diff.removals.stream()
-                                                        .map(metadata.directory::endpoint)
-                                                        .map(Object::toString)
-                                                        .collect(Collectors.toList()));
-
-        return status;
-    }
-
-    @Override
-    public void reconfigureCMS(Map<String, Integer> rf, boolean sync)
-    {
-        Runnable r = () -> ClusterMetadataService.instance().reconfigureCMS(ReplicationParams.ntsMeta(rf));
-        if (sync)
-            r.run();
-        else
-            ScheduledExecutors.nonPeriodicTasks.submit(r);
-    }
-
-    @Override
-    public Map<String, String> describeCMS()
-    {
-        Map<String, String> info = new HashMap<>();
-        ClusterMetadata metadata = ClusterMetadata.current();
-        ClusterMetadataService service = ClusterMetadataService.instance();
-        String members = metadata.fullCMSMembers().stream().sorted().map(Object::toString).collect(Collectors.joining(","));
-        info.put("MEMBERS", members);
-        info.put("IS_MEMBER", Boolean.toString(service.isCurrentMember(FBUtilities.getBroadcastAddressAndPort())));
-        info.put("SERVICE_STATE", ClusterMetadataService.state(metadata).toString());
-        info.put("IS_MIGRATING", Boolean.toString(service.isMigrating()));
-        info.put("EPOCH", Long.toString(metadata.epoch.getEpoch()));
-        info.put("LOCAL_PENDING", Integer.toString(ClusterMetadataService.instance().log().pendingBufferSize()));
-        info.put("COMMITS_PAUSED", Boolean.toString(service.commitsPaused()));
-        info.put("REPLICATION_FACTOR", ReplicationParams.meta(metadata).toString());
-        return info;
-    }
-
-    @Override
     public void removeNotificationListener(NotificationListener listener) throws ListenerNotFoundException
     {
         if (!skipNotificationListeners)
@@ -5871,56 +5434,5 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     {
         if (!skipNotificationListeners)
             super.addNotificationListener(listener, filter, handback);
-    }
-
-    @Override
-    public void sealPeriod()
-    {
-        logger.info("Sealing current period in metadata log");
-        long period = ClusterMetadataService.instance().sealPeriod().period;
-        logger.info("Current period {} is sealed", period);
-    }
-
-    @Override
-    public void unsafeRevertClusterMetadata(long epoch)
-    {
-        if (!DatabaseDescriptor.getUnsafeTCMMode())
-            throw new IllegalStateException("Cluster is not running unsafe TCM mode, can't revert epoch");
-        ClusterMetadataService.instance().revertToEpoch(Epoch.create(epoch));
-    }
-
-    @Override
-    public String dumpClusterMetadata(long epoch, long transformToEpoch, String version) throws IOException
-    {
-        return ClusterMetadataService.instance().dumpClusterMetadata(Epoch.create(epoch), Epoch.create(transformToEpoch), org.apache.cassandra.tcm.serialization.Version.valueOf(version));
-    }
-
-    @Override
-    public String dumpClusterMetadata() throws IOException
-    {
-        return dumpClusterMetadata(Epoch.EMPTY.getEpoch(), ClusterMetadata.current().epoch.getEpoch() + 1000, NodeVersion.CURRENT.serializationVersion().toString());
-    }
-
-    @Override
-    public void unsafeLoadClusterMetadata(String file) throws IOException
-    {
-        if (!DatabaseDescriptor.getUnsafeTCMMode())
-            throw new IllegalStateException("Cluster is not running unsafe TCM mode, can't load cluster metadata " + file);
-        ClusterMetadataService.instance().loadClusterMetadata(file);
-    }
-
-    @Override
-    public void setCommitsPaused(boolean paused)
-    {
-        if (paused)
-            ClusterMetadataService.instance().pauseCommits();
-        else
-            ClusterMetadataService.instance().resumeCommits();
-    }
-
-    @Override
-    public boolean getCommitsPaused()
-    {
-        return ClusterMetadataService.instance().commitsPaused();
     }
 }

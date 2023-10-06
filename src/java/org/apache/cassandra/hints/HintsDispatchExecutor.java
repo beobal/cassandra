@@ -213,7 +213,7 @@ final class HintsDispatchExecutor
 
             // Rate limit is in bytes per second. Uses Double.MAX_VALUE if disabled (set to 0 in cassandra.yaml).
             // Max rate is scaled by the number of nodes in the cluster (CASSANDRA-5272), unless we are transferring
-            // hints during decomission rather than dispatching them to their final destination.
+            // hints during decommission rather than dispatching them to their final destination.
             // The goal is to bound maximum hints traffic going towards a particular node from the rest of the cluster,
             // not total outgoing hints traffic from this node. This is why the rate limiter is not shared between
             // all the dispatch tasks (as there will be at most one dispatch task for a particular host id at a time).

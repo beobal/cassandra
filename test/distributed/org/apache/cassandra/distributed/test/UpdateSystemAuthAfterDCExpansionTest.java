@@ -24,6 +24,7 @@ import com.google.common.collect.ImmutableList;
 
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.membership.NodeId;
+import org.apache.cassandra.tcm.sequences.UnbootstrapAndLeave;
 import org.apache.cassandra.tcm.transformations.Unregister;
 import org.apache.cassandra.utils.concurrent.Condition;
 import org.junit.BeforeClass;
@@ -201,7 +202,7 @@ public class UpdateSystemAuthAfterDCExpansionTest extends TestBaseImpl
                 NodeId nodeId = new NodeId(node2hostId);
                 InetAddressAndPort endpoint = ClusterMetadata.current().directory.endpoint(nodeId);
                 FailureDetector.instance.forceConviction(endpoint);
-                StorageService.instance.removeNode(nodeId, true);
+                UnbootstrapAndLeave.removeNode(nodeId, true);
                 Unregister.unregister(nodeId);
             });
 
