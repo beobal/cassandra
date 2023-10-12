@@ -26,7 +26,9 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.Uninterruptibles;
 import org.slf4j.Logger;
@@ -40,14 +42,19 @@ import org.apache.cassandra.io.util.DataOutputPlus;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.net.IVerbHandler;
 import org.apache.cassandra.net.Message;
+import org.apache.cassandra.net.MessageDelivery;
 import org.apache.cassandra.net.MessagingService;
 import org.apache.cassandra.net.NoPayload;
 import org.apache.cassandra.net.Verb;
-import org.apache.cassandra.tcm.migration.Election;
 import org.apache.cassandra.utils.Clock;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.Pair;
 
+/**
+ * Discovery is used to idenitify other participants in the cluster. Nodes send TCM_DISCOVER_REQ
+ * in several rounds. Node is considered to be discovered by another node when it has responsed
+ * to its discovery request, or when another node received its discovery request.
+ */
 public class Discovery
 {
     private static final Logger logger = LoggerFactory.getLogger(Discovery.class);
@@ -55,9 +62,33 @@ public class Discovery
     public static final Discovery instance = new Discovery();
     public static final Serializer serializer = new Serializer();
 
-    public final DiscoveryRequestHandler requestHandler = new DiscoveryRequestHandler();
+    public final IVerbHandler<NoPayload> requestHandler;
     private final Set<InetAddressAndPort> discovered = new ConcurrentSkipListSet<>();
     private final AtomicReference<State> state = new AtomicReference<>(State.NOT_STARTED);
+
+    // These two have to be suppliers because during simulation we can send out discovery requests
+    // rather early, before other node has initialized either MessagingService or DatabaseDescriptor.
+    // In order to properly route the timeout/failure, Simulator is checking whether the verb is
+    // response verb, which compares the instance of the verb handler with ResponseHandler.
+    // This can be improved by refactoring simulator, but this should help meanwhile.
+    private final Supplier<MessageDelivery> messaging;
+    private final Supplier<Set<InetAddressAndPort>> seeds;
+
+    private final InetAddressAndPort self;
+
+    private Discovery()
+    {
+        this(MessagingService::instance, DatabaseDescriptor::getSeeds, FBUtilities.getBroadcastAddressAndPort());
+    }
+
+    @VisibleForTesting
+    public Discovery(Supplier<MessageDelivery> messaging, Supplier<Set<InetAddressAndPort>> seeds, InetAddressAndPort self)
+    {
+        this.messaging = messaging;
+        this.seeds = seeds;
+        this.requestHandler = new DiscoveryRequestHandler(messaging);
+        this.self = self;
+    }
 
     public DiscoveredNodes discover()
     {
@@ -68,8 +99,6 @@ public class Discovery
     {
         boolean res = state.compareAndSet(State.NOT_STARTED, State.IN_PROGRESS);
         assert res : String.format("Can not start discovery as it is in state %s", state.get());
-
-        discovered.addAll(DatabaseDescriptor.getSeeds());
 
         long deadline = Clock.Global.nanoTime() + TimeUnit.SECONDS.toNanos(10);
         DiscoveredNodes last = null;
@@ -99,18 +128,21 @@ public class Discovery
         if (initiator != null)
             candidates.add(initiator);
         else
-        {
             candidates.addAll(discovered);
-            candidates.remove(FBUtilities.getBroadcastAddressAndPort());
-        }
 
-        Collection<Pair<InetAddressAndPort, DiscoveredNodes>> responses = Election.fanoutAndWait(MessagingService.instance(), candidates, Verb.TCM_DISCOVER_REQ, NoPayload.noPayload);
+        if (candidates.isEmpty())
+            candidates.addAll(seeds.get());
+
+        candidates.remove(self);
+
+        Collection<Pair<InetAddressAndPort, DiscoveredNodes>> responses = MessageDelivery.fanoutAndWait(messaging.get(), candidates, Verb.TCM_DISCOVER_REQ, NoPayload.noPayload);
 
         for (Pair<InetAddressAndPort, DiscoveredNodes> discoveredNodes : responses)
         {
             if (discoveredNodes.right.kind == DiscoveredNodes.Kind.CMS_ONLY)
                 return discoveredNodes.right;
 
+            discovered.add(discoveredNodes.left);
             discovered.addAll(discoveredNodes.right.nodes);
         }
 
@@ -119,6 +151,13 @@ public class Discovery
 
     private final class DiscoveryRequestHandler implements IVerbHandler<NoPayload>
     {
+        final Supplier<MessageDelivery> messaging;
+
+        DiscoveryRequestHandler(Supplier<MessageDelivery> messaging)
+        {
+            this.messaging = messaging;
+        }
+
         @Override
         public void doVerb(Message<NoPayload> message)
         {
@@ -134,7 +173,7 @@ public class Discovery
                 discoveredNodes = new DiscoveredNodes(new HashSet<>(discovered), DiscoveredNodes.Kind.KNOWN_PEERS);
             }
 
-            MessagingService.instance().send(message.responseWith(discoveredNodes), message.from());
+            messaging.get().send(message.responseWith(discoveredNodes), message.from());
         }
     }
 

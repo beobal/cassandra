@@ -20,7 +20,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-rm build/test/lib/jars/guava-18.0.jar
+rm -f build/test/lib/jars/guava-18.0.jar
 current_dir=$(dirname "$(readlink -f "$0")")
 
 common=(-Dstorage-config=$current_dir/../test/conf
