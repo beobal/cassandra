@@ -345,16 +345,8 @@ public class ClusterMetadataService
     {
         Transformation transformation = new PrepareCMSReconfiguration.Complex(replicationParams);
 
-        ClusterMetadataService.instance().commit(transformation,
-                                                 (metadata_) -> metadata_,
-                                                 (metadata_, code, reason) -> {
-                                                     MultiStepOperation<?> sequence = metadata_.inProgressSequences.get(ReconfigureCMS.SequenceKey.instance);
-                                                     if (sequence != null)
-                                                         return null;
-
-                                                     throw new IllegalStateException(String.format("Can not commit event to metadata service: \"%s\"(%s). Interrupting CMS Reconfiguration.",
-                                                                                                   code, reason));
-                                                 });
+        ClusterMetadataService.instance()
+                              .commit(transformation);
 
         InProgressSequences.finishInProgressSequences(ReconfigureCMS.SequenceKey.instance);
     }
@@ -449,23 +441,24 @@ public class ClusterMetadataService
 
     public final Supplier<Entry.Id> entryIdGen = new Entry.DefaultEntryIdGen();
 
-    public ClusterMetadata commit(Transformation transform)
-    {
-        return commit(transform,
-                      (metadata) -> metadata,
-                      (metadata, code, reason) -> {
-                          throw new IllegalStateException(reason);
-                      });
-    }
-
     public interface CommitSuccessHandler<T>
     {
         T accept(ClusterMetadata latest);
     }
 
-    public interface CommitRejectionHandler<T>
+    public interface CommitFailureHandler<T>
     {
-        T accept(ClusterMetadata latest, ExceptionCode code, String message);
+        T accept(ExceptionCode code, String message);
+    }
+
+    public ClusterMetadata commit(Transformation transform)
+    {
+        return commit(transform,
+                      metadata -> metadata,
+                      (code, message) -> {
+                          throw new IllegalStateException(String.format("Can not commit transformation: \"%s\"(%s).",
+                                                                        code, message));
+                      });
     }
 
     /**
@@ -484,13 +477,18 @@ public class ClusterMetadataService
      *
      * @param onFailure handler checks if rejection has resulted from a retry of the same trasformation.
      */
-    public <T1> T1 commit(Transformation transform, CommitSuccessHandler<T1> onSuccess, CommitRejectionHandler<T1> onFailure)
+    public <T1> T1 commit(Transformation transform, CommitSuccessHandler<T1> onSuccess, CommitFailureHandler<T1> onFailure)
     {
         if (commitsPaused.get())
             throw new IllegalStateException("Commits are paused, not trying to commit " + transform);
 
         long startTime = nanoTime();
-        Commit.Result result = processor.commit(entryIdGen.get(), transform, null);
+        // Replay everything in-flight before attempting a commit
+        // We grab highest consecutive epoch here, since we want both local and remote processors to benefit from
+        // discover-own-commits via entry id in case of lost messages (in remote case) and Paxos re-proposals (in local case)
+        Epoch highestConsecutive = log.waitForHighestConsecutive().epoch;
+
+        Commit.Result result = processor.commit(entryIdGen.get(), transform, highestConsecutive);
 
         try
         {
@@ -502,8 +500,7 @@ public class ClusterMetadataService
             else
             {
                 TCMMetrics.instance.recordCommitFailureLatency(nanoTime() - startTime, NANOSECONDS, result.failure().rejected);
-                ClusterMetadata metadata = processor.fetchLogAndWait();
-                return onFailure.accept(metadata, result.failure().code, result.failure().message);
+                return onFailure.accept(result.failure().code, result.failure().message);
             }
         }
         catch (TimeoutException t)
@@ -739,9 +736,9 @@ public class ClusterMetadataService
     {
         return ClusterMetadataService.instance.commit(SealPeriod.instance,
                                                       (ClusterMetadata metadata) -> metadata,
-                                                      (metadata, code, reason) -> {
+                                                      (code, reason) -> {
                                                           // If the transformation got rejected, someone else has beat us to seal this period
-                                                          return metadata;
+                                                          return ClusterMetadata.current();
                                                       });
     }
 

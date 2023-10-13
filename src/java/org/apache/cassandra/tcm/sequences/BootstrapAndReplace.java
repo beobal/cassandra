@@ -46,6 +46,7 @@ import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.tcm.ClusterMetadata;
+import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.MultiStepOperation;
 import org.apache.cassandra.tcm.Transformation;
@@ -184,7 +185,7 @@ public class BootstrapAndReplace extends MultiStepOperation<Epoch>
             case START_REPLACE:
                 try
                 {
-                    commit(startReplace);
+                    ClusterMetadataService.instance().commit(startReplace);
                 }
                 catch (Throwable e)
                 {
@@ -216,7 +217,7 @@ public class BootstrapAndReplace extends MultiStepOperation<Epoch>
                         }
                     }
 
-                    commit(midReplace);
+                    ClusterMetadataService.instance().commit(midReplace);
                 }
                 catch (IllegalStateException e)
                 {
@@ -239,7 +240,7 @@ public class BootstrapAndReplace extends MultiStepOperation<Epoch>
                         StreamSupport.stream(ColumnFamilyStore.all().spliterator(), false)
                                      .filter(cfs -> Schema.instance.getUserKeyspaces().names().contains(cfs.keyspace.getName()))
                                      .forEach(cfs -> cfs.indexManager.executePreJoinTasksBlocking(true));
-                        commit(finishReplace);
+                        ClusterMetadataService.instance().commit(finishReplace);
                     }
                     else
                     {

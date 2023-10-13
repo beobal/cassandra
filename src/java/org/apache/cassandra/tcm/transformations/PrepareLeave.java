@@ -32,7 +32,6 @@ import org.apache.cassandra.locator.NetworkTopologyStrategy;
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
-import org.apache.cassandra.tcm.MultiStepOperation;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.Directory;
 import org.apache.cassandra.tcm.membership.NodeId;
@@ -71,35 +70,6 @@ public class PrepareLeave implements Transformation
         this.force = force;
         this.placementProvider = placementProvider;
         this.streamKind = streamKind;
-    }
-
-    /**
-     * Helper method encapsulating retry logic
-     */
-    public static UnbootstrapAndLeave commit(ClusterMetadataService clusterMetadataService,
-                                             NodeId leaving,
-                                             boolean force,
-                                             PlacementProvider placementProvider,
-                                             LeaveStreams.Kind streamKind,
-                                             MultiStepOperation.Kind sequenceKind)
-    {
-        return clusterMetadataService.commit(new PrepareLeave(leaving,
-                                                              force,
-                                                              placementProvider,
-                                                              streamKind),
-                                             (metadata) -> (UnbootstrapAndLeave) metadata.inProgressSequences.get(leaving),
-                                             (metadata, code, reason) -> {
-                                                 MultiStepOperation<?> sequence = metadata.inProgressSequences.get(leaving);
-
-                                                 // We might have discovered a sequence we ourselves committed but got no response for
-                                                 if (sequence == null || sequence.kind() != sequenceKind)
-                                                 {
-                                                     throw new IllegalStateException(String.format("Can not commit event to metadata service: %s. Interrupting %s sequence.",
-                                                                                                   reason,
-                                                                                                   sequenceKind.toString().toLowerCase()));
-                                                 }
-                                                 return (UnbootstrapAndLeave) sequence;
-                                             });
     }
 
     @Override

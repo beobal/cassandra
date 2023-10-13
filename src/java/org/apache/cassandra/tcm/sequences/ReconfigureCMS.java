@@ -158,7 +158,7 @@ public class ReconfigureCMS extends MultiStepOperation<AdvanceCMSReconfiguration
                 streamRanges(replica, activeTransition.streamCandidates);
             }
             // Commit the next step in the sequence
-            commit(transitionCMS.next);
+            ClusterMetadataService.instance().commit(transitionCMS.next);
             return SequenceState.continuable();
         }
         catch (Throwable t)
@@ -189,16 +189,7 @@ public class ReconfigureCMS extends MultiStepOperation<AdvanceCMSReconfiguration
             return;
 
         // We can force removal from the CMS as it doesn't alter the size of the service
-        ClusterMetadataService.instance().commit(new PrepareCMSReconfiguration.Simple(metadata.directory.peerId(toRemove)),
-                                                 latest -> latest,
-                                                 (latest, code, message) -> {
-                                                     MultiStepOperation<?> sequence = metadata.inProgressSequences.get(SequenceKey.instance);
-                                                     if (sequence != null)
-                                                         return null;
-
-                                                     throw new IllegalStateException(String.format("Can not commit event to metadata service: \"%s\"(%s). Interrupting startup sequence.",
-                                                                                                   code, message));
-                                                 });
+        ClusterMetadataService.instance().commit(new PrepareCMSReconfiguration.Simple(metadata.directory.peerId(toRemove)));
 
         InProgressSequences.finishInProgressSequences(SequenceKey.instance);
         if (ClusterMetadata.current().isCMSMember(toRemove))

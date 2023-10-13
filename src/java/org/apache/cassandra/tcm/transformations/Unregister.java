@@ -69,13 +69,7 @@ public class Unregister implements Transformation
     public static void unregister(NodeId nodeId)
     {
         ClusterMetadataService.instance()
-                              .commit(new Unregister(nodeId),
-                                      (metadata) -> metadata,
-                                      (metadata, code, reason) -> {
-                                          if (metadata.directory.peerIds().contains(nodeId))
-                                              throw new IllegalStateException("Can't unregister node: " + reason);
-                                          return null;
-                                      });
+                              .commit(new Unregister(nodeId));
     }
 
     public String toString()

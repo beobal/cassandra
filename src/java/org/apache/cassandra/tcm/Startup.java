@@ -332,23 +332,7 @@ import static org.apache.cassandra.utils.FBUtilities.getBroadcastAddressAndPort;
                 if (isReplacing)
                     ReconfigureCMS.maybeReconfigureCMS(metadata, DatabaseDescriptor.getReplaceAddress());
 
-                ClusterMetadataService.instance().commit(initialTransformation.get(),
-                                                         (metadata_) -> null,
-                                                         (metadata_, code, reason) -> {
-                                                             // This could happen if `UNSAFE_JOIN` has been retried after it succeded but timed out
-                                                             if (ClusterMetadata.current().directory.peerState(self) == JOINED)
-                                                                 return null;
-
-                                                             MultiStepOperation<?> sequence = metadata_.inProgressSequences.get(self);
-                                                             // We might have discovered a startup sequence we ourselves committed but got no response for
-                                                             if (sequence == null || !InProgressSequences.STARTUP_SEQUENCE_KINDS.contains(sequence.kind()))
-                                                             {
-                                                                 throw new IllegalStateException(String.format("Can not commit event to metadata service: \"%s\"(%s). Interrupting startup sequence.",
-                                                                                                               code, reason));
-                                                             }
-                                                             return null;
-                                                         });
-
+                ClusterMetadataService.instance().commit(initialTransformation.get());
 
                 InProgressSequences.finishInProgressSequences(self);
                 metadata = ClusterMetadata.current();

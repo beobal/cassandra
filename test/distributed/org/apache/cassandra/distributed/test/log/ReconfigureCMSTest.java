@@ -90,14 +90,7 @@ public class ReconfigureCMSTest extends FuzzTestBase
         {
             cluster.get(1).nodetoolResult("reconfigurecms", "--sync", "2").asserts().success();
             cluster.get(1).runOnInstance(() -> {
-                ClusterMetadataService.instance().commit(new PrepareCMSReconfiguration.Complex(ReplicationParams.simple(3).asMeta()),
-                                                         m -> m,
-                                                         (m, code, message) -> {
-                                                             if (m.inProgressSequences.contains(ReconfigureCMS.SequenceKey.instance))
-                                                                 return m;
-
-                                                             throw new IllegalStateException("Could not commit: " + message);
-                                                         });
+                ClusterMetadataService.instance().commit(new PrepareCMSReconfiguration.Complex(ReplicationParams.simple(3).asMeta()));
                 ReconfigureCMS reconfigureCMS = (ReconfigureCMS) ClusterMetadata.current().inProgressSequences.get(ReconfigureCMS.SequenceKey.instance);
                 ClusterMetadataService.instance().commit(reconfigureCMS.next);
                 ProgressBarrier.propagateLast(EntireRange.affectedRanges(ClusterMetadata.current()));
@@ -123,14 +116,7 @@ public class ReconfigureCMSTest extends FuzzTestBase
             });
 
             cluster.get(1).runOnInstance(() -> {
-                ClusterMetadataService.instance().commit(new PrepareCMSReconfiguration.Complex(ReplicationParams.simple(4).asMeta()),
-                                                         m -> m,
-                                                         (m, code, message) -> {
-                                                             if (m.inProgressSequences.contains(ReconfigureCMS.SequenceKey.instance))
-                                                                 return m;
-
-                                                             throw new IllegalStateException("Could not commit: " + message);
-                                                         });
+                ClusterMetadataService.instance().commit(new PrepareCMSReconfiguration.Complex(ReplicationParams.simple(4).asMeta()));
                 ProgressBarrier.propagateLast(EntireRange.affectedRanges(ClusterMetadata.current()));
 
                 ReconfigureCMS reconfigureCMS = (ReconfigureCMS) ClusterMetadata.current().inProgressSequences.get(ReconfigureCMS.SequenceKey.instance);

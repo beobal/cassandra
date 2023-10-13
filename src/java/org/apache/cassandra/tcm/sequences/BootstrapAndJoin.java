@@ -43,6 +43,7 @@ import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.streaming.StreamState;
 import org.apache.cassandra.tcm.ClusterMetadata;
+import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.MultiStepOperation;
 import org.apache.cassandra.tcm.Transformation;
@@ -182,7 +183,7 @@ public class BootstrapAndJoin extends MultiStepOperation<Epoch>
                 try
                 {
                     SystemKeyspace.updateLocalTokens(finishJoin.tokens);
-                    commit(startJoin);
+                    ClusterMetadataService.instance().commit(startJoin);
                 }
                 catch (Throwable e)
                 {
@@ -221,7 +222,7 @@ public class BootstrapAndJoin extends MultiStepOperation<Epoch>
                         logger.info("Skipping data streaming for join");
                     }
 
-                    commit(midJoin);
+                    ClusterMetadataService.instance().commit(midJoin);
                 }
                 catch (IllegalStateException e)
                 {
@@ -245,7 +246,7 @@ public class BootstrapAndJoin extends MultiStepOperation<Epoch>
                         StreamSupport.stream(ColumnFamilyStore.all().spliterator(), false)
                                      .filter(cfs -> Schema.instance.getUserKeyspaces().names().contains(cfs.keyspace.getName()))
                                      .forEach(cfs -> cfs.indexManager.executePreJoinTasksBlocking(true));
-                        commit(finishJoin);
+                        ClusterMetadataService.instance().commit(finishJoin);
                     }
                     else
                     {
