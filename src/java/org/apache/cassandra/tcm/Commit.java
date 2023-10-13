@@ -182,15 +182,6 @@ public class Commit
             // but it was rejected by the internal logic of the transformation.
             public final boolean rejected;
 
-            public Failure(Transformation.Rejected rejection)
-            {
-                this(rejection.code, rejection.reason, true);
-            }
-
-            public Failure(ExceptionCode code, String message)
-            {
-                this(code, message, false);
-            }
             public Failure(ExceptionCode code, String message, boolean rejected)
             {
                 if (message == null)

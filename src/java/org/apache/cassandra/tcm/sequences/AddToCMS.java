@@ -78,28 +78,9 @@ public class AddToCMS extends MultiStepOperation<Epoch>
 
     public static void initiate(NodeId nodeId, InetAddressAndPort addr)
     {
-        MultiStepOperation<?> sequence = ClusterMetadataService.instance()
-                                                               .commit(new StartAddToCMS(addr),
-                                                                       (metadata) -> metadata.inProgressSequences.get(nodeId),
-                                                                       (metadata, code, reason) -> {
-                                                                           MultiStepOperation<?> sequence_ = metadata.inProgressSequences.get(nodeId);
-
-                                                                           if (sequence_ == null)
-                                                                           {
-                                                                               throw new IllegalStateException("Can't join ownership group: " + reason);
-                                                                           }
-
-                                                                           // We might have discovered a startup sequence we ourselves committed but got no response for
-                                                                           if (sequence_.kind() != JOIN_OWNERSHIP_GROUP)
-                                                                           {
-                                                                               throw new IllegalStateException(String.format("Following accepted initiation of node to CMS, " +
-                                                                                                                             "an incorrect sequence %s was found in progress. %s.\nRejection reason: %s",
-                                                                                                                             sequence_.kind(), sequence_, reason));
-                                                                           }
-
-                                                                           return metadata.inProgressSequences.get(nodeId);
-                                                                       });
-
+        MultiStepOperation <?> sequence = ClusterMetadataService.instance()
+                                                               .commit(new StartAddToCMS(addr))
+                                           .inProgressSequences.get(nodeId);
         InProgressSequences.resume(sequence);
         ReconfigureCMS.repairPaxosTopology();
     }
@@ -150,7 +131,7 @@ public class AddToCMS extends MultiStepOperation<Epoch>
         try
         {
             ReconfigureCMS.streamRanges(finishJoin.replicaForStreaming(), streamCandidates);
-            commit(finishJoin);
+            ClusterMetadataService.instance().commit(finishJoin);
         }
         catch (Throwable t)
         {

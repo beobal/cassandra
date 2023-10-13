@@ -53,6 +53,7 @@ import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.streaming.StreamOperation;
 import org.apache.cassandra.streaming.StreamPlan;
 import org.apache.cassandra.tcm.ClusterMetadata;
+import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.MultiStepOperation;
 import org.apache.cassandra.tcm.Transformation;
@@ -192,7 +193,7 @@ public class Move extends MultiStepOperation<Epoch>
                                 metadata.directory.endpoint(startMove.nodeId()),
                                 metadata.tokenMap.tokens(startMove.nodeId()),
                                 finishMove.newTokens);
-                    commit(startMove);
+                    ClusterMetadataService.instance().commit(startMove);
                 }
                 catch (Throwable t)
                 {
@@ -254,7 +255,7 @@ public class Move extends MultiStepOperation<Epoch>
 
                 try
                 {
-                    commit(midMove);
+                    ClusterMetadataService.instance().commit(midMove);
                 }
                 catch (Throwable t)
                 {
@@ -266,7 +267,7 @@ public class Move extends MultiStepOperation<Epoch>
                 try
                 {
                     SystemKeyspace.updateLocalTokens(tokens);
-                    commit(finishMove);
+                    ClusterMetadataService.instance().commit(finishMove);
                 }
                 catch (Throwable t)
                 {

@@ -192,30 +192,4 @@ public abstract class MultiStepOperation<CONTEXT>
     {
         return "kind: " + kind() + ", current step: " + idx + ", barrier: " + barrier();
     }
-
-    /**
-     * Specific mechanism to commit a transformation that is part of a sequence. This uses a rejection handler which
-     * uses the sequence's index to determine whether a failure represents an genuine failure/rejection or a success
-     * response that was dropped, missed or timed out.
-     *
-     * @param transformation to be committed. represents the metadata changes being made by a step in the sequence
-     * @return the resulting metadata, which may be modified by the supplied transformation if the commit was successful
-     */
-    protected ClusterMetadata commit(Transformation transformation)
-    {
-        SequenceKey sequenceKey = sequenceKey();
-        return ClusterMetadataService.instance().commit(transformation,
-                                                        (metadata) -> metadata,
-                                                        (metadata, code, reason) -> {
-                                                            MultiStepOperation<?> seq = metadata.inProgressSequences.get(sequenceKey);
-
-                                                            // Suceeded after retry
-                                                            if ((atFinalStep() && seq == null) ||
-                                                                (!atFinalStep() && seq.idx == idx + 1))
-                                                                return metadata;
-
-                                                            throw new IllegalStateException(String.format("Could not commit %s: %s %s",
-                                                                                                          transformation, code, reason));
-                                                        });
-    }
 }

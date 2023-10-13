@@ -72,7 +72,7 @@ public class StubClusterMetadataService extends ClusterMetadataService
     }
 
     @Override
-    public <T1> T1 commit(Transformation transform, CommitSuccessHandler<T1> onSuccess, CommitRejectionHandler<T1> onFailure)
+    public <T1> T1 commit(Transformation transform, CommitSuccessHandler<T1> onSuccess, CommitFailureHandler<T1> onFailure)
     {
         Transformation.Result result = transform.execute(metadata);
         if (result.isSuccess())
@@ -80,7 +80,7 @@ public class StubClusterMetadataService extends ClusterMetadataService
             metadata = result.success().metadata;
             return  onSuccess.accept(result.success().metadata);
         }
-        return onFailure.accept(metadata, result.rejected().code, result.rejected().reason);
+        return onFailure.accept(result.rejected().code, result.rejected().reason);
     }
 
     @Override

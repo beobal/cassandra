@@ -58,7 +58,6 @@ import org.apache.cassandra.simulator.systems.SimulatedSystems;
 import org.apache.cassandra.simulator.utils.KindOfSequence;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
-import org.apache.cassandra.tcm.membership.NodeState;
 import org.apache.cassandra.tcm.transformations.UnsafeJoin;
 
 import static org.apache.cassandra.simulator.Action.Modifiers.NO_TIMEOUTS;
@@ -235,15 +234,10 @@ public class ClusterActions extends SimulatedSystems
         return invoke("Initial cluster participant " + i.broadcastAddress(), NO_TIMEOUTS, NO_TIMEOUTS,
                       new InterceptedRunnableExecution((InterceptingExecutor) i.executor(),
                                                        () -> i.runOnInstance(() -> {
-                                                           ClusterMetadataService.instance().commit(new UnsafeJoin(ClusterMetadata.current().myNodeId(),
-                                                                                                                   new HashSet<>(BootStrapper.getBootstrapTokens(ClusterMetadata.current(), getBroadcastAddressAndPort())),
-                                                                                                                   ClusterMetadataService.instance().placementProvider()),
-                                                                                                    (metadata) -> null,
-                                                                                                    (metadata, code, msg) -> {
-                                                                                                        if (metadata.directory.peerState(metadata.current().myNodeId()) == NodeState.JOINED)
-                                                                                                            return metadata;
-                                                                                                        throw new IllegalStateException(msg);
-                                                                                                    });
+                                                           ClusterMetadataService.instance()
+                                                                                 .commit(new UnsafeJoin(ClusterMetadata.current().myNodeId(),
+                                                                                                        new HashSet<>(BootStrapper.getBootstrapTokens(ClusterMetadata.current(), getBroadcastAddressAndPort())),
+                                                                                                        ClusterMetadataService.instance().placementProvider()));
                                                        })));
     }
 

@@ -37,8 +37,6 @@ import org.apache.cassandra.tcm.transformations.PrepareLeave;
 import org.apache.cassandra.tcm.transformations.PrepareMove;
 
 import static org.apache.cassandra.tcm.membership.NodeState.LEAVING;
-import static org.apache.cassandra.tcm.MultiStepOperation.Kind.LEAVE;
-import static org.apache.cassandra.tcm.MultiStepOperation.Kind.MOVE;
 import static org.apache.cassandra.utils.FBUtilities.getBroadcastAddressAndPort;
 
 /**
@@ -79,18 +77,7 @@ public interface SingleNodeSequences
             ClusterMetadataService.instance().commit(new PrepareLeave(self,
                                                                       force,
                                                                       ClusterMetadataService.instance().placementProvider(),
-                                                                      LeaveStreams.Kind.UNBOOTSTRAP),
-                                                     (metadata_) -> null,
-                                                     (metadata_, code, reason) -> {
-                                                         MultiStepOperation<?> sequence = metadata_.inProgressSequences.get(self);
-                                                         // We might have discovered a sequence we ourselves committed but got no response for
-                                                         if (sequence == null || sequence.kind() != LEAVE)
-                                                         {
-                                                             throw new IllegalStateException(String.format("Can not commit event to metadata service: %s. Interrupting leave sequence.",
-                                                                                                           reason));
-                                                         }
-                                                         return null;
-                                                     });
+                                                                      LeaveStreams.Kind.UNBOOTSTRAP));
         }
         else if (!InProgressSequences.isLeave(inProgress))
         {
@@ -136,18 +123,7 @@ public interface SingleNodeSequences
         ClusterMetadataService.instance().commit(new PrepareLeave(toRemove,
                                                                   force,
                                                                   ClusterMetadataService.instance().placementProvider(),
-                                                                  LeaveStreams.Kind.REMOVENODE),
-                                                 (metadata_) -> null,
-                                                 (metadata_, code, reason) -> {
-                                                     MultiStepOperation<?> sequence = metadata_.inProgressSequences.get(toRemove);
-                                                     // We might have discovered a startup sequence we ourselves committed but got no response for
-                                                     if (sequence == null || sequence.kind() != MultiStepOperation.Kind.REMOVE)
-                                                     {
-                                                         throw new IllegalStateException(String.format("Can not commit event to metadata service: %s. Interrupting removenode sequence.",
-                                                                                                       reason));
-                                                     }
-                                                     return null;
-                                                 });
+                                                                  LeaveStreams.Kind.REMOVENODE));
         InProgressSequences.finishInProgressSequences(toRemove);
     }
 
@@ -156,7 +132,7 @@ public interface SingleNodeSequences
      *
      * @param newToken new token to boot to, or if null, find balanced token to boot to
      */
-    public static void move(Token newToken)
+    static void move(Token newToken)
     {
         if (ClusterMetadataService.instance().isMigrating() || ClusterMetadataService.state() == ClusterMetadataService.State.GOSSIP)
             throw new IllegalStateException("This cluster is migrating to cluster metadata, can't move until that is done.");
@@ -180,18 +156,7 @@ public interface SingleNodeSequences
         ClusterMetadataService.instance().commit(new PrepareMove(self,
                                                                  Collections.singleton(newToken),
                                                                  ClusterMetadataService.instance().placementProvider(),
-                                                                 true),
-                                                 (metadata_) -> null,
-                                                 (metadata_, code, reason) -> {
-                                                     MultiStepOperation<?> sequence = metadata_.inProgressSequences.get(self);
-                                                     // We might have discovered a startup sequence we ourselves committed but got no response for
-                                                     if (sequence == null || sequence.kind() != MOVE)
-                                                     {
-                                                         throw new IllegalStateException(String.format("Can not commit event to metadata service: %s. Interrupting leave sequence.",
-                                                                                                       reason));
-                                                     }
-                                                     return null;
-                                                 });
+                                                                 true));
         InProgressSequences.finishInProgressSequences(self);
 
         if (logger.isDebugEnabled())

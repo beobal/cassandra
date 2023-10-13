@@ -838,17 +838,13 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
     public static boolean cancelInProgressSequences(NodeId sequenceOwner)
     {
-        return ClusterMetadataService.instance().commit(new CancelInProgressSequence(sequenceOwner),
-                                                        metadata -> true,
-                                                        (metadata, code, message) -> {
-                                                            // Succeeded following rejection; possibly we raced with another cancellation request
-                                                            // or our initial attempt succeeded but the response was lost
-                                                            if (!metadata.inProgressSequences.contains(sequenceOwner))
-                                                                return true;
-
-                                                            logger.warn(String.format("Could not cancel in-progress sequence: %s", message));
-                                                            return false;
-                                                        });
+        return ClusterMetadataService.instance()
+                                     .commit(new CancelInProgressSequence(sequenceOwner),
+                                             metadata -> true,
+                                             (code, message) -> {
+                                                 logger.warn(String.format("Could not cancel in-progress sequence: %s", message));
+                                                 return false;
+                                             });
     }
 
     private boolean servicesInitialized = false;

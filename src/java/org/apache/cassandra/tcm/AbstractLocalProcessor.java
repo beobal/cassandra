@@ -19,6 +19,7 @@
 package org.apache.cassandra.tcm;
 
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import org.apache.cassandra.config.CassandraRelevantProperties;
 import org.slf4j.Logger;
@@ -76,7 +77,11 @@ public abstract class AbstractLocalProcessor implements Processor
 
                 // Retry if replay has changed the epoch, return rejection otherwise.
                 if (!replayed.epoch.isAfter(previous.epoch))
-                    return new Commit.Result.Failure(result.rejected().code, result.rejected().reason, true);
+                {
+                    return maybeFailure(entryId,
+                                        lastKnown,
+                                        () -> new Commit.Result.Failure(result.rejected().code, result.rejected().reason, true));
+                }
 
                 continue;
             }
@@ -114,9 +119,28 @@ public abstract class AbstractLocalProcessor implements Processor
                 retryPolicy.maybeSleep();
             }
         }
-        return new Commit.Result.Failure(SERVER_ERROR, String.format("Could not perform commit after %d/%d tries. Time remaining: %dms",
-                                                                     retryPolicy.tries, retryPolicy.maxTries,
-                                                                     TimeUnit.NANOSECONDS.toMillis(retryPolicy.remainingNanos())), false);
+        return new Commit.Result.Failure(SERVER_ERROR,
+                                         String.format("Could not perform commit after %d/%d tries. Time remaining: %dms",
+                                                       retryPolicy.tries, retryPolicy.maxTries,
+                                                       TimeUnit.NANOSECONDS.toMillis(retryPolicy.remainingNanos())),
+                                         false);
+    }
+
+    public Commit.Result maybeFailure(Entry.Id entryId, Epoch lastKnown, Supplier<Commit.Result.Failure> orElse)
+    {
+        Replication replication = toReplication(lastKnown);
+        Epoch commitedAt = null;
+        for (Entry entry : replication.entries())
+        {
+            if (entry.id.equals(entryId))
+                commitedAt = entry.epoch;
+        }
+
+        // Succeeded after retry
+        if (commitedAt != null)
+            return new Commit.Result.Success(commitedAt, replication);
+        else
+            return orElse.get();
     }
 
     /**
@@ -147,15 +171,28 @@ public abstract class AbstractLocalProcessor implements Processor
 
     private Replication toReplication(Transformation.Success success, Entry.Id entryId, Epoch lastKnown, Transformation transform)
     {
-        Replication replication;
         if (lastKnown == null || lastKnown.isDirectlyBefore(success.metadata.epoch))
-            replication = Replication.of(new Entry(entryId, success.metadata.epoch, transform));
+            return Replication.of(new Entry(entryId, success.metadata.epoch, transform));
         else
-            replication = log.getCommittedEntries(lastKnown);
+            return toReplication(lastKnown);
+    }
 
-        assert !replication.isEmpty();
+    private Replication toReplication(Epoch lastKnown)
+    {
+        Replication replication;
+        if (lastKnown == null)
+            replication = Replication.EMPTY;
+        else
+        {
+            // We can use local log here since we always call this method only if local log is up-to-date:
+            // in case of a successful commit, we apply against latest metadata locally before committing,
+            // and in case of a rejection, we fetch latest entries to verify linearizability.
+            replication = log.getCommittedEntries(lastKnown);
+        }
+
         return replication;
     }
+
 
     @Override
     public abstract ClusterMetadata fetchLogAndWait(Epoch waitFor, Retry.Deadline retryPolicy);

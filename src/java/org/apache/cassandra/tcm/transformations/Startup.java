@@ -119,12 +119,8 @@ public class Startup implements Transformation
         if (!Objects.equals(directory.addresses.get(localNodeId), NodeAddresses.current()) ||
             !Objects.equals(directory.versions.get(localNodeId), NodeVersion.CURRENT))
         {
-            ClusterMetadataService.instance().commit(new Startup(localNodeId, NodeAddresses.current(), NodeVersion.CURRENT),
-                                                     (metadata) -> null,
-                                                     (metadata, code, reason) -> {
-                                                         throw new IllegalStateException(String.format("Startup transformations should be executed unconditionally, " +
-                                                                                                       "but this one got rejected with [%s]: \"%s\"", code, reason));
-                                                     });
+            ClusterMetadataService.instance()
+                                  .commit(new Startup(localNodeId, NodeAddresses.current(), NodeVersion.CURRENT));
         }
     }
 

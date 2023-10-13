@@ -288,25 +288,24 @@ public final class Schema implements SchemaProvider
 
         // result of this execution can be either a complete failure/timeout, or a success, but together with a log of
         // operations that have to be applied before we can do anything
-        // TODO perhaps we should change the retry predicate to be a bit smarter and examine the state of metadata
-        //      when retrying.
-        return ClusterMetadataService.instance().commit(new AlterSchema(transformation, this),
-                                                        (metadata) -> metadata,
-                                                        (metadata, code, reason) -> {
-                                                            switch (code)
-                                                            {
-                                                                case ALREADY_EXISTS:
-                                                                    throw new AlreadyExistsException(reason);
-                                                                case CONFIG_ERROR:
-                                                                    throw new ConfigurationException(reason);
-                                                                case SYNTAX_ERROR:
-                                                                    throw new SyntaxException(reason);
-                                                                case UNAUTHORIZED:
-                                                                    throw new UnauthorizedException(reason);
-                                                                default:
-                                                                    throw new InvalidRequestException(reason);
-                                                            }
-                                                        });
+        return ClusterMetadataService.instance()
+                                     .commit(new AlterSchema(transformation, this),
+                                             (metadata) -> metadata,
+                                             (code, reason) -> {
+                                                 switch (code)
+                                                 {
+                                                     case ALREADY_EXISTS:
+                                                         throw new AlreadyExistsException(reason);
+                                                     case CONFIG_ERROR:
+                                                         throw new ConfigurationException(reason);
+                                                     case SYNTAX_ERROR:
+                                                         throw new SyntaxException(reason);
+                                                     case UNAUTHORIZED:
+                                                         throw new UnauthorizedException(reason);
+                                                     default:
+                                                         throw new InvalidRequestException(reason);
+                                                 }
+                                             });
     }
 
     // We need to lazy-initialize schema for test purposes: since column families are initialized

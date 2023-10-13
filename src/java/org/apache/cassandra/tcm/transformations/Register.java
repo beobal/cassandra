@@ -106,18 +106,12 @@ public class Register implements Transformation
         if (nodeId == null || metadata.directory.peerState(nodeId) == NodeState.LEFT)
         {
             if (nodeId != null)
-                ClusterMetadataService.instance().commit(new Unregister(nodeId));
+                ClusterMetadataService.instance()
+                                      .commit(new Unregister(nodeId));
             nodeId = ClusterMetadataService.instance()
-                                           .commit(new Register(nodeAddresses, location, nodeVersion),
-                                                   (metadata_) -> metadata_.directory.peerId(nodeAddresses.broadcastAddress),
-                                                   (metadata_, code, reason) -> {
-                                                       NodeId registered = metadata_.directory.peerId(nodeAddresses.broadcastAddress);
-                                                       // Check if this registration happened within the lifetime of this node and was done by it
-                                                       if (registered != null && nodeAddresses.identityMatches(metadata_.directory.getNodeAddresses(registered)))
-                                                           return registered;
-
-                                                       throw new IllegalStateException("Can't register node: " + reason);
-                                                   });
+                                           .commit(new Register(nodeAddresses, location, nodeVersion))
+                     .directory
+                     .peerId(nodeAddresses.broadcastAddress);
         }
         else
         {

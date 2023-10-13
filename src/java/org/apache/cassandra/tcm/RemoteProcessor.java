@@ -71,13 +71,10 @@ public final class RemoteProcessor implements Processor
     @SuppressWarnings("resource")
     public Commit.Result commit(Entry.Id entryId, Transformation transform, Epoch lastKnown, Retry.Deadline retryPolicy)
     {
-        // Replay everything in-flight before attempting a commit
-        Epoch highestConsecutive = log.waitForHighestConsecutive().epoch;
-
         try
         {
             Commit.Result result = sendWithCallback(Verb.TCM_COMMIT_REQ,
-                                                    new Commit(entryId, transform, highestConsecutive),
+                                                    new Commit(entryId, transform, lastKnown),
                                                     new CandidateIterator(candidates(false)),
                                                     retryPolicy);
 

@@ -32,6 +32,7 @@ import org.apache.cassandra.io.util.DataOutputPlus;
 import org.apache.cassandra.locator.DynamicEndpointSnitch;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.tcm.ClusterMetadata;
+import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.MultiStepOperation;
 import org.apache.cassandra.tcm.Transformation;
@@ -162,7 +163,7 @@ public class UnbootstrapAndLeave extends MultiStepOperation<Epoch>
                 try
                 {
                     DatabaseDescriptor.getSeverityDuringDecommission().ifPresent(DynamicEndpointSnitch::addSeverity);
-                    commit(startLeave);
+                    ClusterMetadataService.instance().commit(startLeave);
                 }
                 catch (Throwable t)
                 {
@@ -177,7 +178,7 @@ public class UnbootstrapAndLeave extends MultiStepOperation<Epoch>
                                     startLeave.delta(),
                                     midLeave.delta(),
                                     finishLeave.delta());
-                    commit(midLeave);
+                    ClusterMetadataService.instance().commit(midLeave);
                 }
                 catch (ExecutionException e)
                 {
@@ -196,7 +197,7 @@ public class UnbootstrapAndLeave extends MultiStepOperation<Epoch>
             case FINISH_LEAVE:
                 try
                 {
-                    commit(finishLeave);
+                    ClusterMetadataService.instance().commit(finishLeave);
                 }
                 catch (Throwable t)
                 {

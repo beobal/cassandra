@@ -62,16 +62,7 @@ public class Assassinate extends PrepareLeave
 
         NodeId nodeId = metadata.directory.peerId(endpoint);
         ClusterMetadataService.instance().commit(new Assassinate(nodeId,
-                                                                 ClusterMetadataService.instance().placementProvider()),
-                                                 (metadata_) -> null,
-                                                 (metadata_, code, reason) -> {
-                                                     if (metadata_.directory.peerIds().contains(nodeId))
-                                                     {
-                                                         throw new IllegalStateException(String.format("Can not commit event to metadata service: %s. Interrupting assassinate node.",
-                                                                                                       reason));
-                                                     }
-                                                     return null;
-                                                 });
+                                                                 ClusterMetadataService.instance().placementProvider()));
     }
 
     @Override

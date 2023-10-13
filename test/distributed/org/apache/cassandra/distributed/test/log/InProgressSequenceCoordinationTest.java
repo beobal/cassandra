@@ -262,18 +262,7 @@ public class InProgressSequenceCoordinationTest extends FuzzTestBase
                 ClusterMetadataService.instance().commit(new PrepareLeave(self,
                                                                           true,
                                                                           ClusterMetadataService.instance().placementProvider(),
-                                                                          LeaveStreams.Kind.UNBOOTSTRAP),
-                                                         (metadata_) -> null,
-                                                         (metadata_, code, reason) -> {
-                                                             MultiStepOperation<?> sequence = metadata_.inProgressSequences.get(self);
-                                                             // We might have discovered a sequence we ourselves committed but got no response for
-                                                             if (sequence == null || sequence.kind() != MultiStepOperation.Kind.LEAVE)
-                                                             {
-                                                                 throw new IllegalStateException(String.format("Can not commit event to metadata service: %s. Interrupting leave sequence.",
-                                                                                                               reason));
-                                                             }
-                                                             return null;
-                                                         });
+                                                                          LeaveStreams.Kind.UNBOOTSTRAP));
                 try
                 {
                     AddToCMS.initiate();
