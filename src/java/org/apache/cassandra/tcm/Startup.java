@@ -69,6 +69,9 @@ import static org.apache.cassandra.tcm.compatibility.GossipHelper.fromEndpointSt
 import static org.apache.cassandra.tcm.membership.NodeState.JOINED;
 import static org.apache.cassandra.utils.FBUtilities.getBroadcastAddressAndPort;
 
+ /**
+  * Initialize
+  */
  public class Startup
 {
     private static final Logger logger = LoggerFactory.getLogger(Startup.class);
@@ -160,6 +163,13 @@ import static org.apache.cassandra.utils.FBUtilities.getBroadcastAddressAndPort;
         }
     }
 
+    /**
+     * Initialization for Discovery.
+     *
+     * Node will attempt to discover other participants in the cluster by attempting to contact the seeds
+     * it is aware of. After discovery, the node with a smallest ip address will move to propose itself as
+     * a CMS initiator, and attempt to establish a CMS in via two-phase commit protocol.
+     */
     public static void initializeForDiscovery(Runnable initMessaging)
     {
         initMessaging.run();
@@ -412,15 +422,32 @@ import static org.apache.cassandra.utils.FBUtilities.getBroadcastAddressAndPort;
     }
 
     /**
-     * Initialization process:
+     * Initialization process
      */
 
     enum StartupMode
     {
+        /**
+         * Normal startup mode: node has already been a part of a CMS, and was restarted.
+         */
         NORMAL,
+        /**
+         * An upgrade path from Gossip: node has been booted brefore and was a part of a Gossip cluster.
+         */
         UPGRADE,
+        /**
+         * Node is starting for the first time, and should attempt to either discover existing CMS, or
+         * participate in the leader election to establish a new one.
+         */
         VOTE,
+        /**
+         * Node is starting for the first time, and is a designated first CMS node and can become a first CMS
+         * node upon boot.
+         */
         FIRST_CMS,
+        /**
+         * Node has to pick Cluster Metadata from the specified file. Used for testing and for (improbable) disaster recovery.
+         */
         BOOT_WITH_CLUSTERMETADATA;
 
         static StartupMode get(Set<InetAddressAndPort> seeds)

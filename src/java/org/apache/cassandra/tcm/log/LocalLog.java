@@ -71,6 +71,19 @@ import static org.apache.cassandra.tcm.Epoch.FIRST;
 import static org.apache.cassandra.utils.concurrent.WaitQueue.newWaitQueue;
 
 // TODO metrics for contention/buffer size/etc
+
+/**
+ * LocalLog is an entity responsible for collecting replicated entries and enacting new epochs locally as soon
+ * as the node has enough information to reconstruct ClusterMetadata instance at that epoch.
+ *
+ * Since ClusterMetadata can be replicated to the node by different means (commit response, replication after
+ * commit by other node, CMS or peer log replay), it may happen that replicated entries arrive out-of-order
+ * and may even contain gaps. For example, if node1 has registered at epoch 10, and node2 has registered at
+ * epoch 11, it may happen that node3 will receive entry for epoch 11 before it receives the entry for epoch 10.
+ * To reconstruct the history, LocalLog has a reorder buffer, which holds entries until the one that is consecutive
+ * to the highest known epoch is available, at which point it (and all subsequent entries whose predecessors appear in the
+ * pending buffer) is enacted.
+ */
 public abstract class LocalLog implements Closeable
 {
     private static final Logger logger = LoggerFactory.getLogger(LocalLog.class);

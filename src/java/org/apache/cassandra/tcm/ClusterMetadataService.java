@@ -468,6 +468,22 @@ public class ClusterMetadataService
         T accept(ClusterMetadata latest, ExceptionCode code, String message);
     }
 
+    /**
+     * Attempt to commit the transformation (with retries).
+     *
+     * Since we can not rely on reliability of the network or even the fact that the committing node will stay alive
+     * for the duration of commit, we have to allow for subsequent discovery of the transformation effects, which can
+     * be made visible either by replaying the log, or receiving the metadata snapshot.
+     *
+     * In other words, there is no reliable way to find out whether _this particular_ transformation has been executed
+     * while we are allowing replay from snapshot, since even failure response from the CMS does not guarantee
+     * Paxos re-proposal, which would place the transformation into the log during proposal _by some other_ CMS node.
+     *
+     * Protocol does foresee the concept of EntryId that would allow discovery of the committed transformations
+     * without changes to binary protocol, but this change was left out from the initial implementation of TCM.
+     *
+     * @param onFailure handler checks if rejection has resulted from a retry of the same trasformation.
+     */
     public <T1> T1 commit(Transformation transform, CommitSuccessHandler<T1> onSuccess, CommitRejectionHandler<T1> onFailure)
     {
         if (commitsPaused.get())
