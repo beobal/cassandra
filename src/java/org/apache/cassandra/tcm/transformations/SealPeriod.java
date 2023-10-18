@@ -31,6 +31,16 @@ import org.apache.cassandra.tcm.serialization.Version;
 import static org.apache.cassandra.exceptions.ExceptionCode.INVALID;
 
 /**
+ * Period is an entity that is completely transparent to the users of CMS, and is a consequence of a fact that
+ * LWTs only work on a single partition. It would be unwise to hold all epochs in a single partition, as it
+ * will eventually get extremely large. At the same time, we can not use Epoch as a primary key (even though
+ * IF NOT EXISTS queries would technically work for append puposes), since it would make log scans much more
+ * expensive.
+ *
+ * Another reason for having periods is that replaying an entire log for a freshly starting log in an old
+ * cluster can be very expensive, so in such cases the node can be caught up using a snapshot serving as a base
+ * state and a small number of entries instead.
+ *
  * Transformation that seals the period and requests local state to take a snapshot. Snapshot taking is an
  * asynchonous action, and we generally do not rely on the fact snapshot is, in fact going to be
  * there all the time. Snapshots are used as a performance optimization.
