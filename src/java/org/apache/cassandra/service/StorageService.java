@@ -3718,7 +3718,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
     public boolean isDecommissionFailed()
     {
-        return operationMode == DECOMMISSION_FAILED;
+        return transientMode.isPresent() && transientMode.get() == DECOMMISSION_FAILED;
     }
 
     public boolean isDecommissioning()

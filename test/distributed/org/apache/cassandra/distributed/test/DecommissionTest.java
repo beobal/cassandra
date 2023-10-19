@@ -20,6 +20,7 @@ package org.apache.cassandra.distributed.test;
 
 import java.io.IOException;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
@@ -37,9 +38,18 @@ import org.apache.cassandra.distributed.api.IInvokableInstance;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.streaming.StreamSession;
 import org.apache.cassandra.streaming.StreamState;
+import org.apache.cassandra.tcm.ClusterMetadata;
+import org.apache.cassandra.tcm.ClusterMetadataService;
+import org.apache.cassandra.tcm.Transformation;
+import org.apache.cassandra.tcm.membership.NodeId;
+import org.apache.cassandra.tcm.ownership.PlacementDeltas;
+import org.apache.cassandra.tcm.sequences.LeaveStreams;
+import org.apache.cassandra.tcm.sequences.UnbootstrapStreams;
+import org.apache.cassandra.tcm.transformations.PrepareLeave;
 import org.apache.cassandra.utils.concurrent.Future;
 
 import static net.bytebuddy.matcher.ElementMatchers.named;
+import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 import static org.apache.cassandra.db.SystemKeyspace.BootstrapState.COMPLETED;
 import static org.apache.cassandra.db.SystemKeyspace.BootstrapState.DECOMMISSIONED;
 import static org.apache.cassandra.distributed.api.Feature.GOSSIP;
@@ -64,7 +74,7 @@ public class DecommissionTest extends TestBaseImpl
                                            .withInstanceInitializer(DecommissionTest.BB::install)
                                            .start()))
         {
-            IInvokableInstance instance = cluster.get(1);
+            IInvokableInstance instance = cluster.get(2);
 
             instance.runOnInstance(() -> {
 
@@ -79,7 +89,7 @@ public class DecommissionTest extends TestBaseImpl
                 }
                 catch (Throwable t)
                 {
-                    assertEquals("simulated error in prepareUnbootstrapStreaming", t.getMessage());
+                    assertTrue(t.getMessage().contains("simulated error in prepareUnbootstrapStreaming"));
                 }
 
                 assertFalse(StorageService.instance.isDecommissioning());
@@ -110,21 +120,21 @@ public class DecommissionTest extends TestBaseImpl
 
                 // check that decommissioning of already decommissioned node has no effect
 
+                assertEquals(DECOMMISSIONED.name(), StorageService.instance.getBootstrapState());
+                assertFalse(StorageService.instance.isDecommissionFailed());
+
                 try
                 {
-                    assertEquals(DECOMMISSIONED.name(), StorageService.instance.getBootstrapState());
-                    assertFalse(StorageService.instance.isDecommissionFailed());
-
                     StorageService.instance.decommission(true);
-
-                    assertEquals(DECOMMISSIONED.name(), StorageService.instance.getBootstrapState());
-                    assertFalse(StorageService.instance.isDecommissionFailed());
-                    assertFalse(StorageService.instance.isDecommissioning());
+                    fail("Should have failed since the node is in decomissioned state");
                 }
-                catch (Throwable t)
+                catch (UnsupportedOperationException e)
                 {
-                    fail("Decommissioning already decommissioned node should be no-op operation.");
+                    // ignore
                 }
+                assertEquals(DECOMMISSIONED.name(), StorageService.instance.getBootstrapState());
+                assertFalse(StorageService.instance.isDecommissionFailed());
+                assertFalse(StorageService.instance.isDecommissioning());
             });
         }
     }
@@ -139,12 +149,12 @@ public class DecommissionTest extends TestBaseImpl
                                                // we do not want to install BB after restart of a node which
                                                // failed to decommission which is the second generation, here
                                                // as "1" as it is counted from 0.
-                                               if (num == 1 && generation != 1)
+                                               if (num == 2 && generation != 1)
                                                    BB.install(classLoader, num);
                                            })
                                            .start()))
         {
-            IInvokableInstance instance = cluster.get(1);
+            IInvokableInstance instance = cluster.get(2);
 
             instance.runOnInstance(() -> {
                 assertEquals(COMPLETED.name(), StorageService.instance.getBootstrapState());
@@ -158,7 +168,7 @@ public class DecommissionTest extends TestBaseImpl
                 }
                 catch (Throwable t)
                 {
-                    assertEquals("simulated error in prepareUnbootstrapStreaming", t.getMessage());
+                    assertTrue(t.getMessage().contains("simulated error in prepareUnbootstrapStreaming"));
                 }
 
                 // node is in DECOMMISSION_FAILED mode
@@ -189,26 +199,26 @@ public class DecommissionTest extends TestBaseImpl
     {
         public static void install(ClassLoader classLoader, Integer num)
         {
-            new ByteBuddy().rebase(StorageService.class)
-                           .method(named("prepareUnbootstrapStreaming"))
-                           .intercept(MethodDelegation.to(DecommissionTest.BB.class))
-                           .make()
-                           .load(classLoader, ClassLoadingStrategy.Default.INJECTION);
+            if (num == 2)
+            {
+                new ByteBuddy().rebase(UnbootstrapStreams.class)
+                               .method(named("execute"))
+                               .intercept(MethodDelegation.to(DecommissionTest.BB.class))
+                               .make()
+                               .load(classLoader, ClassLoadingStrategy.Default.INJECTION);
+            }
         }
 
-        private static int invocations = 0;
-
         @SuppressWarnings("unused")
-        public static Supplier<Future<StreamState>> prepareUnbootstrapStreaming(@SuperCall Callable<Supplier<Future<StreamState>>> zuper)
+        public static void execute(NodeId leaving, PlacementDeltas startLeave, PlacementDeltas midLeave, PlacementDeltas finishLeave,
+                                   @SuperCall Callable<?> zuper) throws ExecutionException, InterruptedException
         {
-            ++invocations;
-
-            if (invocations == 1)
-                throw new RuntimeException("simulated error in prepareUnbootstrapStreaming");
+            if (!StorageService.instance.isDecommissionFailed())
+                throw new ExecutionException(new RuntimeException("simulated error in prepareUnbootstrapStreaming"));
 
             try
             {
-                return zuper.call();
+                zuper.call();
             }
             catch (Exception e)
             {
@@ -239,12 +249,13 @@ public class DecommissionTest extends TestBaseImpl
                 return;
             new ByteBuddy().rebase(StreamSession.class)
                            .method(named("startStreamingFiles"))
-                           .intercept(MethodDelegation.to(BB.class))
+                           .intercept(MethodDelegation.to(BBResumableDecom.class))
                            .make()
                            .load(cl, ClassLoadingStrategy.Default.INJECTION);
         }
         static AtomicBoolean first = new AtomicBoolean();
 
+        @SuppressWarnings("unused")
         public static void startStreamingFiles(@Nullable StreamSession.PrepareDirection prepareDirection, @SuperCall Callable<Void> zuper) throws Exception
         {
             if (!first.get())
