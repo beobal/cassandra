@@ -29,6 +29,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.MatchResult;
 import java.util.regex.Pattern;
 
+import com.google.common.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,6 +58,12 @@ public class Rebuild
     private static final AtomicBoolean isRebuilding = new AtomicBoolean();
 
     private static final Logger logger = LoggerFactory.getLogger(Rebuild.class);
+
+    @VisibleForTesting
+    public static void unsafeResetRebuilding()
+    {
+        isRebuilding.set(false);
+    }
 
     public static void rebuild(String sourceDc, String keyspace, String tokens, String specificSources, boolean excludeLocalDatacenterNodes)
     {
