@@ -44,7 +44,7 @@ import org.apache.cassandra.tcm.transformations.cms.StartAddToCMS;
 import org.apache.cassandra.utils.FBUtilities;
 
 import static org.apache.cassandra.db.TypeSizes.sizeof;
-import static org.apache.cassandra.tcm.sequences.InProgressSequences.Kind.JOIN_OWNERSHIP_GROUP;
+import static org.apache.cassandra.tcm.MultiStepOperation.Kind.JOIN_OWNERSHIP_GROUP;
 import static org.apache.cassandra.tcm.sequences.SequenceState.continuable;
 
 /**
@@ -150,7 +150,7 @@ public class AddToCMS extends MultiStepOperation<Epoch>
     }
 
     @Override
-    public InProgressSequences.Kind kind()
+    public Kind kind()
     {
         return JOIN_OWNERSHIP_GROUP;
     }

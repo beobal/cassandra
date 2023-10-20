@@ -185,11 +185,11 @@ public class GossipHelper
         if (null == sequence)
             return Collections.emptySet();
 
-        if (sequence.kind() == InProgressSequences.Kind.JOIN)
+        if (sequence.kind() == MultiStepOperation.Kind.JOIN)
             return new HashSet<>(((BootstrapAndJoin)sequence).finishJoin.tokens);
-        else if (sequence.kind() == InProgressSequences.Kind.REPLACE)
+        else if (sequence.kind() == MultiStepOperation.Kind.REPLACE)
             return new HashSet<>(((BootstrapAndReplace)sequence).bootstrapTokens);
-        else if (sequence.kind() == InProgressSequences.Kind.MOVE)
+        else if (sequence.kind() == MultiStepOperation.Kind.MOVE)
             return new HashSet<>(((Move)sequence).tokens);
 
         throw new IllegalArgumentException(String.format("Extracting tokens from %s sequence is " +

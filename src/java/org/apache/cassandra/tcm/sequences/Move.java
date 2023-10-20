@@ -71,7 +71,7 @@ import org.apache.cassandra.utils.vint.VIntCoding;
 import static org.apache.cassandra.tcm.Transformation.Kind.FINISH_MOVE;
 import static org.apache.cassandra.tcm.Transformation.Kind.MID_MOVE;
 import static org.apache.cassandra.tcm.Transformation.Kind.START_MOVE;
-import static org.apache.cassandra.tcm.sequences.InProgressSequences.Kind.MOVE;
+import static org.apache.cassandra.tcm.MultiStepOperation.Kind.MOVE;
 import static org.apache.cassandra.tcm.sequences.SequenceState.continuable;
 import static org.apache.cassandra.tcm.sequences.SequenceState.error;
 
@@ -164,7 +164,7 @@ public class Move extends MultiStepOperation<Epoch>
     }
 
     @Override
-    public InProgressSequences.Kind kind()
+    public Kind kind()
     {
         return MOVE;
     }

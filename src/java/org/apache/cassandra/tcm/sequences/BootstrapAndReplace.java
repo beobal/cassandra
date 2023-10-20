@@ -66,7 +66,7 @@ import static org.apache.cassandra.tcm.Transformation.Kind.FINISH_REPLACE;
 import static org.apache.cassandra.tcm.Transformation.Kind.MID_REPLACE;
 import static org.apache.cassandra.tcm.Transformation.Kind.START_REPLACE;
 import static org.apache.cassandra.tcm.sequences.BootstrapAndJoin.bootstrap;
-import static org.apache.cassandra.tcm.sequences.InProgressSequences.Kind.REPLACE;
+import static org.apache.cassandra.tcm.MultiStepOperation.Kind.REPLACE;
 import static org.apache.cassandra.tcm.sequences.SequenceState.continuable;
 import static org.apache.cassandra.tcm.sequences.SequenceState.error;
 import static org.apache.cassandra.tcm.sequences.SequenceState.halted;
@@ -162,7 +162,7 @@ public class BootstrapAndReplace extends MultiStepOperation<Epoch>
     }
 
     @Override
-    public InProgressSequences.Kind kind()
+    public Kind kind()
     {
         return REPLACE;
     }

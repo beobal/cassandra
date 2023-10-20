@@ -63,7 +63,7 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.apache.cassandra.tcm.Transformation.Kind.FINISH_JOIN;
 import static org.apache.cassandra.tcm.Transformation.Kind.MID_JOIN;
 import static org.apache.cassandra.tcm.Transformation.Kind.START_JOIN;
-import static org.apache.cassandra.tcm.sequences.InProgressSequences.Kind.JOIN;
+import static org.apache.cassandra.tcm.MultiStepOperation.Kind.JOIN;
 import static org.apache.cassandra.tcm.sequences.SequenceState.continuable;
 import static org.apache.cassandra.tcm.sequences.SequenceState.error;
 import static org.apache.cassandra.tcm.sequences.SequenceState.halted;
@@ -158,7 +158,7 @@ public class BootstrapAndJoin extends MultiStepOperation<Epoch>
     }
 
     @Override
-    public InProgressSequences.Kind kind()
+    public Kind kind()
     {
         return JOIN;
     }

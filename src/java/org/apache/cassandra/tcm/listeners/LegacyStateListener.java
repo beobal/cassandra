@@ -43,7 +43,6 @@ import org.apache.cassandra.tcm.membership.Directory;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.membership.NodeState;
 import org.apache.cassandra.tcm.sequences.BootstrapAndReplace;
-import org.apache.cassandra.tcm.sequences.InProgressSequences;
 
 import static org.apache.cassandra.tcm.membership.NodeState.BOOTSTRAPPING;
 import static org.apache.cassandra.tcm.membership.NodeState.BOOT_REPLACING;
@@ -128,7 +127,7 @@ public class LegacyStateListener implements ChangeListener.Async
             {
                 // legacy log message for compatibility (& tests)
                 MultiStepOperation<?> sequence = prev.inProgressSequences.get(change);
-                if (sequence != null && sequence.kind() == InProgressSequences.Kind.REPLACE)
+                if (sequence != null && sequence.kind() == MultiStepOperation.Kind.REPLACE)
                 {
                     BootstrapAndReplace replace = (BootstrapAndReplace) sequence;
                     InetAddressAndPort replaced = prev.directory.endpoint(replace.startReplace.replaced());

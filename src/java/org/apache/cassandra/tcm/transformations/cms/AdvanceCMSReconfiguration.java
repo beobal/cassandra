@@ -46,7 +46,7 @@ import org.apache.cassandra.tcm.serialization.Version;
 
 import static org.apache.cassandra.exceptions.ExceptionCode.INVALID;
 import static org.apache.cassandra.tcm.ownership.EntireRange.entireRange;
-import static org.apache.cassandra.tcm.sequences.InProgressSequences.Kind.RECONFIGURE_CMS;
+import static org.apache.cassandra.tcm.MultiStepOperation.Kind.RECONFIGURE_CMS;
 
 /**
  * A step in a CMS Reconfiguration sequence. This may represent the addition of a new CMS member or the removal of an
