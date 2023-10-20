@@ -125,9 +125,9 @@ public class ReconfigureCMS extends MultiStepOperation<AdvanceCMSReconfiguration
     }
 
     @Override
-    public InProgressSequences.Kind kind()
+    public Kind kind()
     {
-        return InProgressSequences.Kind.RECONFIGURE_CMS;
+        return MultiStepOperation.Kind.RECONFIGURE_CMS;
     }
 
     @Override
@@ -153,8 +153,8 @@ public class ReconfigureCMS extends MultiStepOperation<AdvanceCMSReconfiguration
     {
         ClusterMetadata metadata = ClusterMetadata.current();
         MultiStepOperation<?> sequence = metadata.inProgressSequences.get(SequenceKey.instance);
-        if (sequence.kind() != InProgressSequences.Kind.RECONFIGURE_CMS)
-            throw new IllegalStateException(String.format("Can not advance in-progress sequence, since its kind is %s, but not %s", sequence.kind(), InProgressSequences.Kind.RECONFIGURE_CMS));
+        if (sequence.kind() != MultiStepOperation.Kind.RECONFIGURE_CMS)
+            throw new IllegalStateException(String.format("Can not advance in-progress sequence, since its kind is %s, but not %s", sequence.kind(), MultiStepOperation.Kind.RECONFIGURE_CMS));
 
         ReconfigureCMS transitionCMS = (ReconfigureCMS) sequence;
         try

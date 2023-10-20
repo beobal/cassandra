@@ -40,7 +40,6 @@ import org.apache.cassandra.tcm.membership.NodeState;
 import org.apache.cassandra.tcm.ownership.PlacementDeltas;
 import org.apache.cassandra.tcm.ownership.PlacementProvider;
 import org.apache.cassandra.tcm.ownership.PlacementTransitionPlan;
-import org.apache.cassandra.tcm.sequences.InProgressSequences;
 import org.apache.cassandra.tcm.sequences.LeaveStreams;
 import org.apache.cassandra.tcm.sequences.LockedRanges;
 import org.apache.cassandra.tcm.sequences.UnbootstrapAndLeave;
@@ -82,7 +81,7 @@ public class PrepareLeave implements Transformation
                                              boolean force,
                                              PlacementProvider placementProvider,
                                              LeaveStreams.Kind streamKind,
-                                             InProgressSequences.Kind sequenceKind)
+                                             MultiStepOperation.Kind sequenceKind)
     {
         return clusterMetadataService.commit(new PrepareLeave(leaving,
                                                               force,

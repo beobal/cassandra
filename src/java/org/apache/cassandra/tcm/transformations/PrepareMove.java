@@ -41,7 +41,6 @@ import org.apache.cassandra.tcm.membership.NodeState;
 import org.apache.cassandra.tcm.ownership.PlacementDeltas;
 import org.apache.cassandra.tcm.ownership.PlacementProvider;
 import org.apache.cassandra.tcm.ownership.PlacementTransitionPlan;
-import org.apache.cassandra.tcm.sequences.InProgressSequences;
 import org.apache.cassandra.tcm.sequences.LockedRanges;
 import org.apache.cassandra.tcm.sequences.Move;
 import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializer;
@@ -83,7 +82,7 @@ public class PrepareMove implements Transformation
                                                  (metadata_, code, reason) -> {
                                                      MultiStepOperation<?> sequence = metadata_.inProgressSequences.get(nodeId);
                                                      // We might have discovered a startup sequence we ourselves committed but got no response for
-                                                     if (sequence == null || sequence.kind() != InProgressSequences.Kind.MOVE)
+                                                     if (sequence == null || sequence.kind() != MultiStepOperation.Kind.MOVE)
                                                      {
                                                          throw new IllegalStateException(String.format("Can not commit event to metadata service: %s. Interrupting leave sequence.",
                                                                                                        reason));

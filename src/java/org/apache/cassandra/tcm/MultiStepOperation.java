@@ -19,9 +19,16 @@
 package org.apache.cassandra.tcm;
 
 import org.apache.cassandra.tcm.membership.NodeId;
+import org.apache.cassandra.tcm.sequences.AddToCMS;
+import org.apache.cassandra.tcm.sequences.BootstrapAndJoin;
+import org.apache.cassandra.tcm.sequences.BootstrapAndReplace;
 import org.apache.cassandra.tcm.sequences.InProgressSequences;
+import org.apache.cassandra.tcm.sequences.Move;
+import org.apache.cassandra.tcm.sequences.ReconfigureCMS;
 import org.apache.cassandra.tcm.sequences.SequenceState;
 import org.apache.cassandra.tcm.sequences.ProgressBarrier;
+import org.apache.cassandra.tcm.sequences.UnbootstrapAndLeave;
+import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializer;
 import org.apache.cassandra.tcm.serialization.MetadataSerializer;
 
 /**
@@ -46,6 +53,28 @@ import org.apache.cassandra.tcm.serialization.MetadataSerializer;
  */
 public abstract class MultiStepOperation<CONTEXT>
 {
+    public enum Kind
+    {
+        @Deprecated
+        JOIN_OWNERSHIP_GROUP(AddToCMS.serializer),
+
+        JOIN(BootstrapAndJoin.serializer),
+        MOVE(Move.serializer),
+        REPLACE(BootstrapAndReplace.serializer),
+        LEAVE(UnbootstrapAndLeave.serializer),
+        REMOVE(UnbootstrapAndLeave.serializer),
+
+        RECONFIGURE_CMS(ReconfigureCMS.serializer)
+        ;
+
+        public final AsymmetricMetadataSerializer<MultiStepOperation<?>, ? extends MultiStepOperation<?>> serializer;
+
+        Kind(AsymmetricMetadataSerializer<MultiStepOperation<?>, ? extends MultiStepOperation<?>> serializer)
+        {
+            this.serializer = serializer;
+        }
+    }
+
     // Represents the position in the sequence of the next step to be executed.
     public final int idx;
     // The epoch representing the last modification made by this sequence. Before executing a step in a sequence,
@@ -63,7 +92,7 @@ public abstract class MultiStepOperation<CONTEXT>
      * Unique identifier for the type of operation, e.g. JOIN, LEAVE, MOVE
      * @return the specific kind of this operation
      */
-    public abstract InProgressSequences.Kind kind();
+    public abstract Kind kind();
 
     /**
      * Executes the next step in the operation. This should usually include a Transformation to mutate ClusterMetadata
@@ -178,4 +207,5 @@ public abstract class MultiStepOperation<CONTEXT>
                                                                                                           transformation, code, reason));
                                                         });
     }
+
 }

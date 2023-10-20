@@ -39,12 +39,11 @@ import org.apache.cassandra.tcm.MetadataValue;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.NodeId;
 
-import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializer;
 import org.apache.cassandra.tcm.serialization.MetadataSerializer;
 import org.apache.cassandra.tcm.serialization.Version;
 
 import static org.apache.cassandra.db.TypeSizes.sizeof;
-import static org.apache.cassandra.tcm.sequences.InProgressSequences.Kind.LEAVE;
+import static org.apache.cassandra.tcm.MultiStepOperation.Kind.LEAVE;
 import static org.apache.cassandra.tcm.serialization.Version.V2;
 
 public class InProgressSequences implements MetadataValue<InProgressSequences>
@@ -84,7 +83,7 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
         MultiStepOperation<?> seq = ClusterMetadata.current().inProgressSequences.get(owner);
         if (seq == null)
             throw new IllegalArgumentException("No in progress sequence for "+sequenceOwner);
-        Kind expectedKind = Kind.valueOf(expectedSequenceKind);
+        MultiStepOperation.Kind expectedKind = MultiStepOperation.Kind.valueOf(expectedSequenceKind);
         if (seq.kind() != expectedKind)
             throw new IllegalArgumentException("No in progress sequence of kind " + expectedKind + " for " + owner + " (only " + seq.kind() +" in progress)");
 
@@ -184,29 +183,7 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
         return Objects.hash(state, lastModified);
     }
 
-    public static Set<Kind> STARTUP_SEQUENCE_KINDS = ImmutableSet.of(InProgressSequences.Kind.JOIN, InProgressSequences.Kind.REPLACE);
-
-    public enum Kind
-    {
-        @Deprecated
-        JOIN_OWNERSHIP_GROUP(AddToCMS.serializer),
-
-        JOIN(BootstrapAndJoin.serializer),
-        MOVE(Move.serializer),
-        REPLACE(BootstrapAndReplace.serializer),
-        LEAVE(UnbootstrapAndLeave.serializer),
-        REMOVE(UnbootstrapAndLeave.serializer),
-
-        RECONFIGURE_CMS(ReconfigureCMS.serializer)
-        ;
-
-        public final AsymmetricMetadataSerializer<MultiStepOperation<?>, ? extends MultiStepOperation<?>> serializer;
-
-        Kind(AsymmetricMetadataSerializer<MultiStepOperation<?>, ? extends MultiStepOperation<?>> serializer)
-        {
-            this.serializer = serializer;
-        }
-    }
+    public static Set<MultiStepOperation.Kind> STARTUP_SEQUENCE_KINDS = ImmutableSet.of(MultiStepOperation.Kind.JOIN, MultiStepOperation.Kind.REPLACE);
 
     @VisibleForTesting
     public static BiFunction<MultiStepOperation<?>, SequenceState, SequenceState> listener = (s, o) -> o;
@@ -275,13 +252,13 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
                 if (Version.UNKNOWN.isBefore(V2))
                 {
                     NodeId nodeId = NodeId.serializer.deserialize(in, version);
-                    Kind kind = Kind.valueOf(in.readUTF());
+                    MultiStepOperation.Kind kind = MultiStepOperation.Kind.valueOf(in.readUTF());
                     MultiStepOperation<?> ips = kind.serializer.deserialize(in, version);
                     res.put(nodeId, ips);
                 }
                 else
                 {
-                    Kind kind = Kind.valueOf(in.readUTF());
+                    MultiStepOperation.Kind kind = MultiStepOperation.Kind.valueOf(in.readUTF());
                     MultiStepOperation<?> ips = kind.serializer.deserialize(in, version);
                     SequenceKey key = ips.keySerializer().deserialize(in, version);
                     res.put(key, ips);

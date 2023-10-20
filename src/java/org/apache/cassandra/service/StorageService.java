@@ -990,7 +990,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
         if (sequence == null && metadata.directory.peerState(id) == JOINED)
             return true;
-        if ((sequence.kind() == InProgressSequences.Kind.JOIN || sequence.kind() == InProgressSequences.Kind.REPLACE) && sequence.atFinalStep())
+        if ((sequence.kind() == MultiStepOperation.Kind.JOIN || sequence.kind() == MultiStepOperation.Kind.REPLACE) && sequence.atFinalStep())
             return true;
 
         return false;
@@ -1020,7 +1020,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         MultiStepOperation<?> sequence = metadata.inProgressSequences.get(id);
 
         // Double check the conditions we verified in readyToFinishJoiningRing
-        if (sequence.kind() != InProgressSequences.Kind.JOIN && sequence.kind() != InProgressSequences.Kind.REPLACE)
+        if (sequence.kind() != MultiStepOperation.Kind.JOIN && sequence.kind() != MultiStepOperation.Kind.REPLACE)
             throw new IllegalStateException("Can not finish joining ring as join sequence has not been started");
 
         if (!sequence.atFinalStep())
@@ -1529,7 +1529,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
                 if (metadata.inProgressSequences.contains(nodeId))
                 {
                     MultiStepOperation<?> seq = metadata.inProgressSequences.get(nodeId);
-                    if (seq.kind() != InProgressSequences.Kind.JOIN)
+                    if (seq.kind() != MultiStepOperation.Kind.JOIN)
                         throw new RuntimeException("Can't abort bootstrap for " + nodeId + " since it is not bootstrapping");
                     ClusterMetadataService.instance().commit(new CancelInProgressSequence(nodeId));
                 }
@@ -3572,7 +3572,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             if (state == NodeState.LEAVING)
             {
                 MultiStepOperation<?> seq = metadata.inProgressSequences.get(nodeId);
-                if (seq != null && seq.kind() == InProgressSequences.Kind.REMOVE)
+                if (seq != null && seq.kind() == MultiStepOperation.Kind.REMOVE)
                 {
                     sb.append("Removing node ").append(nodeId).append(" (").append(metadata.directory.endpoint(nodeId)).append(')').append(": ").append(seq.status());
                     found = true;

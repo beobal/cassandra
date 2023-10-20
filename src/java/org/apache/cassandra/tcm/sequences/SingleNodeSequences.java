@@ -37,8 +37,8 @@ import org.apache.cassandra.tcm.transformations.PrepareLeave;
 import org.apache.cassandra.tcm.transformations.PrepareMove;
 
 import static org.apache.cassandra.tcm.membership.NodeState.LEAVING;
-import static org.apache.cassandra.tcm.sequences.InProgressSequences.Kind.LEAVE;
-import static org.apache.cassandra.tcm.sequences.InProgressSequences.Kind.MOVE;
+import static org.apache.cassandra.tcm.MultiStepOperation.Kind.LEAVE;
+import static org.apache.cassandra.tcm.MultiStepOperation.Kind.MOVE;
 import static org.apache.cassandra.utils.FBUtilities.getBroadcastAddressAndPort;
 
 /**
@@ -141,7 +141,7 @@ public interface SingleNodeSequences
                                                  (metadata_, code, reason) -> {
                                                      MultiStepOperation<?> sequence = metadata_.inProgressSequences.get(toRemove);
                                                      // We might have discovered a startup sequence we ourselves committed but got no response for
-                                                     if (sequence == null || sequence.kind() != InProgressSequences.Kind.REMOVE)
+                                                     if (sequence == null || sequence.kind() != MultiStepOperation.Kind.REMOVE)
                                                      {
                                                          throw new IllegalStateException(String.format("Can not commit event to metadata service: %s. Interrupting removenode sequence.",
                                                                                                        reason));

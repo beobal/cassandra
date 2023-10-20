@@ -47,7 +47,7 @@ import org.apache.cassandra.utils.vint.VIntCoding;
 import static org.apache.cassandra.tcm.Transformation.Kind.FINISH_LEAVE;
 import static org.apache.cassandra.tcm.Transformation.Kind.MID_LEAVE;
 import static org.apache.cassandra.tcm.Transformation.Kind.START_LEAVE;
-import static org.apache.cassandra.tcm.sequences.InProgressSequences.Kind.LEAVE;
+import static org.apache.cassandra.tcm.MultiStepOperation.Kind.LEAVE;
 import static org.apache.cassandra.tcm.sequences.SequenceState.continuable;
 import static org.apache.cassandra.tcm.sequences.SequenceState.error;
 
@@ -125,21 +125,21 @@ public class UnbootstrapAndLeave extends MultiStepOperation<Epoch>
         ClusterMetadata metadata = ClusterMetadata.current();
         LockedRanges.AffectedRanges affectedRanges = metadata.lockedRanges.locked.get(lockKey);
         Location location = metadata.directory.location(startLeave.nodeId());
-        if (kind() == InProgressSequences.Kind.REMOVE)
+        if (kind() == MultiStepOperation.Kind.REMOVE)
             return new ProgressBarrier(latestModification, location, affectedRanges, (e) -> !e.equals(metadata.directory.endpoint(startLeave.nodeId())));
         else
             return new ProgressBarrier(latestModification, location, affectedRanges);
     }
 
     @Override
-    public InProgressSequences.Kind kind()
+    public Kind kind()
     {
         switch (streams.kind())
         {
             case UNBOOTSTRAP:
                 return LEAVE;
             case REMOVENODE:
-                return InProgressSequences.Kind.REMOVE;
+                return MultiStepOperation.Kind.REMOVE;
             default:
                 throw new IllegalStateException("Invalid stream kind: "+streams.kind());
         }
