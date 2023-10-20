@@ -144,9 +144,15 @@ public class AddToCMS extends MultiStepOperation<Epoch>
     }
 
     @Override
-    protected InProgressSequences.SequenceKey sequenceKey()
+    protected SequenceKey sequenceKey()
     {
         return toAdd;
+    }
+
+    @Override
+    public MetadataSerializer<? extends SequenceKey> keySerializer()
+    {
+        return NodeId.serializer;
     }
 
     @Override
@@ -158,12 +164,6 @@ public class AddToCMS extends MultiStepOperation<Epoch>
     public Transformation.Kind nextStep()
     {
         return Transformation.Kind.FINISH_ADD_TO_CMS;
-    }
-
-    @Override
-    public MetadataSerializer<? extends InProgressSequences.SequenceKey> keySerializer()
-    {
-        return NodeId.serializer;
     }
 
     @Override

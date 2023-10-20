@@ -149,6 +149,12 @@ public class ReconfigureCMS extends MultiStepOperation<AdvanceCMSReconfiguration
 
 
     @Override
+    public MetadataSerializer<? extends MultiStepOperation.SequenceKey> keySerializer()
+    {
+        return SequenceKey.serializer;
+    }
+
+    @Override
     public SequenceState executeNext()
     {
         ClusterMetadata metadata = ClusterMetadata.current();
@@ -347,7 +353,8 @@ public class ReconfigureCMS extends MultiStepOperation<AdvanceCMSReconfiguration
         }
     }
 
-    public static class SequenceKey implements InProgressSequences.SequenceKey {
+    public static class SequenceKey implements MultiStepOperation.SequenceKey
+    {
         public static SequenceKey instance = new SequenceKey();
         public static Serializer serializer = new Serializer();
 

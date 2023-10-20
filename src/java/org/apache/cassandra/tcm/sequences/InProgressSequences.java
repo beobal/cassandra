@@ -51,16 +51,16 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
     public static final Serializer serializer = new Serializer();
 
     public static InProgressSequences EMPTY = new InProgressSequences(Epoch.EMPTY, ImmutableMap.of());
-    private final ImmutableMap<SequenceKey, MultiStepOperation<?>> state;
+    private final ImmutableMap<MultiStepOperation.SequenceKey, MultiStepOperation<?>> state;
     private final Epoch lastModified;
 
-    private InProgressSequences(Epoch lastModified, ImmutableMap<SequenceKey, MultiStepOperation<?>> state)
+    private InProgressSequences(Epoch lastModified, ImmutableMap<MultiStepOperation.SequenceKey, MultiStepOperation<?>> state)
     {
         this.lastModified = lastModified;
         this.state = state;
     }
 
-    public static void finishInProgressSequences(SequenceKey sequenceKey)
+    public static void finishInProgressSequences(MultiStepOperation.SequenceKey sequenceKey)
     {
         ClusterMetadata metadata = ClusterMetadata.current();
         while (true)
@@ -102,12 +102,12 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
         return lastModified;
     }
 
-    public boolean contains(SequenceKey key)
+    public boolean contains(MultiStepOperation.SequenceKey key)
     {
         return state.containsKey(key);
     }
 
-    public MultiStepOperation<?> get(SequenceKey key)
+    public MultiStepOperation<?> get(MultiStepOperation.SequenceKey key)
     {
         return state.get(key);
     }
@@ -117,19 +117,19 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
         return state.isEmpty();
     }
 
-    public InProgressSequences with(SequenceKey key, MultiStepOperation<?> sequence)
+    public InProgressSequences with(MultiStepOperation.SequenceKey key, MultiStepOperation<?> sequence)
     {
         if (contains(key))
         {
             throw new Transformation.RejectedTransformationException(String.format("Can not add a new in-progress sequence for %s, " +
-                                                                                   "since there's already one assosicated with it: %s",
+                                                                                   "since there's already one associated with it: %s",
                                                                                    key,
                                                                                    get(key)));
         }
 
-        ImmutableMap.Builder<SequenceKey, MultiStepOperation<?>> builder = ImmutableMap.builder();
+        ImmutableMap.Builder<MultiStepOperation.SequenceKey, MultiStepOperation<?>> builder = ImmutableMap.builder();
         builder.put(key, sequence);
-        for (Map.Entry<SequenceKey, MultiStepOperation<?>> e : state.entrySet())
+        for (Map.Entry<MultiStepOperation.SequenceKey, MultiStepOperation<?>> e : state.entrySet())
         {
             if (e.getKey().equals(key))
                 continue;
@@ -138,11 +138,11 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
         return new InProgressSequences(lastModified, builder.build());
     }
 
-    public <T2, T1 extends MultiStepOperation<T2>> InProgressSequences with(SequenceKey key, Function<T1, T1> update)
+    public <T2, T1 extends MultiStepOperation<T2>> InProgressSequences with(MultiStepOperation.SequenceKey key, Function<T1, T1> update)
     {
-        ImmutableMap.Builder<SequenceKey, MultiStepOperation<?>> builder = ImmutableMap.builder();
+        ImmutableMap.Builder<MultiStepOperation.SequenceKey, MultiStepOperation<?>> builder = ImmutableMap.builder();
 
-        for (Map.Entry<SequenceKey, MultiStepOperation<?>> e : state.entrySet())
+        for (Map.Entry<MultiStepOperation.SequenceKey, MultiStepOperation<?>> e : state.entrySet())
         {
             if (e.getKey().equals(key))
                 builder.put(e.getKey(), update.apply((T1) e.getValue()));
@@ -152,11 +152,11 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
         return new InProgressSequences(lastModified, builder.build());
     }
 
-    public InProgressSequences without(SequenceKey key)
+    public InProgressSequences without(MultiStepOperation.SequenceKey key)
     {
-        ImmutableMap.Builder<SequenceKey, MultiStepOperation<?>> builder = ImmutableMap.builder();
+        ImmutableMap.Builder<MultiStepOperation.SequenceKey, MultiStepOperation<?>> builder = ImmutableMap.builder();
         boolean removed = false;
-        for (Map.Entry<SequenceKey, MultiStepOperation<?>> e : state.entrySet())
+        for (Map.Entry<MultiStepOperation.SequenceKey, MultiStepOperation<?>> e : state.entrySet())
         {
             if (e.getKey().equals(key))
                 removed = true;
@@ -221,7 +221,7 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
         {
             Epoch.serializer.serialize(t.lastModified, out, version);
             out.writeInt(t.state.size());
-            for (Map.Entry<SequenceKey, MultiStepOperation<?>> entry : t.state.entrySet())
+            for (Map.Entry<MultiStepOperation.SequenceKey, MultiStepOperation<?>> entry : t.state.entrySet())
             {
                 if (Version.UNKNOWN.isBefore(V2))
                 {
@@ -236,7 +236,7 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
                     MultiStepOperation<?> seq = entry.getValue();
                     out.writeUTF(seq.kind().name());
                     entry.getValue().kind().serializer.serialize(seq, out, version);
-                    MetadataSerializer<SequenceKey> keySerializer = (MetadataSerializer<SequenceKey>) seq.keySerializer();
+                    MetadataSerializer<MultiStepOperation.SequenceKey> keySerializer = (MetadataSerializer<MultiStepOperation.SequenceKey>) seq.keySerializer();
                     keySerializer.serialize(entry.getKey(), out, version);
                 }
             }
@@ -246,7 +246,7 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
         {
             Epoch lastModified = Epoch.serializer.deserialize(in, version);
             int ipsSize = in.readInt();
-            ImmutableMap.Builder<SequenceKey, MultiStepOperation<?>> res = ImmutableMap.builder();
+            ImmutableMap.Builder<MultiStepOperation.SequenceKey, MultiStepOperation<?>> res = ImmutableMap.builder();
             for (int i = 0; i < ipsSize; i++)
             {
                 if (Version.UNKNOWN.isBefore(V2))
@@ -260,7 +260,7 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
                 {
                     MultiStepOperation.Kind kind = MultiStepOperation.Kind.valueOf(in.readUTF());
                     MultiStepOperation<?> ips = kind.serializer.deserialize(in, version);
-                    SequenceKey key = ips.keySerializer().deserialize(in, version);
+                    MultiStepOperation.SequenceKey key = ips.keySerializer().deserialize(in, version);
                     res.put(key, ips);
                 }
             }
@@ -271,7 +271,7 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
         {
             long size = Epoch.serializer.serializedSize(t.lastModified, version);
             size += sizeof(t.state.size());
-            for (Map.Entry<SequenceKey, MultiStepOperation<?>> entry : t.state.entrySet())
+            for (Map.Entry<MultiStepOperation.SequenceKey, MultiStepOperation<?>> entry : t.state.entrySet())
             {
                 if (Version.UNKNOWN.isBefore(V2))
                 {
@@ -285,7 +285,7 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
                     MultiStepOperation<?> seq = entry.getValue();
                     size += sizeof(seq.kind().name());
                     size += entry.getValue().kind().serializer.serializedSize(seq, version);
-                    MetadataSerializer<SequenceKey> keySerializer = (MetadataSerializer<SequenceKey>) seq.keySerializer();
+                    MetadataSerializer<MultiStepOperation.SequenceKey> keySerializer = (MetadataSerializer<MultiStepOperation.SequenceKey>) seq.keySerializer();
                     size += keySerializer.serializedSize(entry.getKey(), version);
                 }
             }
@@ -300,12 +300,5 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>
                "lastModified=" + lastModified +
                ", state=" + state +
                '}';
-    }
-
-    /**
-     * Opaque key identifying the sequence
-     */
-    public interface SequenceKey
-    {
     }
 }

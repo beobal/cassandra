@@ -56,12 +56,14 @@ import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.MultiStepOperation;
 import org.apache.cassandra.tcm.Transformation;
+import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.membership.NodeState;
 import org.apache.cassandra.tcm.ownership.DataPlacements;
 import org.apache.cassandra.tcm.ownership.MovementMap;
 import org.apache.cassandra.tcm.ownership.PlacementDeltas;
 import org.apache.cassandra.tcm.ownership.PlacementForRange;
 import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializer;
+import org.apache.cassandra.tcm.serialization.MetadataSerializer;
 import org.apache.cassandra.tcm.serialization.Version;
 import org.apache.cassandra.tcm.transformations.PrepareMove;
 import org.apache.cassandra.utils.FBUtilities;
@@ -170,7 +172,7 @@ public class Move extends MultiStepOperation<Epoch>
     }
 
     @Override
-    protected InProgressSequences.SequenceKey sequenceKey()
+    protected SequenceKey sequenceKey()
     {
         return startMove.nodeId();
     }
@@ -178,6 +180,12 @@ public class Move extends MultiStepOperation<Epoch>
     @Override public Transformation.Kind nextStep()
     {
         return indexToNext(idx);
+    }
+
+    @Override
+    public MetadataSerializer<? extends SequenceKey> keySerializer()
+    {
+        return NodeId.serializer;
     }
 
     @Override
