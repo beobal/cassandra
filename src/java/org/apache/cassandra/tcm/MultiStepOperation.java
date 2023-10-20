@@ -18,11 +18,9 @@
 
 package org.apache.cassandra.tcm;
 
-import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.sequences.AddToCMS;
 import org.apache.cassandra.tcm.sequences.BootstrapAndJoin;
 import org.apache.cassandra.tcm.sequences.BootstrapAndReplace;
-import org.apache.cassandra.tcm.sequences.InProgressSequences;
 import org.apache.cassandra.tcm.sequences.Move;
 import org.apache.cassandra.tcm.sequences.ReconfigureCMS;
 import org.apache.cassandra.tcm.sequences.SequenceState;
@@ -73,6 +71,13 @@ public abstract class MultiStepOperation<CONTEXT>
         {
             this.serializer = serializer;
         }
+    }
+
+    /**
+     * Opaque key for identifying an operation when stored in ClusterMetadata's map of in-progress operations
+     **/
+    public interface SequenceKey
+    {
     }
 
     // Represents the position in the sequence of the next step to be executed.
@@ -163,7 +168,7 @@ public abstract class MultiStepOperation<CONTEXT>
      * decommission, etc at a time.
      * @return the key to identify this sequence
      */
-    protected abstract InProgressSequences.SequenceKey sequenceKey();
+    protected abstract SequenceKey sequenceKey();
 
     public abstract Transformation.Kind nextStep();
 
@@ -172,10 +177,7 @@ public abstract class MultiStepOperation<CONTEXT>
      * {@link org.apache.cassandra.tcm.ClusterMetadata#inProgressSequences} for snapshots and replication.
      * @return MetadataSerializer for the sequence's key
      */
-    public MetadataSerializer<? extends InProgressSequences.SequenceKey> keySerializer()
-    {
-        return NodeId.serializer;
-    }
+    public abstract MetadataSerializer<? extends SequenceKey> keySerializer();
 
     public String status()
     {
@@ -192,7 +194,7 @@ public abstract class MultiStepOperation<CONTEXT>
      */
     protected ClusterMetadata commit(Transformation transformation)
     {
-        InProgressSequences.SequenceKey sequenceKey = sequenceKey();
+        SequenceKey sequenceKey = sequenceKey();
         return ClusterMetadataService.instance().commit(transformation,
                                                         (metadata) -> metadata,
                                                         (metadata, code, reason) -> {
@@ -207,5 +209,4 @@ public abstract class MultiStepOperation<CONTEXT>
                                                                                                           transformation, code, reason));
                                                         });
     }
-
 }
