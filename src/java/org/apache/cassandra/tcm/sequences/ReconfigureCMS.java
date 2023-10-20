@@ -54,8 +54,9 @@ import org.apache.cassandra.streaming.StreamPlan;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.Epoch;
-import org.apache.cassandra.tcm.InProgressSequence;
+import org.apache.cassandra.tcm.MultiStepOperation;
 import org.apache.cassandra.tcm.Retry;
+import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.ownership.EntireRange;
 import org.apache.cassandra.tcm.ownership.MovementMap;
@@ -70,7 +71,7 @@ import org.apache.cassandra.utils.concurrent.Future;
 import static org.apache.cassandra.streaming.StreamOperation.RESTORE_REPLICA_COUNT;
 import static org.apache.cassandra.tcm.ownership.EntireRange.entireRange;
 
-public class ReconfigureCMS extends InProgressSequence<AdvanceCMSReconfiguration>
+public class ReconfigureCMS extends MultiStepOperation<AdvanceCMSReconfiguration>
 {
     public static final Serializer serializer = new Serializer();
     private static final Logger logger = LoggerFactory.getLogger(ReconfigureCMS.class);
@@ -141,15 +142,21 @@ public class ReconfigureCMS extends InProgressSequence<AdvanceCMSReconfiguration
         return SequenceKey.instance;
     }
 
+    @Override public Transformation.Kind nextStep()
+    {
+        return next.kind();
+    }
+
+
     @Override
     public SequenceState executeNext()
     {
         ClusterMetadata metadata = ClusterMetadata.current();
-        InProgressSequence<?> inProgressSequence = metadata.inProgressSequences.get(SequenceKey.instance);
-        if (inProgressSequence.kind() != InProgressSequences.Kind.RECONFIGURE_CMS)
-            throw new IllegalStateException(String.format("Can not advance in-progress sequence, since its kind is %s, but not %s", inProgressSequence.kind(), InProgressSequences.Kind.RECONFIGURE_CMS));
+        MultiStepOperation<?> sequence = metadata.inProgressSequences.get(SequenceKey.instance);
+        if (sequence.kind() != InProgressSequences.Kind.RECONFIGURE_CMS)
+            throw new IllegalStateException(String.format("Can not advance in-progress sequence, since its kind is %s, but not %s", sequence.kind(), InProgressSequences.Kind.RECONFIGURE_CMS));
 
-        ReconfigureCMS transitionCMS = (ReconfigureCMS) inProgressSequence;
+        ReconfigureCMS transitionCMS = (ReconfigureCMS) sequence;
         try
         {
             if (transitionCMS.next.activeTransition != null)
@@ -182,7 +189,7 @@ public class ReconfigureCMS extends InProgressSequence<AdvanceCMSReconfiguration
         ClusterMetadataService.instance().commit(new PrepareCMSReconfiguration.Simple(metadata.directory.peerId(toRemove)),
                                                  latest -> latest,
                                                  (latest, code, message) -> {
-                                                     InProgressSequence<?> sequence = metadata.inProgressSequences.get(SequenceKey.instance);
+                                                     MultiStepOperation<?> sequence = metadata.inProgressSequences.get(SequenceKey.instance);
                                                      if (sequence != null)
                                                          return null;
 
@@ -319,10 +326,10 @@ public class ReconfigureCMS extends InProgressSequence<AdvanceCMSReconfiguration
         }
     }
 
-    public static class Serializer implements AsymmetricMetadataSerializer<InProgressSequence<?>, ReconfigureCMS>
+    public static class Serializer implements AsymmetricMetadataSerializer<MultiStepOperation<?>, ReconfigureCMS>
     {
 
-        public void serialize(InProgressSequence<?> t, DataOutputPlus out, Version version) throws IOException
+        public void serialize(MultiStepOperation<?> t, DataOutputPlus out, Version version) throws IOException
         {
             ReconfigureCMS transformation = (ReconfigureCMS) t;
             AdvanceCMSReconfiguration.serializer.serialize(transformation.next, out, version);
@@ -333,7 +340,7 @@ public class ReconfigureCMS extends InProgressSequence<AdvanceCMSReconfiguration
             return new ReconfigureCMS(AdvanceCMSReconfiguration.serializer.deserialize(in, version));
         }
 
-        public long serializedSize(InProgressSequence<?> t, Version version)
+        public long serializedSize(MultiStepOperation<?> t, Version version)
         {
             ReconfigureCMS transformation = (ReconfigureCMS) t;
             return AdvanceCMSReconfiguration.serializer.serializedSize(transformation.next, version);

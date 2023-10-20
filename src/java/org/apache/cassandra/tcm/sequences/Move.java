@@ -54,7 +54,7 @@ import org.apache.cassandra.streaming.StreamOperation;
 import org.apache.cassandra.streaming.StreamPlan;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.Epoch;
-import org.apache.cassandra.tcm.InProgressSequence;
+import org.apache.cassandra.tcm.MultiStepOperation;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.NodeState;
 import org.apache.cassandra.tcm.ownership.DataPlacements;
@@ -75,7 +75,7 @@ import static org.apache.cassandra.tcm.sequences.InProgressSequences.Kind.MOVE;
 import static org.apache.cassandra.tcm.sequences.SequenceState.continuable;
 import static org.apache.cassandra.tcm.sequences.SequenceState.error;
 
-public class Move extends InProgressSequence<Epoch>
+public class Move extends MultiStepOperation<Epoch>
 {
     private static final Logger logger = LoggerFactory.getLogger(Move.class);
     public static final Serializer serializer = new Serializer();
@@ -173,6 +173,11 @@ public class Move extends InProgressSequence<Epoch>
     protected InProgressSequences.SequenceKey sequenceKey()
     {
         return startMove.nodeId();
+    }
+
+    @Override public Transformation.Kind nextStep()
+    {
+        return indexToNext(idx);
     }
 
     @Override
@@ -511,9 +516,9 @@ public class Move extends InProgressSequence<Epoch>
         return Objects.hash(latestModification, tokens, lockKey, next, toSplitRanges, startMove, midMove, finishMove, streamData);
     }
 
-    public static class Serializer implements AsymmetricMetadataSerializer<InProgressSequence<?>, Move>
+    public static class Serializer implements AsymmetricMetadataSerializer<MultiStepOperation<?>, Move>
     {
-        public void serialize(InProgressSequence<?> t, DataOutputPlus out, Version version) throws IOException
+        public void serialize(MultiStepOperation<?> t, DataOutputPlus out, Version version) throws IOException
         {
             Move plan = (Move) t;
             out.writeBoolean(plan.streamData);
@@ -554,7 +559,7 @@ public class Move extends InProgressSequence<Epoch>
                             toSplitRanges, startMove, midMove, finishMove, streamData);
         }
 
-        public long serializedSize(InProgressSequence<?> t, Version version)
+        public long serializedSize(MultiStepOperation<?> t, Version version)
         {
             Move plan = (Move) t;
             long size = TypeSizes.BOOL_SIZE;

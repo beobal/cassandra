@@ -275,7 +275,7 @@ public class ClusterMetadata
         Transformer t = transformer();
         for (NodeId node: joining)
         {
-            InProgressSequence<?> joinSequence = inProgressSequences.get(node);
+            MultiStepOperation<?> joinSequence = inProgressSequences.get(node);
             assert joinSequence instanceof BootstrapAndJoin;
             Set<Token> tokens = ((BootstrapAndJoin)joinSequence).finishJoin.tokens;
             t = t.proposeToken(node, tokens);

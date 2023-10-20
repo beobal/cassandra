@@ -37,7 +37,7 @@ import org.apache.cassandra.gms.Gossiper;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.tcm.ClusterMetadata;
-import org.apache.cassandra.tcm.InProgressSequence;
+import org.apache.cassandra.tcm.MultiStepOperation;
 import org.apache.cassandra.tcm.compatibility.GossipHelper;
 import org.apache.cassandra.tcm.membership.Directory;
 import org.apache.cassandra.tcm.membership.NodeId;
@@ -121,19 +121,19 @@ public class LegacyStateListener implements ChangeListener.Async
             {
                 // For compatibility with clients, ensure we set TOKENS for bootstrapping nodes in gossip.
                 // As these are not yet added to the token map they must be extracted from the in progress sequence.
-                Collection<Token> tokens = GossipHelper.getTokensFromSequence(change, next);
+                Collection<Token> tokens = GossipHelper.getTokensFromOperation(change, next);
                 Gossiper.instance.mergeNodeToGossip(change, next, tokens);
             }
             else if (prev.directory.peerState(change) == BOOT_REPLACING)
             {
                 // legacy log message for compatibility (& tests)
-                InProgressSequence<?> sequence = prev.inProgressSequences.get(change);
+                MultiStepOperation<?> sequence = prev.inProgressSequences.get(change);
                 if (sequence != null && sequence.kind() == InProgressSequences.Kind.REPLACE)
                 {
                     BootstrapAndReplace replace = (BootstrapAndReplace) sequence;
                     InetAddressAndPort replaced = prev.directory.endpoint(replace.startReplace.replaced());
                     InetAddressAndPort replacement = prev.directory.endpoint(change);
-                    Collection<Token> tokens = GossipHelper.getTokensFromSequence(replace);
+                    Collection<Token> tokens = GossipHelper.getTokensFromOperation(replace);
                     logger.info("Node {} will complete replacement of {} for tokens {}", replacement, replaced, tokens);
                 }
             }

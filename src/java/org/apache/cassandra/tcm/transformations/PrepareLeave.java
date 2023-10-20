@@ -32,7 +32,7 @@ import org.apache.cassandra.locator.NetworkTopologyStrategy;
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
-import org.apache.cassandra.tcm.InProgressSequence;
+import org.apache.cassandra.tcm.MultiStepOperation;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.Directory;
 import org.apache.cassandra.tcm.membership.NodeId;
@@ -90,7 +90,7 @@ public class PrepareLeave implements Transformation
                                                               streamKind),
                                              (metadata) -> (UnbootstrapAndLeave) metadata.inProgressSequences.get(leaving),
                                              (metadata, code, reason) -> {
-                                                 InProgressSequence<?> sequence = metadata.inProgressSequences.get(leaving);
+                                                 MultiStepOperation<?> sequence = metadata.inProgressSequences.get(leaving);
 
                                                  // We might have discovered a sequence we ourselves committed but got no response for
                                                  if (sequence == null || sequence.kind() != sequenceKind)

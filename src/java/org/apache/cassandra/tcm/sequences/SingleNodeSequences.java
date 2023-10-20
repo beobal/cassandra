@@ -30,7 +30,7 @@ import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
-import org.apache.cassandra.tcm.InProgressSequence;
+import org.apache.cassandra.tcm.MultiStepOperation;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.membership.NodeState;
 import org.apache.cassandra.tcm.transformations.PrepareLeave;
@@ -71,7 +71,7 @@ public interface SingleNodeSequences
         NodeId self = metadata.myNodeId();
 
         ReconfigureCMS.maybeReconfigureCMS(metadata, getBroadcastAddressAndPort());
-        InProgressSequence<?> inProgress = metadata.inProgressSequences.get(self);
+        MultiStepOperation<?> inProgress = metadata.inProgressSequences.get(self);
 
         if (inProgress == null)
         {
@@ -82,7 +82,7 @@ public interface SingleNodeSequences
                                                                       LeaveStreams.Kind.UNBOOTSTRAP),
                                                      (metadata_) -> null,
                                                      (metadata_, code, reason) -> {
-                                                         InProgressSequence<?> sequence = metadata_.inProgressSequences.get(self);
+                                                         MultiStepOperation<?> sequence = metadata_.inProgressSequences.get(self);
                                                          // We might have discovered a sequence we ourselves committed but got no response for
                                                          if (sequence == null || sequence.kind() != LEAVE)
                                                          {
@@ -139,7 +139,7 @@ public interface SingleNodeSequences
                                                                   LeaveStreams.Kind.REMOVENODE),
                                                  (metadata_) -> null,
                                                  (metadata_, code, reason) -> {
-                                                     InProgressSequence<?> sequence = metadata_.inProgressSequences.get(toRemove);
+                                                     MultiStepOperation<?> sequence = metadata_.inProgressSequences.get(toRemove);
                                                      // We might have discovered a startup sequence we ourselves committed but got no response for
                                                      if (sequence == null || sequence.kind() != InProgressSequences.Kind.REMOVE)
                                                      {
@@ -183,7 +183,7 @@ public interface SingleNodeSequences
                                                                  true),
                                                  (metadata_) -> null,
                                                  (metadata_, code, reason) -> {
-                                                     InProgressSequence<?> sequence = metadata_.inProgressSequences.get(self);
+                                                     MultiStepOperation<?> sequence = metadata_.inProgressSequences.get(self);
                                                      // We might have discovered a startup sequence we ourselves committed but got no response for
                                                      if (sequence == null || sequence.kind() != MOVE)
                                                      {

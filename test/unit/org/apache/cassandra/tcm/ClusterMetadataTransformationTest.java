@@ -177,7 +177,7 @@ public class ClusterMetadataTransformationTest
         assertModifications(transformed);
 
         InProgressSequences trivial = metadata.inProgressSequences.with(new NodeId(ThreadLocalRandom.current().nextInt()),
-                                                                        Mockito.mock(InProgressSequence.class));
+                                                                        Mockito.mock(MultiStepOperation.class));
         transformed = transformed.metadata.transformer().with(trivial).build();
         assertModifications(transformed, IN_PROGRESS_SEQUENCES);
     }

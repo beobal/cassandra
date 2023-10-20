@@ -33,7 +33,7 @@ import org.apache.cassandra.locator.DynamicEndpointSnitch;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.Epoch;
-import org.apache.cassandra.tcm.InProgressSequence;
+import org.apache.cassandra.tcm.MultiStepOperation;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.Location;
 import org.apache.cassandra.tcm.membership.NodeState;
@@ -51,7 +51,7 @@ import static org.apache.cassandra.tcm.sequences.InProgressSequences.Kind.LEAVE;
 import static org.apache.cassandra.tcm.sequences.SequenceState.continuable;
 import static org.apache.cassandra.tcm.sequences.SequenceState.error;
 
-public class UnbootstrapAndLeave extends InProgressSequence<Epoch>
+public class UnbootstrapAndLeave extends MultiStepOperation<Epoch>
 {
     private static final Logger logger = LoggerFactory.getLogger(UnbootstrapAndLeave.class);
     public static final Serializer serializer = new Serializer();
@@ -149,6 +149,12 @@ public class UnbootstrapAndLeave extends InProgressSequence<Epoch>
     protected InProgressSequences.SequenceKey sequenceKey()
     {
         return startLeave.nodeId();
+    }
+
+    @Override
+    public Transformation.Kind nextStep()
+    {
+        return indexToNext(idx);
     }
 
     @Override
@@ -308,9 +314,9 @@ public class UnbootstrapAndLeave extends InProgressSequence<Epoch>
         return Objects.hash(startLeave, midLeave, finishLeave, latestModification, lockKey, next);
     }
 
-    public static class Serializer implements AsymmetricMetadataSerializer<InProgressSequence<?>, UnbootstrapAndLeave>
+    public static class Serializer implements AsymmetricMetadataSerializer<MultiStepOperation<?>, UnbootstrapAndLeave>
     {
-        public void serialize(InProgressSequence<?> t, DataOutputPlus out, Version version) throws IOException
+        public void serialize(MultiStepOperation<?> t, DataOutputPlus out, Version version) throws IOException
         {
             UnbootstrapAndLeave plan = (UnbootstrapAndLeave) t;
 
@@ -340,7 +346,7 @@ public class UnbootstrapAndLeave extends InProgressSequence<Epoch>
                                            streamKind.supplier.get());
         }
 
-        public long serializedSize(InProgressSequence<?> t, Version version)
+        public long serializedSize(MultiStepOperation<?> t, Version version)
         {
             UnbootstrapAndLeave plan = (UnbootstrapAndLeave) t;
             long size = Epoch.serializer.serializedSize(plan.latestModification, version);
