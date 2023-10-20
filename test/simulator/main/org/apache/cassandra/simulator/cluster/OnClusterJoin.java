@@ -29,7 +29,7 @@ import org.apache.cassandra.simulator.ActionList;
 import org.apache.cassandra.simulator.Actions;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
-import org.apache.cassandra.tcm.InProgressSequence;
+import org.apache.cassandra.tcm.MultiStepOperation;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.sequences.BootstrapAndJoin;
 import org.apache.cassandra.tcm.transformations.PrepareJoin;
@@ -104,7 +104,7 @@ class OnClusterJoin extends OnClusterChangeTopology
         {
             super(String.format("Execute next step of the join operation: %s", Transformation.Kind.values()[kind]), actions, on, () -> {
                 ClusterMetadata metadata = ClusterMetadata.current();
-                InProgressSequence<?> sequence = metadata.inProgressSequences.get(metadata.myNodeId());
+                MultiStepOperation<?> sequence = metadata.inProgressSequences.get(metadata.myNodeId());
 
                 if (!(sequence instanceof BootstrapAndJoin))
                     throw new IllegalStateException(String.format("Can not resume bootstrap as it does not appear to have been started. Found %s", sequence));

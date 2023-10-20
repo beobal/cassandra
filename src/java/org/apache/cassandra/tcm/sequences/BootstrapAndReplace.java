@@ -47,7 +47,7 @@ import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.Epoch;
-import org.apache.cassandra.tcm.InProgressSequence;
+import org.apache.cassandra.tcm.MultiStepOperation;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.membership.NodeState;
@@ -71,7 +71,7 @@ import static org.apache.cassandra.tcm.sequences.SequenceState.continuable;
 import static org.apache.cassandra.tcm.sequences.SequenceState.error;
 import static org.apache.cassandra.tcm.sequences.SequenceState.halted;
 
-public class BootstrapAndReplace extends InProgressSequence<Epoch>
+public class BootstrapAndReplace extends MultiStepOperation<Epoch>
 {
     private static final Logger logger = LoggerFactory.getLogger(BootstrapAndReplace.class);
     public static final Serializer serializer = new Serializer();
@@ -168,15 +168,21 @@ public class BootstrapAndReplace extends InProgressSequence<Epoch>
     }
 
     @Override
-    public boolean atFinalStep()
-    {
-        return next == Transformation.Kind.FINISH_REPLACE;
-    }
-
-    @Override
     protected InProgressSequences.SequenceKey sequenceKey()
     {
         return startReplace.nodeId();
+    }
+
+    @Override
+    public Transformation.Kind nextStep()
+    {
+        return indexToNext(idx);
+    }
+
+    @Override
+    public boolean atFinalStep()
+    {
+        return next == Transformation.Kind.FINISH_REPLACE;
     }
 
     @Override
@@ -410,9 +416,9 @@ public class BootstrapAndReplace extends InProgressSequence<Epoch>
         Gossiper.instance.addLocalApplicationStates(states);
     }
 
-    public static class Serializer implements AsymmetricMetadataSerializer<InProgressSequence<?>, BootstrapAndReplace>
+    public static class Serializer implements AsymmetricMetadataSerializer<MultiStepOperation<?>, BootstrapAndReplace>
     {
-        public void serialize(InProgressSequence<?> t, DataOutputPlus out, Version version) throws IOException
+        public void serialize(MultiStepOperation<?> t, DataOutputPlus out, Version version) throws IOException
         {
             BootstrapAndReplace plan = (BootstrapAndReplace) t;
             out.writeBoolean(plan.finishJoiningRing);
@@ -453,7 +459,7 @@ public class BootstrapAndReplace extends InProgressSequence<Epoch>
             return new BootstrapAndReplace(barrier, lockKey, tokens, next, startReplace, midReplace, finishReplace, finishJoiningRing, streamData);
         }
 
-        public long serializedSize(InProgressSequence<?> t, Version version)
+        public long serializedSize(MultiStepOperation<?> t, Version version)
         {
             BootstrapAndReplace plan = (BootstrapAndReplace) t;
             long size = (TypeSizes.BOOL_SIZE * 2);

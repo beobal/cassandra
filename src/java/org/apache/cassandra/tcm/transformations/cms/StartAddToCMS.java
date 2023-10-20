@@ -26,7 +26,7 @@ import org.apache.cassandra.locator.RangesByEndpoint;
 import org.apache.cassandra.locator.Replica;
 import org.apache.cassandra.schema.ReplicationParams;
 import org.apache.cassandra.tcm.ClusterMetadata;
-import org.apache.cassandra.tcm.InProgressSequence;
+import org.apache.cassandra.tcm.MultiStepOperation;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.ownership.DataPlacement;
@@ -70,7 +70,7 @@ public class StartAddToCMS extends BaseMembershipTransformation
     public Result execute(ClusterMetadata prev)
     {
         NodeId nodeId = prev.directory.peerId(endpoint);
-        InProgressSequence<?> sequence = prev.inProgressSequences.get(nodeId);
+        MultiStepOperation<?> sequence = prev.inProgressSequences.get(nodeId);
         if (sequence != null)
             return new Rejected(INVALID, String.format("Cannot add node to CMS, since it already has an active in-progress sequence %s", sequence));
         if (prev.inProgressSequences.get(ReconfigureCMS.SequenceKey.instance) != null)

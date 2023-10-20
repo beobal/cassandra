@@ -35,16 +35,16 @@ import org.apache.cassandra.tcm.serialization.MetadataSerializer;
  *     owners of these ranges from the read placements
  *   * FinishJoin, which removes owners of the gained ranges from the write placements.
  *
- * A multi-step sequence necessarily holds all data required to execute the next step in sequence. All in-progress
- * sequences can be interleaved, as long as their internal logic permits. In other words, an arbitrary number of join,
+ * A multi-step operation necessarily holds all data required to execute the next step in sequence. All in-progress
+ * operation can be interleaved, as long as their internal logic permits. In other words, an arbitrary number of join,
  * move, leave, and replace sequences can be in flight at any point in time, as long as they operate on non-overlapping
  * ranges.
  *
- * It is assumed that the node may crash after committing any of the steps. {@link InProgressSequence#executeNext()}
+ * It is assumed that the node may crash after committing any of the steps. {@link MultiStepOperation#executeNext()}
  * should be implemented such that commits are done _after_ executing necessary prerequisites. For example,
  * streaming has to finish before MidJoin transformation (which adds the node to the read placements) is executed.
  */
-public abstract class InProgressSequence<CONTEXT>
+public abstract class MultiStepOperation<CONTEXT>
 {
     // Represents the position in the sequence of the next step to be executed.
     public final int idx;
@@ -53,25 +53,25 @@ public abstract class InProgressSequence<CONTEXT>
     // ensure step execution is coordinated across those peers.
     public final Epoch latestModification;
 
-    protected InProgressSequence(int currentStep, Epoch latestModification)
+    protected MultiStepOperation(int currentStep, Epoch latestModification)
     {
         this.idx = currentStep;
         this.latestModification = latestModification;
     }
 
     /**
-     * Unique identifier for the type of sequence, e.g. JOIN, LEAVE, MOVE
-     * @return the specific kind of this sequence
+     * Unique identifier for the type of operation, e.g. JOIN, LEAVE, MOVE
+     * @return the specific kind of this operation
      */
     public abstract InProgressSequences.Kind kind();
 
     /**
-     * Executes the next step in the sequence. This should usually include a Transformation to mutate ClusterMetadata
+     * Executes the next step in the operation. This should usually include a Transformation to mutate ClusterMetadata
      * state, and _may_ also involve additional non-metadata operations such as streaming of SSTables to or from peers
      * (i.e. in the sequences implementing bootstrap, decommission, etc).
      *
      * Returns an indication of the sequence's state based on the outcome of executing the step.
-     * This may express that the sequence can continue processing (executing further steps), report a fatal and
+     * This may express that the operation can continue processing (executing further steps), report a fatal and
      * non-fatal errors, or indicate that further execution is blocked while waiting for acknowledgement of preceding
      * steps from peers.
      * @return sequence state following attempted execution
@@ -79,9 +79,9 @@ public abstract class InProgressSequence<CONTEXT>
     public abstract SequenceState executeNext();
 
     /**
-     * Advance the state of in-progress sequence after successfully executing a step. Essentially, this "bumps the
-     * pointer" into the list (actual or logical) of steps which comprise the sequence. It is most commonly called by
-     * Transformations which represent the steps of the sequence. For example, in a sequence X comprising steps A, B, C
+     * Advance the state of an in-progress operation after successfully executing a step. Essentially, this "bumps the
+     * pointer" into the list (actual or logical) of steps which comprise the operation. It is most commonly called by
+     * Transformations which represent the steps of the operation. For example, in an operation X comprising steps A, B, C
      * each step will typically modify ClusterMetadata such that the persisted representation of X indicates what the
      * next step to execute is. So at the start, A is the next step and X's internal state will indicate this. Part of
      * A's execution is to update that state to show that B is now the next step to run.
@@ -95,28 +95,28 @@ public abstract class InProgressSequence<CONTEXT>
      * @param context required to move the sequence's state onto the next step
      * @return Logically this sequence, ready to execute the next step.
      */
-    public abstract InProgressSequence<CONTEXT> advance(CONTEXT context);
+    public abstract MultiStepOperation<CONTEXT> advance(CONTEXT context);
 
     /**
-     * When execution of steps needs to be coordinated across nodes in the cluster, ProgressBarrier enables the sequence
+     * When execution of steps needs to be coordinated across nodes in the cluster, ProgressBarrier enables the operation
      * to wait for a quorum of peers to acknowledge an epoch before proceeding. For example, during a BootstrapAndJoin
      * sequence, a quorum of relevant nodes must acknowledge that the joining node has become a write replica (which is
      * an effect of the StartJoin transformation), before commencing the next step, which includes streaming existing
      * data from peers and making the joining node a read replica.
-     * @return the barrier to wait on before executing the next step of the sequence.
+     * @return the barrier to wait on before executing the next step of the operation.
      */
     public abstract ProgressBarrier barrier();
 
     /**
-     * Whether or not the next step is the last in the sequence, this is useful to know when handling commit failure
-     * during a sequence step (see {@link #commit(Transformation)}. This is also used to indicate if node which is
-     * started in write survey mode or with -Djoin_ring=false is in a suitable state to fully join the cluster.
-     * @return true if the next step is the last in the sequence, false otherwise
+     * Whether or not the next step is the last in the operation, this is useful to know when handling commit failure
+     * during a step (see {@link #commit(Transformation)}. This is also used to indicate if node which is started in
+     * write survey mode or with -Djoin_ring=false is in a suitable state to fully join the cluster.
+     * @return true if the next step is the last in the operation, false otherwise
      */
     public abstract boolean atFinalStep();
 
     /**
-     * Reverts any metadata changes that this sequence has made up to now. Used to cancel in flight sequences such as
+     * Reverts any metadata changes that this operation has made up to now. Used to cancel in flight operations such as
      * bootstrapping. This is performed by the CancelInProgressSequence transformation, which is also responsible for
      * removing the sequence itself from the map in ClusterMetadata.
      * @param metadata current cluster metadata. Any metadata changes already committed by this sequence will be
@@ -129,15 +129,17 @@ public abstract class InProgressSequence<CONTEXT>
     }
 
     /**
-     * The key under which this sequence is stored in {@link org.apache.cassandra.tcm.ClusterMetadata#inProgressSequences}
+     * The key under which this operation is stored in {@link org.apache.cassandra.tcm.ClusterMetadata#inProgressSequences}
      * In many cases, this is a NodeId, restricting each peer to be the object of at most one bootstrap, token movement,
      * decommission, etc at a time.
      * @return the key to identify this sequence
      */
     protected abstract InProgressSequences.SequenceKey sequenceKey();
 
+    public abstract Transformation.Kind nextStep();
+
     /**
-     * Provides the means to write this sequence's key as bytes. Used when serializing the map of current sequences
+     * Provides the means to write this sequence's key as bytes. Used when serializing the map of current operations
      * {@link org.apache.cassandra.tcm.ClusterMetadata#inProgressSequences} for snapshots and replication.
      * @return MetadataSerializer for the sequence's key
      */
@@ -165,7 +167,7 @@ public abstract class InProgressSequence<CONTEXT>
         return ClusterMetadataService.instance().commit(transformation,
                                                         (metadata) -> metadata,
                                                         (metadata, code, reason) -> {
-                                                            InProgressSequence<?> seq = metadata.inProgressSequences.get(sequenceKey);
+                                                            MultiStepOperation<?> seq = metadata.inProgressSequences.get(sequenceKey);
 
                                                             // Suceeded after retry
                                                             if ((atFinalStep() && seq == null) ||

@@ -348,7 +348,7 @@ public class ClusterMetadataService
         ClusterMetadataService.instance().commit(transformation,
                                                  (metadata_) -> metadata_,
                                                  (metadata_, code, reason) -> {
-                                                     InProgressSequence<?> sequence = metadata_.inProgressSequences.get(ReconfigureCMS.SequenceKey.instance);
+                                                     MultiStepOperation<?> sequence = metadata_.inProgressSequences.get(ReconfigureCMS.SequenceKey.instance);
                                                      if (sequence != null)
                                                          return null;
 

@@ -54,7 +54,7 @@ import org.apache.cassandra.schema.SchemaKeyspace;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.Epoch;
-import org.apache.cassandra.tcm.InProgressSequence;
+import org.apache.cassandra.tcm.MultiStepOperation;
 import org.apache.cassandra.tcm.Period;
 import org.apache.cassandra.tcm.extensions.ExtensionKey;
 import org.apache.cassandra.tcm.extensions.ExtensionValue;
@@ -113,7 +113,7 @@ public class GossipHelper
         if ((tokens == null || tokens.isEmpty()) && !NodeState.isBootstrap(nodeState))
             return null;
 
-        InProgressSequence<?> sequence;
+        MultiStepOperation<?> sequence;
         VersionedValue status = null;
         switch (nodeState)
         {
@@ -133,7 +133,7 @@ public class GossipHelper
                     logger.error(String.format("Cannot construct gossip state. Node is in %s state, but the sequence is %s", NodeState.BOOTSTRAPPING, sequence));
                     return null;
                 }
-                Collection<Token> bootstrapTokens = getTokensFromSequence(sequence);
+                Collection<Token> bootstrapTokens = getTokensFromOperation(sequence);
                 status = valueFactory.bootstrapping(bootstrapTokens);
                 break;
             case BOOT_REPLACING:
@@ -160,7 +160,7 @@ public class GossipHelper
                     logger.error(String.format("Cannot construct gossip state. Node is in %s state, but sequence the is %s", NodeState.MOVING, sequence));
                     return null;
                 }
-                Collection<Token> moveTokens = getTokensFromSequence(sequence);
+                Collection<Token> moveTokens = getTokensFromOperation(sequence);
                 if (!moveTokens.isEmpty())
                 {
                     Token token = ((Move) sequence).tokens.iterator().next();
@@ -175,12 +175,12 @@ public class GossipHelper
         return status;
     }
 
-    public static Collection<Token> getTokensFromSequence(NodeId nodeId, ClusterMetadata metadata)
+    public static Collection<Token> getTokensFromOperation(NodeId nodeId, ClusterMetadata metadata)
     {
-        return getTokensFromSequence(metadata.inProgressSequences.get(nodeId));
+        return getTokensFromOperation(metadata.inProgressSequences.get(nodeId));
     }
 
-    public static Collection<Token> getTokensFromSequence(InProgressSequence<?> sequence)
+    public static Collection<Token> getTokensFromOperation(MultiStepOperation<?> sequence)
     {
         if (null == sequence)
             return Collections.emptySet();

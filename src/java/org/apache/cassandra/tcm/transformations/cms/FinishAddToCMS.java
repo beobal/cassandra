@@ -22,7 +22,7 @@ import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.locator.Replica;
 import org.apache.cassandra.schema.ReplicationParams;
 import org.apache.cassandra.tcm.ClusterMetadata;
-import org.apache.cassandra.tcm.InProgressSequence;
+import org.apache.cassandra.tcm.MultiStepOperation;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.ownership.DataPlacement;
@@ -72,7 +72,7 @@ public class FinishAddToCMS extends BaseMembershipTransformation
     {
         InProgressSequences sequences = prev.inProgressSequences;
         NodeId targetNode = prev.directory.peerId(replica.endpoint());
-        InProgressSequence<?> sequence = sequences.get(targetNode);
+        MultiStepOperation<?> sequence = sequences.get(targetNode);
 
         if (sequence == null)
             return new Rejected(INVALID, "Can't execute finish join as cluster metadata does not hold join sequence for this node");

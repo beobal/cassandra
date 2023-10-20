@@ -165,7 +165,7 @@ public class BootWithMetadataTest
         return fromRead.epoch;
     }
 
-    private InProgressSequences addSequence(InProgressSequences sequences, InProgressSequence<?> seq) throws Transformation.RejectedTransformationException
+    private InProgressSequences addSequence(InProgressSequences sequences, MultiStepOperation<?> seq)
     {
         return sequences.with(seq.sequenceKey(), seq);
     }

@@ -66,6 +66,9 @@ public abstract class ApplyPlacementDeltas implements Transformation
         if (!prev.inProgressSequences.contains(nodeId()))
             return new Rejected(ExceptionCode.INVALID, "Can't find an in-progress sequence for this operation");
 
+        if (prev.inProgressSequences.get(nodeId()).nextStep() != kind())
+            return new Rejected(ExceptionCode.INVALID, String.format("Can't commit sequenced operations out of order. Expected %s, but got %s", prev.inProgressSequences.get(nodeId()).nextStep(), kind()));
+
         ClusterMetadata.Transformer next = prev.transformer();
 
         if (!delta.isEmpty())

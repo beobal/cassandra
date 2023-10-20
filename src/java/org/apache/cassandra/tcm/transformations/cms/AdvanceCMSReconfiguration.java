@@ -33,7 +33,7 @@ import org.apache.cassandra.locator.Replica;
 import org.apache.cassandra.schema.ReplicationParams;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.Epoch;
-import org.apache.cassandra.tcm.InProgressSequence;
+import org.apache.cassandra.tcm.MultiStepOperation;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.ownership.DataPlacement;
@@ -97,7 +97,7 @@ public class AdvanceCMSReconfiguration implements Transformation
     public Result execute(ClusterMetadata prev)
     {
         InProgressSequences sequences = prev.inProgressSequences;
-        InProgressSequence<?> sequence = sequences.get(ReconfigureCMS.SequenceKey.instance);
+        MultiStepOperation<?> sequence = sequences.get(ReconfigureCMS.SequenceKey.instance);
 
         if (sequence == null)
             return new Transformation.Rejected(INVALID, "Can't advance CMS Reconfiguration as it is not present in current metadata");

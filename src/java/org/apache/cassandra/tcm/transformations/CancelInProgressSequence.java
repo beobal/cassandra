@@ -23,7 +23,7 @@ import java.io.IOException;
 import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.cassandra.io.util.DataOutputPlus;
 import org.apache.cassandra.tcm.ClusterMetadata;
-import org.apache.cassandra.tcm.InProgressSequence;
+import org.apache.cassandra.tcm.MultiStepOperation;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.sequences.LockedRanges;
@@ -52,7 +52,7 @@ public class CancelInProgressSequence implements Transformation
     @Override
     public Result execute(ClusterMetadata prev)
     {
-        InProgressSequence<?> sequence = prev.inProgressSequences.get(nodeId);
+        MultiStepOperation<?> sequence = prev.inProgressSequences.get(nodeId);
         if (null == sequence)
             return new Rejected(INVALID, String.format("No in-progress sequence found for node id %s at epoch %s",
                                                        nodeId, prev.epoch));

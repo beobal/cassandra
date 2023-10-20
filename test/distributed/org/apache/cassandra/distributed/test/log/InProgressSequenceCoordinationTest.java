@@ -41,7 +41,7 @@ import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.Epoch;
-import org.apache.cassandra.tcm.InProgressSequence;
+import org.apache.cassandra.tcm.MultiStepOperation;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.sequences.AddToCMS;
 import org.apache.cassandra.tcm.sequences.InProgressSequences;
@@ -265,7 +265,7 @@ public class InProgressSequenceCoordinationTest extends FuzzTestBase
                                                                           LeaveStreams.Kind.UNBOOTSTRAP),
                                                          (metadata_) -> null,
                                                          (metadata_, code, reason) -> {
-                                                             InProgressSequence<?> sequence = metadata_.inProgressSequences.get(self);
+                                                             MultiStepOperation<?> sequence = metadata_.inProgressSequences.get(self);
                                                              // We might have discovered a sequence we ourselves committed but got no response for
                                                              if (sequence == null || sequence.kind() != InProgressSequences.Kind.LEAVE)
                                                              {
@@ -346,12 +346,12 @@ public class InProgressSequenceCoordinationTest extends FuzzTestBase
         return remoteCallable::call;
     }
 
-    public static class TestExecutionListener implements BiFunction<InProgressSequence<?>, SequenceState, SequenceState>
+    public static class TestExecutionListener implements BiFunction<MultiStepOperation<?>, SequenceState, SequenceState>
     {
         volatile boolean retry = true;
         volatile Condition expectationsMet = Condition.newOneTimeCondition();
         volatile Condition barrier;
-        volatile BiFunction<InProgressSequence<?>, SequenceState, SequenceState> previous;
+        volatile BiFunction<MultiStepOperation<?>, SequenceState, SequenceState> previous;
 
         SequenceState[] expectations;
         int index = 0;
@@ -372,7 +372,7 @@ public class InProgressSequenceCoordinationTest extends FuzzTestBase
         }
 
         @Override
-        public SequenceState apply(InProgressSequence<?> sequence, SequenceState state)
+        public SequenceState apply(MultiStepOperation<?> sequence, SequenceState state)
         {
             if (null == expectations || expectations.length == 0)
                 return state;

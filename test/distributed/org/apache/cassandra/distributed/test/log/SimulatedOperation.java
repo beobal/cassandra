@@ -35,7 +35,7 @@ import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
-import org.apache.cassandra.tcm.InProgressSequence;
+import org.apache.cassandra.tcm.MultiStepOperation;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.ownership.VersionedEndpoints;
 import org.apache.cassandra.tcm.sequences.BootstrapAndJoin;
@@ -192,7 +192,7 @@ public abstract class SimulatedOperation
     {
         ClusterMetadata metadata = sut.service.metadata();
         Node node = targetNode();
-        InProgressSequence<?> operation = metadata.inProgressSequences.get(node.nodeId());
+        MultiStepOperation<?> operation = metadata.inProgressSequences.get(node.nodeId());
         assert operation != null : "No in-progress sequence found for node " + node.nodeId();
         sut.service.commit(new CancelInProgressSequence(node.nodeId()));
 

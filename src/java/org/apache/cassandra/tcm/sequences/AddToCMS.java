@@ -33,9 +33,11 @@ import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.Epoch;
-import org.apache.cassandra.tcm.InProgressSequence;
+import org.apache.cassandra.tcm.MultiStepOperation;
+import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializer;
+import org.apache.cassandra.tcm.serialization.MetadataSerializer;
 import org.apache.cassandra.tcm.serialization.Version;
 import org.apache.cassandra.tcm.transformations.cms.FinishAddToCMS;
 import org.apache.cassandra.tcm.transformations.cms.StartAddToCMS;
@@ -60,7 +62,7 @@ import static org.apache.cassandra.tcm.sequences.SequenceState.continuable;
  * remove this superceded version asap.
  */
 @Deprecated
-public class AddToCMS extends InProgressSequence<Epoch>
+public class AddToCMS extends MultiStepOperation<Epoch>
 {
     private static final Logger logger = LoggerFactory.getLogger(AddToCMS.class);
     public static Serializer serializer = new Serializer();
@@ -76,11 +78,11 @@ public class AddToCMS extends InProgressSequence<Epoch>
 
     public static void initiate(NodeId nodeId, InetAddressAndPort addr)
     {
-        InProgressSequence<?> sequence = ClusterMetadataService.instance()
+        MultiStepOperation<?> sequence = ClusterMetadataService.instance()
                                                                .commit(new StartAddToCMS(addr),
                                                                        (metadata) -> metadata.inProgressSequences.get(nodeId),
                                                                        (metadata, code, reason) -> {
-                                                                           InProgressSequence<?> sequence_ = metadata.inProgressSequences.get(nodeId);
+                                                                           MultiStepOperation<?> sequence_ = metadata.inProgressSequences.get(nodeId);
 
                                                                            if (sequence_ == null)
                                                                            {
@@ -153,6 +155,17 @@ public class AddToCMS extends InProgressSequence<Epoch>
         return JOIN_OWNERSHIP_GROUP;
     }
 
+    public Transformation.Kind nextStep()
+    {
+        return Transformation.Kind.FINISH_ADD_TO_CMS;
+    }
+
+    @Override
+    public MetadataSerializer<? extends InProgressSequences.SequenceKey> keySerializer()
+    {
+        return NodeId.serializer;
+    }
+
     @Override
     public boolean atFinalStep()
     {
@@ -176,10 +189,10 @@ public class AddToCMS extends InProgressSequence<Epoch>
         return Objects.hash(latestModification, streamCandidates, finishJoin);
     }
 
-    public static class Serializer implements AsymmetricMetadataSerializer<InProgressSequence<?>, AddToCMS>
+    public static class Serializer implements AsymmetricMetadataSerializer<MultiStepOperation<?>, AddToCMS>
     {
         @Override
-        public void serialize(InProgressSequence<?> t, DataOutputPlus out, Version version) throws IOException
+        public void serialize(MultiStepOperation<?> t, DataOutputPlus out, Version version) throws IOException
         {
             AddToCMS seq = (AddToCMS) t;
             NodeId.serializer.serialize(seq.toAdd,out, version);
@@ -205,7 +218,7 @@ public class AddToCMS extends InProgressSequence<Epoch>
         }
 
         @Override
-        public long serializedSize(InProgressSequence<?> t, Version version)
+        public long serializedSize(MultiStepOperation<?> t, Version version)
         {
             AddToCMS seq = (AddToCMS) t;
             long size = NodeId.serializer.serializedSize(seq.toAdd, version);

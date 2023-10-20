@@ -53,7 +53,7 @@ import org.apache.cassandra.tcm.AtomicLongBackedProcessor;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.Epoch;
-import org.apache.cassandra.tcm.InProgressSequence;
+import org.apache.cassandra.tcm.MultiStepOperation;
 import org.apache.cassandra.tcm.membership.Location;
 import org.apache.cassandra.tcm.membership.NodeAddresses;
 import org.apache.cassandra.tcm.membership.NodeVersion;
@@ -153,7 +153,7 @@ public class ProgressBarrierTest extends CMSTestBase
                         public <REQ, RSP> Future<Message<RSP>> sendWithResult(Message<REQ> message, InetAddressAndPort to) { return null; }
                         public <V> void respond(V response, Message<?> message) {}
                     };
-                    ProgressBarrier progressBarrier = ((InProgressSequence<Epoch>)metadata.inProgressSequences.get(node.nodeId()))
+                    ProgressBarrier progressBarrier = ((MultiStepOperation<Epoch>)metadata.inProgressSequences.get(node.nodeId()))
                                                       .advance(metadata.epoch)
                                                       .barrier()
                                                       .withMessagingService(delivery);
@@ -312,7 +312,7 @@ public class ProgressBarrierTest extends CMSTestBase
             };
 
             ClusterMetadata metadata = ClusterMetadata.current();
-            ProgressBarrier progressBarrier = ((InProgressSequence<Epoch>) metadata.inProgressSequences.get(node.nodeId()))
+            ProgressBarrier progressBarrier = ((MultiStepOperation<Epoch>) metadata.inProgressSequences.get(node.nodeId()))
                                               .advance(metadata.epoch)
                                               .barrier()
                                               .withMessagingService(delivery);

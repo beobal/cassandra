@@ -31,7 +31,7 @@ import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.locator.Replica;
 import org.apache.cassandra.schema.ReplicationParams;
 import org.apache.cassandra.tcm.ClusterMetadata;
-import org.apache.cassandra.tcm.InProgressSequence;
+import org.apache.cassandra.tcm.MultiStepOperation;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.ownership.DataPlacement;
@@ -82,7 +82,7 @@ public class RemoveFromCMS extends BaseMembershipTransformation
             return new Transformation.Rejected(INVALID, String.format("%s is not currently a CMS member, cannot remove it", endpoint));
 
         NodeId nodeId = prev.directory.peerId(endpoint);
-        InProgressSequence<?> sequence = sequences.get(nodeId);
+        MultiStepOperation<?> sequence = sequences.get(nodeId);
         // This is theoretically permissible, but feels unsafe
         if (sequence != null)
             return new Transformation.Rejected(INVALID, String.format("Can't remove %s from CMS as there are ongoing range movements on it", endpoint));

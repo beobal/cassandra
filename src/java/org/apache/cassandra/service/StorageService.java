@@ -182,7 +182,7 @@ import org.apache.cassandra.streaming.StreamResultFuture;
 import org.apache.cassandra.streaming.StreamState;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
-import org.apache.cassandra.tcm.InProgressSequence;
+import org.apache.cassandra.tcm.MultiStepOperation;
 import org.apache.cassandra.tcm.compatibility.GossipHelper;
 import org.apache.cassandra.tcm.compatibility.TokenRingUtils;
 import org.apache.cassandra.tcm.membership.Directory;
@@ -986,7 +986,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     {
         ClusterMetadata metadata = ClusterMetadata.current();
         NodeId id = metadata.myNodeId();
-        InProgressSequence<?> sequence = metadata.inProgressSequences.get(id);
+        MultiStepOperation<?> sequence = metadata.inProgressSequences.get(id);
 
         if (sequence == null && metadata.directory.peerState(id) == JOINED)
             return true;
@@ -1000,7 +1000,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     {
         ClusterMetadata metadata = ClusterMetadata.current();
         NodeId id = metadata.myNodeId();
-        InProgressSequence<?> sequence = metadata.inProgressSequences.get(id);
+        MultiStepOperation<?> sequence = metadata.inProgressSequences.get(id);
 
         if (!(sequence instanceof BootstrapAndJoin) && !(sequence instanceof BootstrapAndReplace))
             throw new IllegalStateException("Can not resume bootstrap as join sequence has not been started");
@@ -1017,7 +1017,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     {
         ClusterMetadata metadata = ClusterMetadata.current();
         NodeId id = metadata.myNodeId();
-        InProgressSequence<?> sequence = metadata.inProgressSequences.get(id);
+        MultiStepOperation<?> sequence = metadata.inProgressSequences.get(id);
 
         // Double check the conditions we verified in readyToFinishJoiningRing
         if (sequence.kind() != InProgressSequences.Kind.JOIN && sequence.kind() != InProgressSequences.Kind.REPLACE)
@@ -1528,7 +1528,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             case BOOTSTRAPPING:
                 if (metadata.inProgressSequences.contains(nodeId))
                 {
-                    InProgressSequence<?> seq = metadata.inProgressSequences.get(nodeId);
+                    MultiStepOperation<?> seq = metadata.inProgressSequences.get(nodeId);
                     if (seq.kind() != InProgressSequences.Kind.JOIN)
                         throw new RuntimeException("Can't abort bootstrap for " + nodeId + " since it is not bootstrapping");
                     ClusterMetadataService.instance().commit(new CancelInProgressSequence(nodeId));
@@ -1809,8 +1809,8 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         {
             if (NodeState.isPreJoin(metadata.directory.peerState(nodeId)))
             {
-                InProgressSequence<?> seq = metadata.inProgressSequences.get(nodeId);
-                GossipHelper.getTokensFromSequence(seq).forEach(t -> mapNodeId.put(t, nodeId));
+                MultiStepOperation<?> seq = metadata.inProgressSequences.get(nodeId);
+                GossipHelper.getTokensFromOperation(seq).forEach(t -> mapNodeId.put(t, nodeId));
             }
         }
         // in order to preserve tokens in ascending order, we use LinkedHashMap here
@@ -3571,7 +3571,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             NodeState state = stateEntry.getValue();
             if (state == NodeState.LEAVING)
             {
-                InProgressSequence<?> seq = metadata.inProgressSequences.get(nodeId);
+                MultiStepOperation<?> seq = metadata.inProgressSequences.get(nodeId);
                 if (seq != null && seq.kind() == InProgressSequences.Kind.REMOVE)
                 {
                     sb.append("Removing node ").append(nodeId).append(" (").append(metadata.directory.endpoint(nodeId)).append(')').append(": ").append(seq.status());

@@ -339,7 +339,7 @@ import static org.apache.cassandra.utils.FBUtilities.getBroadcastAddressAndPort;
                                                              if (ClusterMetadata.current().directory.peerState(self) == JOINED)
                                                                  return null;
 
-                                                             InProgressSequence<?> sequence = metadata_.inProgressSequences.get(self);
+                                                             MultiStepOperation<?> sequence = metadata_.inProgressSequences.get(self);
                                                              // We might have discovered a startup sequence we ourselves committed but got no response for
                                                              if (sequence == null || !InProgressSequences.STARTUP_SEQUENCE_KINDS.contains(sequence.kind()))
                                                              {

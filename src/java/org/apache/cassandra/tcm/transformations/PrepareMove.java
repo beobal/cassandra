@@ -34,7 +34,7 @@ import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.cassandra.io.util.DataOutputPlus;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
-import org.apache.cassandra.tcm.InProgressSequence;
+import org.apache.cassandra.tcm.MultiStepOperation;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.membership.NodeState;
@@ -81,7 +81,7 @@ public class PrepareMove implements Transformation
                                                              streamData),
                                                  (metadata) -> metadata,
                                                  (metadata_, code, reason) -> {
-                                                     InProgressSequence<?> sequence = metadata_.inProgressSequences.get(nodeId);
+                                                     MultiStepOperation<?> sequence = metadata_.inProgressSequences.get(nodeId);
                                                      // We might have discovered a startup sequence we ourselves committed but got no response for
                                                      if (sequence == null || sequence.kind() != InProgressSequences.Kind.MOVE)
                                                      {
