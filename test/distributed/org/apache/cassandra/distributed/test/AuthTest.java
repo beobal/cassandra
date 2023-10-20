@@ -27,6 +27,7 @@ import org.junit.Test;
 import com.datastax.driver.core.PlainTextAuthProvider;
 import com.datastax.driver.core.Session;
 import com.datastax.driver.core.policies.DCAwareRoundRobinPolicy;
+import org.apache.cassandra.auth.CassandraRoleManager;
 import org.apache.cassandra.distributed.Cluster;
 import org.apache.cassandra.distributed.api.ConsistencyLevel;
 import org.apache.cassandra.distributed.api.ICoordinator;
@@ -42,7 +43,6 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.apache.cassandra.distributed.api.Feature.GOSSIP;
 import static org.apache.cassandra.distributed.api.Feature.NATIVE_PROTOCOL;
 import static org.apache.cassandra.distributed.api.Feature.NETWORK;
-import static org.apache.cassandra.distributed.util.Auth.waitForExistingRoles;
 import static org.awaitility.Awaitility.await;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -79,7 +79,8 @@ public class AuthTest extends TestBaseImpl
                                         .withNodes(1)
                                         .withTokenSupplier(TokenSupplier.evenlyDistributedTokens(2, 1))
                                         .withConfig(config -> config.with(NETWORK, GOSSIP, NATIVE_PROTOCOL)
-                                                                    .set("authenticator", "PasswordAuthenticator"))
+                                                                    .set("authenticator", "PasswordAuthenticator")
+                                                                    .set("credentials_validity", "2s")) // revert to OSS default
                                         .start())
         {
             waitForExistingRoles(cluster.get(1));
@@ -105,6 +106,11 @@ public class AuthTest extends TestBaseImpl
                                  .drop();
 
             secondNode.startup();
+
+            // turn off filters
+            to.off();
+            from.off();
+
             try
             {
                 waitForExistingRoles(secondNode);
@@ -113,9 +119,6 @@ public class AuthTest extends TestBaseImpl
             {
                 assertTrue(t.getMessage().contains("ReadTimeoutException"));
             }
-            // turn off filters
-            to.off();
-            from.off();
 
             // Node has started with auto_bootstrap=false, and it just so happens that this key belongs to node2, so we get no results
             assertEquals(0L,
@@ -156,6 +159,14 @@ public class AuthTest extends TestBaseImpl
         config.set("seed_provider", new IInstanceConfig.ParameterizedClass(SimpleSeedProvider.class.getName(),
                                                                            Collections.singletonMap("seeds", "127.0.0.1, 127.0.0.2")));
         return cluster.bootstrap(config);
+    }
+
+    private void waitForExistingRoles(IInvokableInstance instance)
+    {
+        await().pollDelay(1, SECONDS)
+               .pollInterval(1, SECONDS)
+               .atMost(30, SECONDS)
+               .until(() -> instance.callOnInstance(CassandraRoleManager::hasExistingRoles));
     }
 
     private long getPasswordWritetime(ICoordinator coordinator)
