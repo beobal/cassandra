@@ -33,6 +33,7 @@ import org.apache.cassandra.tcm.serialization.Version;
 
 public class NodeId implements Comparable<NodeId>, MultiStepOperation.SequenceKey
 {
+    private final static long NODE_ID_UUID_MAGIC = 7861390860069061072L;
     public static final Serializer serializer = new Serializer();
 
     private final int id;
@@ -53,19 +54,23 @@ public class NodeId implements Comparable<NodeId>, MultiStepOperation.SequenceKe
     {
         if (!isValidNodeId(uuid))
             throw new UnsupportedOperationException("Not a node id: " + uuid); // see RemoveTest#testBadHostId
-        return new NodeId(Ints.checkedCast(uuid.getLeastSignificantBits()));
+
+        long id = 0x0FFFFFFFFFFFFFFFL & uuid.getLeastSignificantBits();
+        return new NodeId(Ints.checkedCast(id));
     }
 
     public static boolean isValidNodeId(UUID uuid)
     {
-        return uuid.getMostSignificantBits() == 0 &&
-               uuid.getLeastSignificantBits() < Integer.MAX_VALUE;
+        long id = 0x0FFFFFFFFFFFFFFFL & uuid.getLeastSignificantBits();
+        return (uuid.getMostSignificantBits() == NODE_ID_UUID_MAGIC && id < Integer.MAX_VALUE) ||
+                (uuid.getMostSignificantBits() == 0 && uuid.getLeastSignificantBits() < Integer.MAX_VALUE); // old check, for existing cluster upgrades, no need upstream
     }
 
     @Deprecated
     public UUID toUUID()
     {
-        return new UUID(0, id);
+        long lsb = 0xC000000000000000L | id;
+        return new UUID(NODE_ID_UUID_MAGIC, lsb);
     }
 
     public int id()
