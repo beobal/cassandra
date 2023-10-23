@@ -27,6 +27,7 @@ import java.util.UUID;
 import org.junit.Assert;
 import org.junit.Test;
 
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.cql3.CQLTester;
 import org.apache.cassandra.cql3.Duration;
 import org.apache.cassandra.db.Mutation;
@@ -43,6 +44,7 @@ import org.apache.cassandra.schema.MemtableParams;
 import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.SchemaConstants;
 import org.apache.cassandra.schema.SchemaKeyspaceTables;
+import org.apache.cassandra.schema.TableId;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.membership.Location;
@@ -720,6 +722,27 @@ public class CreateTest extends CQLTester
         assertThrowsConfigurationException("Unknown compression options unknownOption",
                                            "CREATE TABLE %s (a text, b int, c int, primary key (a, b))"
                                             + " WITH compression = { 'class' : 'SnappyCompressor', 'unknownOption' : 32 };");
+    }
+
+    @Test
+    public void testUsingDeterministicTableID()
+    {
+        DatabaseDescriptor.useDeterministicTableID(true);
+
+        createTable("CREATE TABLE %s (id text PRIMARY KEY);");
+        TableMetadata tmd = currentTableMetadata();
+        assertEquals(TableId.unsafeDeterministic(tmd.keyspace, tmd.name), tmd.id);
+
+    }
+
+    @Test
+    public void testNotUsingDeterministicTableIDWhenDisabled()
+    {
+        DatabaseDescriptor.useDeterministicTableID(false);
+
+        createTable("CREATE TABLE %s (id text PRIMARY KEY);");
+        TableMetadata tmd = currentTableMetadata();
+        assertFalse(TableId.unsafeDeterministic(tmd.keyspace, tmd.name).equals(tmd.id));
     }
 
     private void assertThrowsConfigurationException(String errorMsg, String createStmt)

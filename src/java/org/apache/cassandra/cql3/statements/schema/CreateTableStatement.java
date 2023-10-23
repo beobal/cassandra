@@ -34,6 +34,7 @@ import org.apache.cassandra.audit.AuditLogEntryType;
 import org.apache.cassandra.auth.DataResource;
 import org.apache.cassandra.auth.IResource;
 import org.apache.cassandra.auth.Permission;
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.cql3.*;
 import org.apache.cassandra.cql3.functions.masking.ColumnMask;
 import org.apache.cassandra.db.Keyspace;
@@ -110,7 +111,10 @@ public final class CreateTableStatement extends AlterSchemaStatement
             throw new AlreadyExistsException(keyspaceName, tableName);
         }
 
-        TableMetadata table = builder(keyspace.types).epoch(metadata.nextEpoch()).build();
+        TableMetadata.Builder builder = builder(keyspace.types).epoch(metadata.nextEpoch());
+        if (!builder.hasId() && !DatabaseDescriptor.useDeterministicTableID())
+            builder.id(TableId.get(metadata));
+        TableMetadata table = builder.build();
         table.validate();
 
         if (keyspace.replicationStrategy.hasTransientReplicas()

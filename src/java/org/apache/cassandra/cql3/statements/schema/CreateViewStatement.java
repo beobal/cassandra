@@ -327,6 +327,8 @@ public final class CreateViewStatement extends AlterSchemaStatement
 
         if (attrs.hasProperty(TableAttributes.ID))
             builder.id(attrs.getId());
+        else if (!builder.hasId() && !DatabaseDescriptor.useDeterministicTableID())
+            builder.id(TableId.get(metadata));
 
         builder.params(attrs.asNewTableParams())
                .kind(TableMetadata.Kind.VIEW);

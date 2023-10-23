@@ -25,6 +25,7 @@ import java.util.UUID;
 
 import javax.annotation.Nullable;
 
+import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.commons.lang3.ArrayUtils;
 
 import org.apache.cassandra.utils.ByteBufferUtil;
@@ -41,6 +42,7 @@ import static org.apache.cassandra.utils.TimeUUID.Generator.nextTimeUUID;
  */
 public class TableId implements Comparable<TableId>
 {
+    public static final long MAGIC = 1956074401491665062L;
     // TODO: should this be a TimeUUID?
     private final UUID id;
 
@@ -65,6 +67,23 @@ public class TableId implements Comparable<TableId>
         return new TableId(UUID.fromString(idString));
     }
 
+    public static TableId get(ClusterMetadata metadata)
+    {
+        int i = 0;
+        while (true)
+        {
+            TableId tableId = TableId.fromLong(metadata.epoch.getEpoch() + i);
+            if (!tableIdExists(metadata, tableId))
+                return tableId;
+            i++;
+        }
+    }
+
+    private static boolean tableIdExists(ClusterMetadata metadata, TableId tableId)
+    {
+        return metadata.schema.getKeyspaces().stream().anyMatch(ks -> ks.tables.containsTable(tableId));
+    }
+
     @Nullable
     public static Pair<String, TableId> tableNameAndIdFromFilename(String filename)
     {
@@ -84,6 +103,11 @@ public class TableId implements Comparable<TableId>
         long msb = bytes.getLong(0);
         long lsb = bytes.getLong(8);
         return fromUUID(new UUID(msb, lsb));
+    }
+
+    private static TableId fromLong(long start)
+    {
+        return TableId.fromUUID(new UUID(MAGIC, start));
     }
 
     /**

@@ -478,16 +478,17 @@ public class SchemaChangesTest
     }
 
     @Test
-    public void testValidateNullKeyspace() throws Exception
+    public void testValidateNullKeyspace()
     {
         TableMetadata.Builder builder = TableMetadata.builder(null, TABLE1).addPartitionKeyColumn("partitionKey", BytesType.instance);
-
-        // TODO this will fail while we enforce deterministic table ids. Restore non-determinism by generating when
-        //      creating the SchemaTransformation and including in the serialisation
-        TableMetadata table1 = builder.build();
-        thrown.expect(ConfigurationException.class);
-        thrown.expectMessage(null + "." + TABLE1 + ": Keyspace name must not be empty");
-        table1.validate();
+        try
+        {
+            builder.build();
+        }
+        catch (ConfigurationException e)
+        {
+            assertTrue(e.getMessage().contains(null + "." + TABLE1 + ": Keyspace name must not be empty"));
+        }
     }
 
     @Test

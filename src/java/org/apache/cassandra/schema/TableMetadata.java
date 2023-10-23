@@ -820,11 +820,20 @@ public class TableMetadata implements SchemaElement
 
         public TableMetadata build()
         {
+            if (keyspace == null)
+                throw new ConfigurationException(keyspace + '.' + name + ": Keyspace name must not be empty");
             if (partitioner == null)
                 partitioner = DatabaseDescriptor.getPartitioner();
 
             if (id == null)
-                id = TableId.unsafeDeterministic(keyspace, name);
+            {
+                // make sure vtables use deteriminstic ids so they can be referenced in calls cross-nodes
+                // see CASSANDRA-17295
+                if (DatabaseDescriptor.useDeterministicTableID() || kind == Kind.VIRTUAL)
+                    id = TableId.unsafeDeterministic(keyspace, name);
+                else
+                    id = TableId.generate();
+            }
 
             if (Flag.isCQLTable(flags))
                 return new TableMetadata(this);
@@ -836,6 +845,11 @@ public class TableMetadata implements SchemaElement
         {
             id = val;
             return this;
+        }
+
+        public boolean hasId()
+        {
+            return id != null;
         }
 
         public Builder epoch(Epoch val)
