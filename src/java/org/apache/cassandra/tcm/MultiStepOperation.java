@@ -100,6 +100,40 @@ public abstract class MultiStepOperation<CONTEXT>
     public abstract Kind kind();
 
     /**
+     * The key under which this operation is stored in {@link org.apache.cassandra.tcm.ClusterMetadata#inProgressSequences}
+     * In many cases, this is a NodeId, restricting each peer to be the object of at most one bootstrap, token movement,
+     * decommission, etc at a time.
+     * @return the key to identify this sequence
+     */
+    protected abstract SequenceKey sequenceKey();
+
+    /**
+     * Provides the means to write this sequence's key as bytes. Used when serializing the map of current operations
+     * {@link org.apache.cassandra.tcm.ClusterMetadata#inProgressSequences} for snapshots and replication.
+     * @return MetadataSerializer for the sequence's key
+     */
+    public abstract MetadataSerializer<? extends SequenceKey> keySerializer();
+
+    /**
+     * Returns the {@link Transformation.Kind} of the next step due to be executed in the sequence. Used when executing
+     * a {@link Transformation} which is part of a sequence (specifically, subclasses of
+     * {@link org.apache.cassandra.tcm.transformations.ApplyPlacementDeltas}) to validate that it is being applied at
+     * the correct point (i.e. that the type of the transform matches the expected next)
+     * matches the If all steps
+     * have already been executed, throws {@code IllegalStateException}
+     * @return the kind of the next step to be executed.
+     */
+    public abstract Transformation.Kind nextStep();
+
+    /**
+     * Whether or not the next step is the last in the operation, this is useful to know when handling commit failure
+     * during a step (see {@link #commit(Transformation)}. This is also used to indicate if node which is started in
+     * write survey mode or with -Djoin_ring=false is in a suitable state to fully join the cluster.
+     * @return true if the next step is the last in the operation, false otherwise
+     */
+    public abstract boolean atFinalStep();
+
+    /**
      * Executes the next step in the operation. This should usually include a Transformation to mutate ClusterMetadata
      * state, and _may_ also involve additional non-metadata operations such as streaming of SSTables to or from peers
      * (i.e. in the sequences implementing bootstrap, decommission, etc).
@@ -142,14 +176,6 @@ public abstract class MultiStepOperation<CONTEXT>
     public abstract ProgressBarrier barrier();
 
     /**
-     * Whether or not the next step is the last in the operation, this is useful to know when handling commit failure
-     * during a step (see {@link #commit(Transformation)}. This is also used to indicate if node which is started in
-     * write survey mode or with -Djoin_ring=false is in a suitable state to fully join the cluster.
-     * @return true if the next step is the last in the operation, false otherwise
-     */
-    public abstract boolean atFinalStep();
-
-    /**
      * Reverts any metadata changes that this operation has made up to now. Used to cancel in flight operations such as
      * bootstrapping. This is performed by the CancelInProgressSequence transformation, which is also responsible for
      * removing the sequence itself from the map in ClusterMetadata.
@@ -161,23 +187,6 @@ public abstract class MultiStepOperation<CONTEXT>
     {
         throw new UnsupportedOperationException();
     }
-
-    /**
-     * The key under which this operation is stored in {@link org.apache.cassandra.tcm.ClusterMetadata#inProgressSequences}
-     * In many cases, this is a NodeId, restricting each peer to be the object of at most one bootstrap, token movement,
-     * decommission, etc at a time.
-     * @return the key to identify this sequence
-     */
-    protected abstract SequenceKey sequenceKey();
-
-    public abstract Transformation.Kind nextStep();
-
-    /**
-     * Provides the means to write this sequence's key as bytes. Used when serializing the map of current operations
-     * {@link org.apache.cassandra.tcm.ClusterMetadata#inProgressSequences} for snapshots and replication.
-     * @return MetadataSerializer for the sequence's key
-     */
-    public abstract MetadataSerializer<? extends SequenceKey> keySerializer();
 
     public String status()
     {

@@ -116,9 +116,32 @@ public class AddToCMS extends MultiStepOperation<Epoch>
     }
 
     @Override
-    public ProgressBarrier barrier()
+    public Kind kind()
     {
-        return ProgressBarrier.immediate();
+        return JOIN_OWNERSHIP_GROUP;
+    }
+
+    @Override
+    protected SequenceKey sequenceKey()
+    {
+        return toAdd;
+    }
+
+    @Override
+    public MetadataSerializer<? extends SequenceKey> keySerializer()
+    {
+        return NodeId.serializer;
+    }
+
+    public Transformation.Kind nextStep()
+    {
+        return Transformation.Kind.FINISH_ADD_TO_CMS;
+    }
+
+    @Override
+    public boolean atFinalStep()
+    {
+        return true;
     }
 
     @Override
@@ -144,32 +167,9 @@ public class AddToCMS extends MultiStepOperation<Epoch>
     }
 
     @Override
-    protected SequenceKey sequenceKey()
+    public ProgressBarrier barrier()
     {
-        return toAdd;
-    }
-
-    @Override
-    public MetadataSerializer<? extends SequenceKey> keySerializer()
-    {
-        return NodeId.serializer;
-    }
-
-    @Override
-    public Kind kind()
-    {
-        return JOIN_OWNERSHIP_GROUP;
-    }
-
-    public Transformation.Kind nextStep()
-    {
-        return Transformation.Kind.FINISH_ADD_TO_CMS;
-    }
-
-    @Override
-    public boolean atFinalStep()
-    {
-        return true;
+        return ProgressBarrier.immediate();
     }
 
     @Override
