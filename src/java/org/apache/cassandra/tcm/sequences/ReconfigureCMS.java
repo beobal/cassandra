@@ -108,38 +108,21 @@ public class ReconfigureCMS extends MultiStepOperation<AdvanceCMSReconfiguration
         super(next.sequenceIndex, next.latestModification);
         this.next = next;
     }
-
-    @Override
-    public ReconfigureCMS advance(AdvanceCMSReconfiguration next)
-    {
-        return new ReconfigureCMS(next);
-    }
-
-    @Override
-    public ProgressBarrier barrier()
-    {
-        ClusterMetadata metadata = ClusterMetadata.current();
-        return new ProgressBarrier(latestModification,
-                                   metadata.directory.location(metadata.myNodeId()),
-                                   EntireRange.affectedRanges(metadata));
-    }
-
     @Override
     public Kind kind()
     {
         return MultiStepOperation.Kind.RECONFIGURE_CMS;
     }
-
-    @Override
-    public boolean atFinalStep()
-    {
-        return next.isLast();
-    }
-
     @Override
     protected SequenceKey sequenceKey()
     {
         return SequenceKey.instance;
+    }
+
+    @Override
+    public MetadataSerializer<? extends MultiStepOperation.SequenceKey> keySerializer()
+    {
+        return SequenceKey.serializer;
     }
 
     @Override public Transformation.Kind nextStep()
@@ -147,11 +130,10 @@ public class ReconfigureCMS extends MultiStepOperation<AdvanceCMSReconfiguration
         return next.kind();
     }
 
-
     @Override
-    public MetadataSerializer<? extends MultiStepOperation.SequenceKey> keySerializer()
+    public boolean atFinalStep()
     {
-        return SequenceKey.serializer;
+        return next.isLast();
     }
 
     @Override
@@ -184,6 +166,21 @@ public class ReconfigureCMS extends MultiStepOperation<AdvanceCMSReconfiguration
             logger.error("Could not finish adding the node to the Cluster Metadata Service", t);
             return SequenceState.blocked();
         }
+    }
+
+    @Override
+    public ReconfigureCMS advance(AdvanceCMSReconfiguration next)
+    {
+        return new ReconfigureCMS(next);
+    }
+
+    @Override
+    public ProgressBarrier barrier()
+    {
+        ClusterMetadata metadata = ClusterMetadata.current();
+        return new ProgressBarrier(latestModification,
+                                   metadata.directory.location(metadata.myNodeId()),
+                                   EntireRange.affectedRanges(metadata));
     }
 
     public static void maybeReconfigureCMS(ClusterMetadata metadata, InetAddressAndPort toRemove)
@@ -236,6 +233,7 @@ public class ReconfigureCMS extends MultiStepOperation<AdvanceCMSReconfiguration
             DataMovements.instance.unregisterMovements(RESTORE_REPLICA_COUNT, operationId);
         }
     }
+
     public static void streamRanges(Replica replicaForStreaming, Set<InetAddressAndPort> streamCandidates) throws ExecutionException, InterruptedException
     {
         InetAddressAndPort endpoint = replicaForStreaming.endpoint();
@@ -311,6 +309,7 @@ public class ReconfigureCMS extends MultiStepOperation<AdvanceCMSReconfiguration
         }
         logger.error("Added node as a CMS, but failed to repair paxos topology after this operation.");
     }
+
     public static class ActiveTransition
     {
         public final NodeId nodeId;

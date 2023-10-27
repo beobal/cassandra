@@ -151,21 +151,6 @@ public class Move extends MultiStepOperation<Epoch>
     }
 
     @Override
-    public Move advance(Epoch waitForWatermark)
-    {
-        return new Move(this, waitForWatermark);
-    }
-
-    @Override
-    public ProgressBarrier barrier()
-    {
-        if (next == START_MOVE)
-            return ProgressBarrier.immediate();
-        ClusterMetadata metadata = ClusterMetadata.current();
-        return new ProgressBarrier(latestModification, metadata.directory.location(startMove.nodeId()), metadata.lockedRanges.locked.get(lockKey));
-    }
-
-    @Override
     public Kind kind()
     {
         return MOVE;
@@ -177,15 +162,15 @@ public class Move extends MultiStepOperation<Epoch>
         return startMove.nodeId();
     }
 
-    @Override public Transformation.Kind nextStep()
-    {
-        return indexToNext(idx);
-    }
-
     @Override
     public MetadataSerializer<? extends SequenceKey> keySerializer()
     {
         return NodeId.serializer;
+    }
+
+    @Override public Transformation.Kind nextStep()
+    {
+        return indexToNext(idx);
     }
 
     @Override
@@ -295,6 +280,21 @@ public class Move extends MultiStepOperation<Epoch>
         }
 
         return continuable();
+    }
+
+    @Override
+    public Move advance(Epoch waitForWatermark)
+    {
+        return new Move(this, waitForWatermark);
+    }
+
+    @Override
+    public ProgressBarrier barrier()
+    {
+        if (next == START_MOVE)
+            return ProgressBarrier.immediate();
+        ClusterMetadata metadata = ClusterMetadata.current();
+        return new ProgressBarrier(latestModification, metadata.directory.location(startMove.nodeId()), metadata.lockedRanges.locked.get(lockKey));
     }
 
     @Override

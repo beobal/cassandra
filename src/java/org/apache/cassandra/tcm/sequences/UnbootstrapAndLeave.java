@@ -116,24 +116,6 @@ public class UnbootstrapAndLeave extends MultiStepOperation<Epoch>
     }
 
     @Override
-    public UnbootstrapAndLeave advance(Epoch waitUntilAcknowledged)
-    {
-        return new UnbootstrapAndLeave(this, waitUntilAcknowledged);
-    }
-
-    @Override
-    public ProgressBarrier barrier()
-    {
-        ClusterMetadata metadata = ClusterMetadata.current();
-        LockedRanges.AffectedRanges affectedRanges = metadata.lockedRanges.locked.get(lockKey);
-        Location location = metadata.directory.location(startLeave.nodeId());
-        if (kind() == MultiStepOperation.Kind.REMOVE)
-            return new ProgressBarrier(latestModification, location, affectedRanges, (e) -> !e.equals(metadata.directory.endpoint(startLeave.nodeId())));
-        else
-            return new ProgressBarrier(latestModification, location, affectedRanges);
-    }
-
-    @Override
     public Kind kind()
     {
         switch (streams.kind())
@@ -154,15 +136,15 @@ public class UnbootstrapAndLeave extends MultiStepOperation<Epoch>
     }
 
     @Override
-    public Transformation.Kind nextStep()
-    {
-        return indexToNext(idx);
-    }
-
-    @Override
     public MetadataSerializer<? extends SequenceKey> keySerializer()
     {
         return NodeId.serializer;
+    }
+
+    @Override
+    public Transformation.Kind nextStep()
+    {
+        return indexToNext(idx);
     }
 
     @Override
@@ -227,6 +209,24 @@ public class UnbootstrapAndLeave extends MultiStepOperation<Epoch>
         }
 
         return continuable();
+    }
+
+    @Override
+    public UnbootstrapAndLeave advance(Epoch waitUntilAcknowledged)
+    {
+        return new UnbootstrapAndLeave(this, waitUntilAcknowledged);
+    }
+
+    @Override
+    public ProgressBarrier barrier()
+    {
+        ClusterMetadata metadata = ClusterMetadata.current();
+        LockedRanges.AffectedRanges affectedRanges = metadata.lockedRanges.locked.get(lockKey);
+        Location location = metadata.directory.location(startLeave.nodeId());
+        if (kind() == MultiStepOperation.Kind.REMOVE)
+            return new ProgressBarrier(latestModification, location, affectedRanges, (e) -> !e.equals(metadata.directory.endpoint(startLeave.nodeId())));
+        else
+            return new ProgressBarrier(latestModification, location, affectedRanges);
     }
 
     @Override

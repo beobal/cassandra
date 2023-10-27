@@ -144,22 +144,6 @@ public class BootstrapAndJoin extends MultiStepOperation<Epoch>
     }
 
     @Override
-    public BootstrapAndJoin advance(Epoch waitForWatermark)
-    {
-        return new BootstrapAndJoin(this, waitForWatermark);
-    }
-
-    @Override
-    public ProgressBarrier barrier()
-    {
-        // There is no requirement to wait for peers to sync before starting the sequence
-        if (next == START_JOIN)
-            return ProgressBarrier.immediate();
-        ClusterMetadata metadata = ClusterMetadata.current();
-        return new ProgressBarrier(latestModification, metadata.directory.location(startJoin.nodeId()), metadata.lockedRanges.locked.get(lockKey));
-    }
-
-    @Override
     public Kind kind()
     {
         return JOIN;
@@ -172,15 +156,15 @@ public class BootstrapAndJoin extends MultiStepOperation<Epoch>
     }
 
     @Override
-    public Transformation.Kind nextStep()
-    {
-        return indexToNext(idx);
-    }
-
-    @Override
     public MetadataSerializer<? extends SequenceKey> keySerializer()
     {
         return NodeId.serializer;
+    }
+
+    @Override
+    public Transformation.Kind nextStep()
+    {
+        return indexToNext(idx);
     }
 
     @Override
@@ -281,6 +265,22 @@ public class BootstrapAndJoin extends MultiStepOperation<Epoch>
                 return error(new IllegalStateException("Can't proceed with join from " + next));
         }
         return continuable();
+    }
+
+    @Override
+    public BootstrapAndJoin advance(Epoch waitForWatermark)
+    {
+        return new BootstrapAndJoin(this, waitForWatermark);
+    }
+
+    @Override
+    public ProgressBarrier barrier()
+    {
+        // There is no requirement to wait for peers to sync before starting the sequence
+        if (next == START_JOIN)
+            return ProgressBarrier.immediate();
+        ClusterMetadata metadata = ClusterMetadata.current();
+        return new ProgressBarrier(latestModification, metadata.directory.location(startJoin.nodeId()), metadata.lockedRanges.locked.get(lockKey));
     }
 
     @Override

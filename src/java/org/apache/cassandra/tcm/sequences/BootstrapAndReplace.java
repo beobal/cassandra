@@ -146,23 +146,6 @@ public class BootstrapAndReplace extends MultiStepOperation<Epoch>
     }
 
     @Override
-    public BootstrapAndReplace advance(Epoch waitFor)
-    {
-        return new BootstrapAndReplace(this, waitFor);
-    }
-
-    @Override
-    public ProgressBarrier barrier()
-    {
-        // There is no requirement to wait for peers to sync before starting the sequence
-        if (next == START_REPLACE)
-            return ProgressBarrier.immediate();
-        ClusterMetadata metadata = ClusterMetadata.current();
-        InetAddressAndPort replaced = metadata.directory.getNodeAddresses(startReplace.replaced()).broadcastAddress;
-        return new ProgressBarrier(latestModification, metadata.directory.location(startReplace.nodeId()), metadata.lockedRanges.locked.get(lockKey), e -> !e.equals(replaced));
-    }
-
-    @Override
     public Kind kind()
     {
         return REPLACE;
@@ -276,6 +259,23 @@ public class BootstrapAndReplace extends MultiStepOperation<Epoch>
         }
 
         return continuable();
+    }
+
+    @Override
+    public BootstrapAndReplace advance(Epoch waitFor)
+    {
+        return new BootstrapAndReplace(this, waitFor);
+    }
+
+    @Override
+    public ProgressBarrier barrier()
+    {
+        // There is no requirement to wait for peers to sync before starting the sequence
+        if (next == START_REPLACE)
+            return ProgressBarrier.immediate();
+        ClusterMetadata metadata = ClusterMetadata.current();
+        InetAddressAndPort replaced = metadata.directory.getNodeAddresses(startReplace.replaced()).broadcastAddress;
+        return new ProgressBarrier(latestModification, metadata.directory.location(startReplace.nodeId()), metadata.lockedRanges.locked.get(lockKey), e -> !e.equals(replaced));
     }
 
     @Override
