@@ -242,6 +242,7 @@ public class ConsistentBootstrapTest extends FuzzTestBase
             }
             Assert.assertTrue("Metric CoordinatorBehindRing should have been bumped by at least one replica", metricTriggered);
 
+            cluster.filters().reset();
             unpauseCommits(cmsInstance);
             thread.join();
         }

@@ -98,7 +98,7 @@ public enum RequestFailureReason
         if (t instanceof InvalidRoutingException)
             return INVALID_ROUTING;
 
-        if (t instanceof  CoordinatorBehindException)
+        if (t instanceof CoordinatorBehindException)
             return COORDINATOR_BEHIND;
 
         return UNKNOWN;
