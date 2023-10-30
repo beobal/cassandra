@@ -43,8 +43,8 @@ import org.apache.cassandra.distributed.test.TestBaseImpl;
 import org.apache.cassandra.service.StorageService;
 
 import static net.bytebuddy.matcher.ElementMatchers.named;
-import static org.apache.cassandra.config.CassandraRelevantProperties.JOIN_RING;
 import static org.apache.cassandra.config.CassandraRelevantProperties.RESET_BOOTSTRAP_PROGRESS;
+import static org.apache.cassandra.config.CassandraRelevantProperties.TEST_WRITE_SURVEY;
 import static org.apache.cassandra.distributed.action.GossipHelper.withProperty;
 import static org.apache.cassandra.distributed.api.Feature.GOSSIP;
 import static org.apache.cassandra.distributed.api.Feature.NETWORK;
@@ -122,13 +122,9 @@ public class BootstrapTest extends TestBaseImpl
         {
             IInstanceConfig config = cluster.newInstanceConfig();
             IInvokableInstance newInstance = cluster.bootstrap(config);
-            withProperty(JOIN_RING, false,
+            withProperty(TEST_WRITE_SURVEY, true,
                          () -> newInstance.startup(cluster));
-            // todo:
-//            cluster.forEach(statusToBootstrap(newInstance));
-
             populate(cluster, 0, 100);
-
             assertEquals(100, newInstance.executeInternal("SELECT * FROM " + KEYSPACE + ".tbl").length);
         }
     }
