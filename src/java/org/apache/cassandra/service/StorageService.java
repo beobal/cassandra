@@ -3644,6 +3644,12 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         transientMode = Optional.of(DECOMMISSION_FAILED);
     }
 
+    public void markBootstrapFailed()
+    {
+        logger.info(JOINING_FAILED.toString());
+        transientMode = Optional.of(JOINING_FAILED);
+    }
+
     /*
     - Use system_views.local to get information about the node (todo: we might still need a jmx endpoint for that since you can't run cql queries on drained etc nodes)
      */
@@ -3718,7 +3724,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
     public boolean isDecommissionFailed()
     {
-        return transientMode.orElseGet(() -> operationMode) == DECOMMISSION_FAILED;
+        return operationMode() == DECOMMISSION_FAILED;
     }
 
     public boolean isDecommissioning()
@@ -3728,7 +3734,12 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
     public boolean isBootstrapFailed()
     {
-        return operationMode == JOINING_FAILED;
+        return operationMode() == JOINING_FAILED;
+    }
+
+    public void clearTransientMode()
+    {
+        transientMode = Optional.empty();
     }
 
     public String getDrainProgress()

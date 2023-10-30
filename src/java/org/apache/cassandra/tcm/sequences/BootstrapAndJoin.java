@@ -247,6 +247,7 @@ public class BootstrapAndJoin extends MultiStepOperation<Epoch>
                                      .filter(cfs -> Schema.instance.getUserKeyspaces().names().contains(cfs.keyspace.getName()))
                                      .forEach(cfs -> cfs.indexManager.executePreJoinTasksBlocking(true));
                         ClusterMetadataService.instance().commit(finishJoin);
+                        StorageService.instance.clearTransientMode();
                     }
                     else
                     {

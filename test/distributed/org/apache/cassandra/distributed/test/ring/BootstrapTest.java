@@ -29,7 +29,6 @@ import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
 import net.bytebuddy.implementation.MethodDelegation;
 import net.bytebuddy.implementation.bind.annotation.SuperCall;
-
 import org.apache.cassandra.distributed.Cluster;
 import org.apache.cassandra.distributed.Constants;
 import org.apache.cassandra.distributed.api.ConsistencyLevel;
@@ -38,7 +37,6 @@ import org.apache.cassandra.distributed.api.IInstanceConfig;
 import org.apache.cassandra.distributed.api.IInvokableInstance;
 import org.apache.cassandra.distributed.api.TokenSupplier;
 import org.apache.cassandra.distributed.shared.NetworkTopology;
-import org.apache.cassandra.distributed.test.DecommissionTest;
 import org.apache.cassandra.distributed.test.TestBaseImpl;
 import org.apache.cassandra.service.StorageService;
 
@@ -135,7 +133,6 @@ public class BootstrapTest extends TestBaseImpl
         int originalNodeCount = 2;
         int expandedNodeCount = originalNodeCount + 1;
 
-        RESET_BOOTSTRAP_PROGRESS.setBoolean(false);
         try (Cluster cluster = builder().withNodes(originalNodeCount)
                                         .withTokenSupplier(TokenSupplier.evenlyDistributedTokens(expandedNodeCount))
                                         .withNodeIdTopology(NetworkTopology.singleDcNetworkTopology(expandedNodeCount, "dc0", "rack0"))
@@ -206,8 +203,8 @@ public class BootstrapTest extends TestBaseImpl
                 return;
             }
             new ByteBuddy().rebase(StorageService.class)
-                           .method(named("bootstrapFinished"))
-                           .intercept(MethodDelegation.to(DecommissionTest.BB.class))
+                           .method(named("markViewsAsBuilt"))
+                           .intercept(MethodDelegation.to(BB.class))
                            .make()
                            .load(classLoader, ClassLoadingStrategy.Default.INJECTION);
         }
@@ -215,7 +212,7 @@ public class BootstrapTest extends TestBaseImpl
         private static int invocations = 0;
 
         @SuppressWarnings("unused")
-        public static void bootstrapFinished(@SuperCall Callable<Void> zuper)
+        public static void markViewsAsBuilt(@SuperCall Callable<Void> zuper)
         {
             ++invocations;
 

@@ -58,7 +58,10 @@ import org.apache.cassandra.distributed.api.IInstanceConfig;
 import org.apache.cassandra.distributed.api.IInvokableInstance;
 import org.apache.cassandra.distributed.shared.DistributedTestBase;
 
+import static org.apache.cassandra.config.CassandraRelevantProperties.JOIN_RING;
+import static org.apache.cassandra.config.CassandraRelevantProperties.RESET_BOOTSTRAP_PROGRESS;
 import static org.apache.cassandra.config.CassandraRelevantProperties.SKIP_GC_INSPECTOR;
+import static org.apache.cassandra.distributed.action.GossipHelper.withProperty;
 
 // checkstyle: suppress below 'blockSystemPropertyUsage'
 public class TestBaseImpl extends DistributedTestBase
@@ -138,11 +141,10 @@ public class TestBaseImpl extends DistributedTestBase
         IInstanceConfig config = cluster.newInstanceConfig();
         config.set("auto_bootstrap", true);
         IInvokableInstance newInstance = cluster.bootstrap(config);
-        newInstance.startup(cluster);
-        // todo: re-add once we fix write survey/join ring = false mode
-//        withProperty(BOOTSTRAP_SCHEMA_DELAY_MS, Integer.toString(90 * 1000),
-//                     () -> withProperty(JOIN_RING, false, () -> newInstance.startup(cluster)));
-//        newInstance.nodetoolResult("join").asserts().success();
+        RESET_BOOTSTRAP_PROGRESS.setBoolean(false);
+        withProperty(JOIN_RING, false,
+                     () -> newInstance.startup(cluster));
+        newInstance.nodetoolResult("join").asserts().success();
         newInstance.nodetoolResult("describecms").asserts().success(); // just make sure we're joined, remove later
     }
 
