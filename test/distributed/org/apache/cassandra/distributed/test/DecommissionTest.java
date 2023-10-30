@@ -40,7 +40,6 @@ import org.apache.cassandra.tcm.ownership.PlacementDeltas;
 import org.apache.cassandra.tcm.sequences.UnbootstrapStreams;
 
 import static net.bytebuddy.matcher.ElementMatchers.named;
-import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 import static org.apache.cassandra.db.SystemKeyspace.BootstrapState.COMPLETED;
 import static org.apache.cassandra.db.SystemKeyspace.BootstrapState.DECOMMISSIONED;
 import static org.apache.cassandra.distributed.api.Feature.GOSSIP;
@@ -108,8 +107,6 @@ public class DecommissionTest extends TestBaseImpl
                 {
                     fail("the second decommission attempt should pass but it failed on: " + t.getMessage());
                 }
-
-                // check that decommissioning of already decommissioned node has no effect
 
                 assertEquals(DECOMMISSIONED.name(), StorageService.instance.getBootstrapState());
                 assertFalse(StorageService.instance.isDecommissionFailed());
