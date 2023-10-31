@@ -3637,7 +3637,6 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         }
     }
 
-    // TODO - still necessary?
     public void markDecommissionFailed()
     {
         logger.info(DECOMMISSION_FAILED.toString());

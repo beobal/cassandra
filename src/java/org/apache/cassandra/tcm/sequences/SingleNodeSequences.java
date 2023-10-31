@@ -36,7 +36,9 @@ import org.apache.cassandra.tcm.membership.NodeState;
 import org.apache.cassandra.tcm.transformations.PrepareLeave;
 import org.apache.cassandra.tcm.transformations.PrepareMove;
 
-import static org.apache.cassandra.tcm.membership.NodeState.LEAVING;
+import static org.apache.cassandra.service.StorageService.Mode.LEAVING;
+import static org.apache.cassandra.service.StorageService.Mode.NORMAL;
+import static org.apache.cassandra.service.StorageService.Mode.DECOMMISSION_FAILED;
 import static org.apache.cassandra.utils.FBUtilities.getBroadcastAddressAndPort;
 
 /**
@@ -62,8 +64,8 @@ public interface SingleNodeSequences
         ClusterMetadata metadata = ClusterMetadata.current();
 
         StorageService.Mode mode = StorageService.instance.operationMode();
-        if (!EnumSet.of(StorageService.Mode.LEAVING, StorageService.Mode.NORMAL).contains(mode))
-            throw new UnsupportedOperationException(String.format("Node in %s state; wait for status to become normal", mode));
+        if (!EnumSet.of(LEAVING, NORMAL, DECOMMISSION_FAILED).contains(mode))
+            throw new UnsupportedOperationException("Node in " + mode + " state; wait for status to become normal");
         logger.debug("DECOMMISSIONING");
 
         NodeId self = metadata.myNodeId();
@@ -110,7 +112,7 @@ public interface SingleNodeSequences
         NodeState removeState = metadata.directory.peerState(toRemove);
         if (removeState == null)
             throw new UnsupportedOperationException("Node to be removed is not a member of the token ring");
-        if (removeState == LEAVING)
+        if (removeState == NodeState.LEAVING)
             logger.warn("Node {} is already leaving or being removed, continuing removal anyway", endpoint);
 
         if (metadata.inProgressSequences.contains(toRemove))

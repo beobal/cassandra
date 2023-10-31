@@ -341,6 +341,7 @@ import static org.apache.cassandra.utils.FBUtilities.getBroadcastAddressAndPort;
                     SystemKeyspace.setBootstrapState(SystemKeyspace.BootstrapState.COMPLETED);
                 else
                 {
+                    StorageService.instance.markBootstrapFailed();
                     logger.info("Did not finish joining the ring; node state is {}, bootstrap state is {}",
                                 metadata.directory.peerState(self),
                                 SystemKeyspace.getBootstrapState());
