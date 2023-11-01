@@ -205,7 +205,7 @@ public class BatchlogManager implements BatchlogManagerMBean
 
         // rate limit is in bytes per second. Uses Double.MAX_VALUE if disabled (set to 0 in cassandra.yaml).
         // max rate is scaled by the number of nodes in the cluster (same as for HHOM - see CASSANDRA-5272).
-        int endpointsCount = ClusterMetadata.current().directory.allAddresses().size();
+        int endpointsCount = ClusterMetadata.current().directory.allJoinedEndpoints().size();
         if (endpointsCount <= 0)
         {
             logger.trace("Replay cancelled as there are no peers in the ring.");

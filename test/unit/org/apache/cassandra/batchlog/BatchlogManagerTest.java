@@ -102,8 +102,6 @@ public class BatchlogManagerTest
     public void setUp() throws Exception
     {
         InetAddressAndPort localhost = InetAddressAndPort.getByName("127.0.0.1");
-//        metadata.updateNormalToken(Util.token("A"), localhost);
-//        metadata.updateHostId(UUID.randomUUID(), localhost);
         Keyspace.open(SchemaConstants.SYSTEM_KEYSPACE_NAME).getColumnFamilyStore(SystemKeyspace.BATCHES).truncateBlocking();
     }
 
