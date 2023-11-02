@@ -2120,6 +2120,9 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean, 
                         case DC:
                             newValue = valueFactory.datacenter(location.datacenter);
                             break;
+                        case SCHEMA:
+                            newValue = valueFactory.schema(metadata.schema.getVersion());
+                            break;
                         case RACK:
                             newValue = valueFactory.rack(location.rack);
                             break;

@@ -25,7 +25,6 @@ import java.util.Set;
 import java.util.stream.StreamSupport;
 
 import com.google.common.collect.Sets;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,6 +35,7 @@ import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.gms.Gossiper;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.schema.Schema;
+import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.MultiStepOperation;
 import org.apache.cassandra.tcm.compatibility.GossipHelper;
@@ -44,6 +44,7 @@ import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.membership.NodeState;
 import org.apache.cassandra.tcm.sequences.BootstrapAndReplace;
 
+import static org.apache.cassandra.gms.ApplicationState.SCHEMA;
 import static org.apache.cassandra.tcm.membership.NodeState.BOOTSTRAPPING;
 import static org.apache.cassandra.tcm.membership.NodeState.BOOT_REPLACING;
 import static org.apache.cassandra.tcm.membership.NodeState.LEFT;
@@ -104,6 +105,7 @@ public class LegacyStateListener implements ChangeListener.Async
                             logger.info("Node {} state jump to NORMAL", next.directory.endpoint(change));
                         break;
                 }
+                Gossiper.instance.addLocalApplicationState(SCHEMA, StorageService.instance.valueFactory.schema(next.schema.getVersion()));
             }
 
             if (next.directory.peerState(change) == LEFT)
