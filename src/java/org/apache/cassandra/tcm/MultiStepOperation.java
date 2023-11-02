@@ -126,14 +126,6 @@ public abstract class MultiStepOperation<CONTEXT>
     public abstract Transformation.Kind nextStep();
 
     /**
-     * Whether or not the next step is the last in the operation, this is useful to know when handling commit failure
-     * during a step (see {@link #commit(Transformation)}. This is also used to indicate if node which is started in
-     * write survey mode or with -Djoin_ring=false is in a suitable state to fully join the cluster.
-     * @return true if the next step is the last in the operation, false otherwise
-     */
-    public abstract boolean atFinalStep();
-
-    /**
      * Executes the next step in the operation. This should usually include a Transformation to mutate ClusterMetadata
      * state, and _may_ also involve additional non-metadata operations such as streaming of SSTables to or from peers
      * (i.e. in the sequences implementing bootstrap, decommission, etc).

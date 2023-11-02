@@ -39,6 +39,9 @@ import org.apache.cassandra.distributed.fuzz.InJVMTokenAwareVisitorExecutor;
 import org.apache.cassandra.distributed.fuzz.InJvmSut;
 import org.apache.cassandra.distributed.shared.ClusterUtils;
 import org.apache.cassandra.distributed.shared.NetworkTopology;
+import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.schema.KeyspaceMetadata;
+import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.transformations.PrepareJoin;
 import org.apache.cassandra.service.StorageService;
@@ -100,6 +103,27 @@ public class ResumableStartupTest extends FuzzTestBase
                                            " not be restricted by in flight operations';",
                                            ConsistencyLevel.ALL);
 
+            final String newAddress = ClusterUtils.getBroadcastAddressHostWithPortString(newInstance);
+            final String keyspace = run.schemaSpec.keyspace;
+            boolean newReplicaInCorrectState = cluster.get(1).callOnInstance(() -> {
+                ClusterMetadata metadata = ClusterMetadata.current();
+                KeyspaceMetadata ksm = metadata.schema.getKeyspaceMetadata(keyspace);
+                boolean isWriteReplica = false;
+                boolean isReadReplica = false;
+                for (InetAddressAndPort readReplica : metadata.placements.get(ksm.params.replication).reads.byEndpoint().keySet())
+                {
+                    if (readReplica.getHostAddressAndPort().equals(newAddress))
+                        isReadReplica = true;
+                }
+                for (InetAddressAndPort writeReplica : metadata.placements.get(ksm.params.replication).writes.byEndpoint().keySet())
+                {
+                    if (writeReplica.getHostAddressAndPort().equals(newAddress))
+                        isWriteReplica = true;
+                }
+                return (isWriteReplica && !isReadReplica);
+            });
+            Assert.assertTrue("Expected new instance to be a write replica only", newReplicaInCorrectState);
+
             Callable<Epoch> finishedBootstrap = getSequenceAfterCommit(cmsInstance, (e, r) -> e instanceof PrepareJoin.FinishJoin && r.isSuccess());
             newInstance.runOnInstance(() -> {
                 try
@@ -112,9 +136,9 @@ public class ResumableStartupTest extends FuzzTestBase
                 }
             });
             Epoch next = finishedBootstrap.call();
-            Assert.assertEquals(String.format("Expected epoch after schema change and finish join to be %s, but was %s",
-                                              next.getEpoch(), currentEpoch.getEpoch() + 2),
-                                next.getEpoch(), currentEpoch.getEpoch() + 2);
+            Assert.assertEquals(String.format("Expected epoch after schema change, mid join & finish join to be %s, but was %s",
+                                              next.getEpoch(), currentEpoch.getEpoch() + 3),
+                                next.getEpoch(), currentEpoch.getEpoch() + 3);
 
             for (int i = 0; i < WRITES; i++)
                 visitor.visit();

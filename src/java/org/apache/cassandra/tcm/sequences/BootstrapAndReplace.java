@@ -171,12 +171,6 @@ public class BootstrapAndReplace extends MultiStepOperation<Epoch>
     }
 
     @Override
-    public boolean atFinalStep()
-    {
-        return next == Transformation.Kind.FINISH_REPLACE;
-    }
-
-    @Override
     public SequenceState executeNext()
     {
         switch (next)
@@ -215,9 +209,35 @@ public class BootstrapAndReplace extends MultiStepOperation<Epoch>
                                         "For more, see `nodetool help bootstrap`. {}", SystemKeyspace.getBootstrapState());
                             return halted();
                         }
+                        SystemKeyspace.setBootstrapState(SystemKeyspace.BootstrapState.COMPLETED);
+                    }
+                    else
+                    {
+                        // The node may have previously been started in write survey mode and may or may not have
+                        // performed initial streaming (i.e. auto_bootstap: false). When an operator then manually joins
+                        // it (or it bounces and comes up without the system property), it will hit this condition.
+                        // If during the initial startup no streaming was performed then bootstrap state is not
+                        // COMPLETED and so we log the message about skipping data streaming. Alternatively, if
+                        // streaming was done before entering write survey mode, the bootstrap is COMPLETE and so no
+                        // need to log.
+                        // The ability to join without bootstrapping, especially when combined with write survey mode
+                        // is probably a mis-feature and serious consideration should be given to removing it.
+                        if (!SystemKeyspace.bootstrapComplete())
+                            logger.info("Skipping data streaming for join");
                     }
 
-                    ClusterMetadataService.instance().commit(midReplace);
+                    if (finishJoiningRing)
+                    {
+                        StreamSupport.stream(ColumnFamilyStore.all().spliterator(), false)
+                                     .filter(cfs -> Schema.instance.getUserKeyspaces().names().contains(cfs.keyspace.getName()))
+                                     .forEach(cfs -> cfs.indexManager.executePreJoinTasksBlocking(true));
+                        ClusterMetadataService.instance().commit(midReplace);
+                    }
+                    else
+                    {
+                        logger.info("Startup complete, but write survey mode is active, not becoming an active ring member. Use JMX (StorageService->joinRing()) to finalize ring joining.");
+                        return halted();
+                    }
                 }
                 catch (IllegalStateException e)
                 {
@@ -234,19 +254,8 @@ public class BootstrapAndReplace extends MultiStepOperation<Epoch>
             case FINISH_REPLACE:
                 try
                 {
-                    if (finishJoiningRing)
-                    {
-                        SystemKeyspace.setBootstrapState(SystemKeyspace.BootstrapState.COMPLETED);
-                        StreamSupport.stream(ColumnFamilyStore.all().spliterator(), false)
-                                     .filter(cfs -> Schema.instance.getUserKeyspaces().names().contains(cfs.keyspace.getName()))
-                                     .forEach(cfs -> cfs.indexManager.executePreJoinTasksBlocking(true));
-                        ClusterMetadataService.instance().commit(finishReplace);
-                    }
-                    else
-                    {
-                        logger.info("Startup complete, but write survey mode is active, not becoming an active ring member. Use JMX (StorageService->joinRing()) to finalize ring joining.");
-                        return halted();
-                    }
+                    SystemKeyspace.setBootstrapState(SystemKeyspace.BootstrapState.COMPLETED);
+                    ClusterMetadataService.instance().commit(finishReplace);
                 }
                 catch (Throwable e)
                 {
@@ -307,7 +316,7 @@ public class BootstrapAndReplace extends MultiStepOperation<Epoch>
     {
         return new BootstrapAndReplace(latestModification, lockKey, bootstrapTokens,
                                        next, startReplace, midReplace, finishReplace,
-                                       true, streamData);
+                                       true, false);
     }
 
     /**

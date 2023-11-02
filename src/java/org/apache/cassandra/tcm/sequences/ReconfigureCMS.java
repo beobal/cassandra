@@ -131,12 +131,6 @@ public class ReconfigureCMS extends MultiStepOperation<AdvanceCMSReconfiguration
     }
 
     @Override
-    public boolean atFinalStep()
-    {
-        return next.isLast();
-    }
-
-    @Override
     public SequenceState executeNext()
     {
         ClusterMetadata metadata = ClusterMetadata.current();

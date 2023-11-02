@@ -175,12 +175,6 @@ public class Move extends MultiStepOperation<Epoch>
     }
 
     @Override
-    public boolean atFinalStep()
-    {
-        return next == FINISH_MOVE;
-    }
-
-    @Override
     public SequenceState executeNext()
     {
         switch (next)

@@ -120,12 +120,6 @@ public class AddToCMS extends MultiStepOperation<Epoch>
     }
 
     @Override
-    public boolean atFinalStep()
-    {
-        return true;
-    }
-
-    @Override
     public SequenceState executeNext()
     {
         try

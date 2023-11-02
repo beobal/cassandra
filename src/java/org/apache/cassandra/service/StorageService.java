@@ -183,6 +183,7 @@ import org.apache.cassandra.streaming.StreamState;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.MultiStepOperation;
+import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.compatibility.GossipHelper;
 import org.apache.cassandra.tcm.compatibility.TokenRingUtils;
 import org.apache.cassandra.tcm.membership.Directory;
@@ -951,15 +952,20 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             {
                 // note: this has always been a no-op, starting a previously joined node in
                 // survey mode is meaningless as bootstrapping and joining the ring is already
-                // complete and being in survey mode does not prevent the node participating in
-                // reads.
+                // complete and a full joined node being restarted in survey mode does not prevent
+                // it participating in reads. This exists only for backwards compatibilty.
                 logger.info("Leaving write survey mode and joining ring at operator request");
                 isSurveyMode = false;
+            }
+            else if (!SystemKeyspace.bootstrapComplete())
+            {
+                logger.warn("Can't join the ring because in write_survey mode and bootstrap hasn't completed");
+                throw new IllegalStateException("Cannot join the ring until bootstrap completes");
             }
             else if (readyToFinishJoiningRing())
             {
                 logger.info("Leaving write survey mode and joining ring at operator request");
-                finishJoiningRing();
+                exitWriteSurveyMode();
                 isSurveyMode = false;
                 daemon.start();
             }
@@ -977,20 +983,6 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         }
     }
 
-    public boolean readyToFinishJoiningRing()
-    {
-        ClusterMetadata metadata = ClusterMetadata.current();
-        NodeId id = metadata.myNodeId();
-        MultiStepOperation<?> sequence = metadata.inProgressSequences.get(id);
-
-        if (sequence == null && metadata.directory.peerState(id) == JOINED)
-            return true;
-        if ((sequence.kind() == MultiStepOperation.Kind.JOIN || sequence.kind() == MultiStepOperation.Kind.REPLACE) && sequence.atFinalStep())
-            return true;
-
-        return false;
-    }
-
     public void resumeBootstrapSequence()
     {
         ClusterMetadata metadata = ClusterMetadata.current();
@@ -999,16 +991,55 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
         if (!(sequence instanceof BootstrapAndJoin) && !(sequence instanceof BootstrapAndReplace))
             throw new IllegalStateException("Can not resume bootstrap as join sequence has not been started");
-        ongoingBootstrap.set(null);
+        clearOngoingBootstrap();
         InProgressSequences.finishInProgressSequences(id);
-        if (!isNativeTransportRunning())
-            daemon.initializeClientTransports();
-        daemon.start();
-        progressSupport.progress("bootstrap", new ProgressEvent(ProgressEventType.COMPLETE, 1, 1, "Resume bootstrap complete"));
-        logger.info("Resume complete");
+        // only start transports and report that we're done if the resumed bootstrap completed successfully
+        // See CASSANDRA-16491
+        if (ongoingBootstrap.get() == null)
+        {
+            if (!isNativeTransportRunning())
+                daemon.initializeClientTransports();
+            daemon.start();
+            progressSupport.progress("bootstrap", new ProgressEvent(ProgressEventType.COMPLETE, 1, 1, "Resume bootstrap complete"));
+            logger.info("Resume complete");
+        }
     }
 
-    public void finishJoiningRing()
+    public boolean readyToFinishJoiningRing()
+    {
+        ClusterMetadata metadata = ClusterMetadata.current();
+        NodeId id = metadata.myNodeId();
+        MultiStepOperation<?> sequence = metadata.inProgressSequences.get(id);
+
+        if (sequence == null && metadata.directory.peerState(id) == JOINED)
+            return true;
+
+        if ((sequence.kind() == MultiStepOperation.Kind.JOIN && sequence.nextStep() == Transformation.Kind.MID_JOIN)
+            || (sequence.kind() == MultiStepOperation.Kind.REPLACE && sequence.nextStep() == Transformation.Kind.MID_REPLACE))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Called when a node has been started in {@code write survey mode} on its first boot. In this case, the regular
+     * startup sequence, either joining with a new set of tokens or replacing an existing node, will pause after
+     * bootstrap streaming but before committing the MID_JOIN or MID_REPLACE step. This leaves the joining node as a
+     * fully up to date (if streaming was successful) write replica for the ranges it is acquiring, but it does not
+     * make it active for reads.
+     * At the point when an operator decides to bring the node out of write survey mode, we need to execute the
+     * remaining steps of the join/replace sequence. The caveat is that although this execution will recommence at the
+     * point it left off (after the START_JOIN/START_REPLACE step), the {@code finishJoiningRing} flag which causes
+     * execution to pause for write survey mode must be overridden, so that we fully execute the MID step. We also want
+     * force the {@code streamData} flag to false, to prevent re-streaming the bootstrap data. To do this, we create a
+     * temporary copy of the {@link MultiStepOperation} and manually execute its next step after verifying expected
+     * invariants. This causes the MID step to fully execute, which then moves the sequence persisted in
+     * {@link ClusterMetadata}'s in-progress sequences onto the FINISH step, and we can complete the operation in the
+     * normal way with {@link InProgressSequences#finishInProgressSequences(MultiStepOperation.SequenceKey)}
+     * */
+    private void exitWriteSurveyMode()
     {
         ClusterMetadata metadata = ClusterMetadata.current();
         NodeId id = metadata.myNodeId();
@@ -1018,20 +1049,35 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         if (sequence.kind() != MultiStepOperation.Kind.JOIN && sequence.kind() != MultiStepOperation.Kind.REPLACE)
             throw new IllegalStateException("Can not finish joining ring as join sequence has not been started");
 
-        if (!sequence.atFinalStep())
+        if ((sequence.kind() == MultiStepOperation.Kind.JOIN && sequence.nextStep() != Transformation.Kind.MID_JOIN)
+            || (sequence.kind() == MultiStepOperation.Kind.REPLACE && sequence.nextStep() != Transformation.Kind.MID_REPLACE))
+        {
+            throw new IllegalStateException("Can not finish joining ring, sequence is in an incorrect state. " +
+                                            "If no progress is made, cancel the join process for this node and retry");
+        }
+
+        if (sequence.kind() == MultiStepOperation.Kind.REPLACE && sequence.nextStep() != Transformation.Kind.MID_REPLACE)
             throw new IllegalStateException("Can not finish joining ring, sequence is in an incorrect state. " +
                                             "If no progress is made, cancel the join process for this node and retry");
 
-        // create a new copy of the sequence with the finishJoining flag set to true, then complete it.
-        // Note, this does not replace the existing sequence in ClusterMetadata, but it will remove it
-        // as usual if execution is successful.
+        // Create a temporary new copy of the sequence with the finishJoining flag set to true and with streaming
+        // disabled, then execute its next step (the MID_*). We do this because effectively we want to jump over the
+        // MID_JOIN/MID_REPLACE of the "real" sequence. Note, this does not replace the existing sequence in
+        // ClusterMetadata with the temporary copy, but an effect of executing the MID step of the copy is that it will
+        // update the persisted state of the sequence leaving it with only the FINISH_* step to complete.
+        Transformation.Kind next = sequence.nextStep();
         boolean success = (sequence instanceof BootstrapAndJoin)
                           ? ((BootstrapAndJoin)sequence).finishJoiningRing().executeNext().isContinuable()
                           : ((BootstrapAndReplace)sequence).finishJoiningRing().executeNext().isContinuable();
-        if (!success)
-            throw new RuntimeException("Could not finish joining ring, restart this node and inflight operations will " +
-                                       "attempt to complete. If no progress is made, cancel the join process for this node and retry");
 
+        if (!success)
+            throw new RuntimeException(String.format("Could not perform next step of joining the ring {}, " +
+                                                     "restart this node and inflight operations will attempt to complete. " +
+                                                     "If no progress is made, cancel the join process for this node and retry",
+                                                     next));
+
+        // Now the MID step has completed and updated the sequence persisted in ClusterMetadata, finish it.
+        InProgressSequences.finishInProgressSequences(id);
     }
 
     @VisibleForTesting
@@ -1457,6 +1503,11 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         return bootstrapper.bootstrap(streamStateStore,
                                       useStrictConsistency && beingReplaced == null,
                                       beingReplaced); // handles token update
+    }
+
+    public void clearOngoingBootstrap()
+    {
+        ongoingBootstrap.set(null);
     }
 
     public void invalidateLocalRanges()

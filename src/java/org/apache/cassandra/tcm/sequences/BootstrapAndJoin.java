@@ -169,12 +169,6 @@ public class BootstrapAndJoin extends MultiStepOperation<Epoch>
     }
 
     @Override
-    public boolean atFinalStep()
-    {
-        return next == FINISH_JOIN;
-    }
-
-    @Override
     public SequenceState executeNext()
     {
         switch (next)
@@ -216,13 +210,35 @@ public class BootstrapAndJoin extends MultiStepOperation<Epoch>
                                         "For more, see `nodetool help bootstrap`. {}", SystemKeyspace.getBootstrapState());
                             return halted();
                         }
+                        SystemKeyspace.setBootstrapState(SystemKeyspace.BootstrapState.COMPLETED);
                     }
                     else
                     {
-                        logger.info("Skipping data streaming for join");
+                        // The node may have previously been started in write survey mode and may or may not have
+                        // performed initial streaming (i.e. auto_bootstap: false). When an operator then manually joins
+                        // it (or it bounces and comes up without the system property), it will hit this condition.
+                        // If during the initial startup no streaming was performed then bootstrap state is not
+                        // COMPLETED and so we log the message about skipping data streaming. Alternatively, if
+                        // streaming was done before entering write survey mode, the bootstrap is COMPLETE and so no
+                        // need to log.
+                        // The ability to join without bootstrapping, especially when combined with write survey mode
+                        // is probably a mis-feature and serious consideration should be given to removing it.
+                        if (!SystemKeyspace.bootstrapComplete())
+                            logger.info("Skipping data streaming for join");
                     }
 
-                    ClusterMetadataService.instance().commit(midJoin);
+                    if (finishJoiningRing)
+                    {
+                        StreamSupport.stream(ColumnFamilyStore.all().spliterator(), false)
+                                     .filter(cfs -> Schema.instance.getUserKeyspaces().names().contains(cfs.keyspace.getName()))
+                                     .forEach(cfs -> cfs.indexManager.executePreJoinTasksBlocking(true));
+                        ClusterMetadataService.instance().commit(midJoin);
+                    }
+                    else
+                    {
+                        logger.info("Startup complete, but write survey mode is active, not becoming an active ring member. Use JMX (StorageService->joinRing()) to finalize ring joining.");
+                        return halted();
+                    }
                 }
                 catch (IllegalStateException e)
                 {
@@ -240,21 +256,9 @@ public class BootstrapAndJoin extends MultiStepOperation<Epoch>
             case FINISH_JOIN:
                 try
                 {
-                    if (finishJoiningRing)
-                    {
-                        SystemKeyspace.setBootstrapState(SystemKeyspace.BootstrapState.COMPLETED);
-                        StreamSupport.stream(ColumnFamilyStore.all().spliterator(), false)
-                                     .filter(cfs -> Schema.instance.getUserKeyspaces().names().contains(cfs.keyspace.getName()))
-                                     .forEach(cfs -> cfs.indexManager.executePreJoinTasksBlocking(true));
-                        ClusterMetadataService.instance().commit(finishJoin);
-                        StorageService.instance.clearTransientMode();
-                    }
-                    else
-                    {
-                        logger.info("Startup complete, but write survey mode is active, not becoming an active ring member. Use JMX (StorageService->joinRing()) to finalize ring joining.");
-                        return halted();
-                    }
-
+                    SystemKeyspace.setBootstrapState(SystemKeyspace.BootstrapState.COMPLETED);
+                    ClusterMetadataService.instance().commit(finishJoin);
+                    StorageService.instance.clearTransientMode();
                 }
                 catch (Throwable e)
                 {
@@ -313,7 +317,7 @@ public class BootstrapAndJoin extends MultiStepOperation<Epoch>
     {
         return new BootstrapAndJoin(latestModification, lockKey, toSplitRanges,
                                     next, startJoin, midJoin, finishJoin,
-                                    true, streamData);
+                                    true, false);
     }
 
     @VisibleForTesting
@@ -348,6 +352,7 @@ public class BootstrapAndJoin extends MultiStepOperation<Epoch>
             else
                 bootstrapStream.get();
             StorageService.instance.markViewsAsBuilt();
+            StorageService.instance.clearOngoingBootstrap();
             logger.info("Bootstrap completed for tokens {}", tokens);
             return true;
         }

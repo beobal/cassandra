@@ -149,12 +149,6 @@ public class UnbootstrapAndLeave extends MultiStepOperation<Epoch>
     }
 
     @Override
-    public boolean atFinalStep()
-    {
-        return next == FINISH_LEAVE;
-    }
-
-    @Override
     public SequenceState executeNext()
     {
         switch (next)
