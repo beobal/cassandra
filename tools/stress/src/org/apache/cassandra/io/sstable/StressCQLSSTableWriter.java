@@ -61,8 +61,10 @@ import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.SchemaTransformations;
 import org.apache.cassandra.schema.TableId;
 import org.apache.cassandra.schema.TableMetadata;
+import org.apache.cassandra.schema.Tables;
 import org.apache.cassandra.schema.Types;
 import org.apache.cassandra.service.ClientState;
+import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.transport.ProtocolVersion;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.JavaDriverUtils;
@@ -618,14 +620,14 @@ public class StressCQLSSTableWriter implements Closeable
          */
         public static ColumnFamilyStore createOfflineTable(CreateTableStatement.Raw schemaStatement, List<CreateTypeStatement.Raw> typeStatements, List<File> directoryList)
         {
+            ClusterMetadata prev = ClusterMetadata.current();
             String keyspace = schemaStatement.keyspace();
 
-            Schema.instance.submit(SchemaTransformations.addKeyspace(KeyspaceMetadata.create(keyspace, KeyspaceParams.simple(1)), true));
+            KeyspaceMetadata ksm = KeyspaceMetadata.create(keyspace, KeyspaceParams.simple(1));
+            Schema.instance.submit((metadata) ->  metadata.schema.getKeyspaces().withAddedOrUpdated(ksm));
 
             Types types = createTypes(keyspace, typeStatements);
             Schema.instance.submit(SchemaTransformations.addTypes(types, true));
-
-            KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(keyspace);
 
             TableMetadata tableMetadata = ksm.tables.getNullable(schemaStatement.table());
             if (tableMetadata != null)
@@ -639,17 +641,15 @@ public class StressCQLSSTableWriter implements Closeable
             tableMetadata = statement.builder(ksm.types)
                                      .id(deterministicId(schemaStatement.keyspace(), schemaStatement.table()))
                                      .build();
-
+            Tables tables = Tables.of(tableMetadata);
+            KeyspaceMetadata updated = ksm.withSwapped(tables);
+            Schema.instance.submit((metadata) ->  metadata.schema.getKeyspaces().withAddedOrUpdated(updated));
+            ClusterMetadata.current().schema.initializeKeyspaceInstances(prev.schema, false);
             Keyspace.setInitialized();
             Directories directories = new Directories(tableMetadata, directoryList.stream().map(f -> new Directories.DataDirectory(new org.apache.cassandra.io.util.File(f.toPath()))).collect(Collectors.toList()));
 
             Keyspace ks = Keyspace.openWithoutSSTables(keyspace);
-            ColumnFamilyStore cfs =  ColumnFamilyStore.createColumnFamilyStore(ks, tableMetadata.name, tableMetadata, directories, false, false, true);
-
-            ks.initCfCustom(cfs);
-            Schema.instance.submit(SchemaTransformations.addTable(tableMetadata, true));
-
-            return cfs;
+            return ColumnFamilyStore.createColumnFamilyStore(ks, tableMetadata.name, tableMetadata, directories, false, false, true);
         }
 
         private static TableId deterministicId(String keyspace, String table)
