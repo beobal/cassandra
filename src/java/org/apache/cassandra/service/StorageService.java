@@ -2009,16 +2009,9 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
                     String[] pieces = splitValue(value);
                     String moveName = pieces[0];
                     if (moveName.equals(VersionedValue.SHUTDOWN))
-                    {
                         logger.info("Node {} state jump to shutdown", endpoint);
-                        Gossiper.runInGossipStageBlocking(() -> {
-                            Gossiper.instance.markDead(endpoint, epState);
-                        });
-                    }
                     else if (moveName.equals(VersionedValue.STATUS_NORMAL))
-                    {
                         logger.info("Node {} state jump to NORMAL", endpoint);
-                    }
                     break;
                 case SCHEMA:
                     SystemKeyspace.updatePeerInfo(endpoint, "schema_version", UUID.fromString(value.value));
