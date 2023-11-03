@@ -269,6 +269,13 @@ public class ClusterMetadataService
 
         ClusterMetadataService.setInstance(StubClusterMetadataService.forClientTools());
     }
+    public static void initializeForClients(DistributedSchema initialSchema)
+    {
+        if (instance != null)
+            return;
+
+        ClusterMetadataService.setInstance(StubClusterMetadataService.forClientTools(initialSchema));
+    }
 
     public boolean isCurrentMember(InetAddressAndPort peer)
     {

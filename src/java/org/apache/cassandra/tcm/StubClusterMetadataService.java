@@ -48,6 +48,13 @@ public class StubClusterMetadataService extends ClusterMetadataService
                                                                   new DistributedSchema(Keyspaces.of(ks))));
     }
 
+    public static StubClusterMetadataService forClientTools(DistributedSchema initialSchema)
+    {
+        ClusterMetadata metadata = new ClusterMetadata(DatabaseDescriptor.getPartitioner());
+        metadata = metadata.transformer().with(initialSchema).build().metadata.forceEpoch(Epoch.EMPTY);
+        return new StubClusterMetadataService(metadata);
+    }
+
     public static StubClusterMetadataService forTesting()
     {
         return new StubClusterMetadataService(new ClusterMetadata(DatabaseDescriptor.getPartitioner()));
