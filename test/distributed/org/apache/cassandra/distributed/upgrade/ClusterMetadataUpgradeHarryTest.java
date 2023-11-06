@@ -66,7 +66,7 @@ public class ClusterMetadataUpgradeHarryTest extends UpgradeTestBase
         .nodesToUpgrade(1, 2, 3)
         .withConfig((cfg) -> cfg.with(Feature.NETWORK, Feature.GOSSIP)
                                 .set(Constants.KEY_DTEST_FULL_STARTUP, true))
-        .singleUpgradeToCurrentFrom(v41.toStrict())
+        .upgradesToCurrentFrom(v41)
         .withUpgradeListener(listener)
         .setup((cluster) -> {
             SchemaSpec schema = new SchemaSpec("harry", "test_table",
@@ -75,7 +75,7 @@ public class ClusterMetadataUpgradeHarryTest extends UpgradeTestBase
                                                asList(regularColumn("regular1", asciiType), regularColumn("regular1", int64Type)),
                                                asList(staticColumn("static1", asciiType), staticColumn("static1", int64Type)));
 
-            Configuration config = Configuration.fromFile("conf/example.yaml")
+            Configuration config = Configuration.fromFile("conf/harry-example.yaml")
                                                 .unbuild()
                                                 .setKeyspaceDdl(String.format("CREATE KEYSPACE IF NOT EXISTS %s WITH replication = {'class': 'SimpleStrategy', 'replication_factor': %d};", schema.keyspace, 3))
                                                 .setSUT(new ExistingClusterSUT(cluster, listener))
@@ -109,9 +109,8 @@ public class ClusterMetadataUpgradeHarryTest extends UpgradeTestBase
                 assertEquals(0, res.length);
             });
 
-            cluster.get(1).nodetoolResult("addtocms").asserts().success();
-            cluster.get(2).nodetoolResult("addtocms").asserts().success();
-            cluster.get(1).nodetoolResult("addtocms").asserts().failure();
+            cluster.get(1).nodetoolResult("initializecms").asserts().success();
+            cluster.get(1).nodetoolResult("reconfigurecms", "datacenter1:3").asserts().success();
             cluster.schemaChange(withKeyspace("create table %s.xyz (id int primary key)"));
             stopLatch.decrement();
             harryRunner.get().get();

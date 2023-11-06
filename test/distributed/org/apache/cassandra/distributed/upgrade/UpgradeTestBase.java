@@ -41,6 +41,7 @@ import com.vdurmont.semver4j.Semver.SemverType;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.distributed.UpgradeableCluster;
+import org.apache.cassandra.distributed.api.Feature;
 import org.apache.cassandra.distributed.api.ICluster;
 import org.apache.cassandra.distributed.api.IInstanceConfig;
 import org.apache.cassandra.distributed.shared.DistributedTestBase;
@@ -432,6 +433,7 @@ public class UpgradeTestBase extends DistributedTestBase
     {
         return new TestCase().nodes(nodes)
                              .upgradesToCurrentFrom(v30)
+                             .withConfig(c -> c.with(Feature.GOSSIP))
                              .nodesToUpgrade(toUpgrade);
     }
 

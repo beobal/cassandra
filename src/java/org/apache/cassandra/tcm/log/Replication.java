@@ -35,7 +35,6 @@ import org.apache.cassandra.io.util.DataOutputPlus;
 import org.apache.cassandra.net.IVerbHandler;
 import org.apache.cassandra.net.Message;
 import org.apache.cassandra.net.MessagingService;
-import org.apache.cassandra.net.NoPayload;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.Epoch;
@@ -254,7 +253,7 @@ public class Replication
             else
                 log.waitForHighestConsecutive();
 
-            Message<NoPayload> response = message.emptyResponse();
+            Message<Epoch> response = message.responseWith(ClusterMetadata.current().epoch);
             MessagingService.instance().send(response, message.from());
         }
     }

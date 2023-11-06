@@ -53,7 +53,7 @@ public class ClusterMetadataUpgradeTest extends UpgradeTestBase
         .nodesToUpgrade(1, 2, 3)
         .withConfig((cfg) -> cfg.with(Feature.NETWORK, Feature.GOSSIP)
                                 .set(Constants.KEY_DTEST_FULL_STARTUP, true))
-        .singleUpgradeToCurrentFrom(v41.toStrict())
+        .upgradesToCurrentFrom(v41)
         .setup((cluster) -> {
             cluster.schemaChange(withKeyspace("ALTER KEYSPACE %s WITH replication = {'class': 'SimpleStrategy', 'replication_factor':2}"));
             cluster.schemaChange("CREATE TABLE " + KEYSPACE + ".tbl (pk int, ck int, v int, PRIMARY KEY (pk, ck))");
@@ -83,7 +83,7 @@ public class ClusterMetadataUpgradeTest extends UpgradeTestBase
         .nodes(3)
         .nodesToUpgrade(1, 2, 3)
         .withConfig((cfg) -> cfg.with(Feature.NETWORK, Feature.GOSSIP))
-        .singleUpgradeToCurrentFrom(v41.toStrict())
+        .upgradesToCurrentFrom(v41)
         .setup((cluster) -> {
             cluster.schemaChange(withKeyspace("ALTER KEYSPACE %s WITH replication = {'class': 'SimpleStrategy', 'replication_factor':3}"));
             cluster.schemaChange("CREATE TABLE " + KEYSPACE + ".tbl (k int, v int, PRIMARY KEY (k))");
@@ -123,7 +123,7 @@ public class ClusterMetadataUpgradeTest extends UpgradeTestBase
         .nodesToUpgrade(1, 2, 3)
         .withConfig((cfg) -> cfg.with(Feature.NETWORK, Feature.GOSSIP)
                                 .set(Constants.KEY_DTEST_FULL_STARTUP, true))
-        .singleUpgradeToCurrentFrom(v41.toStrict())
+        .upgradesToCurrentFrom(v41)
         .setup((cluster) -> {
             cluster.schemaChange(withKeyspace("ALTER KEYSPACE %s WITH replication = {'class': 'SimpleStrategy', 'replication_factor':2}"));
             cluster.schemaChange("CREATE TABLE " + KEYSPACE + ".tbl (pk int, ck int, v int, PRIMARY KEY (pk, ck))");
@@ -147,7 +147,7 @@ public class ClusterMetadataUpgradeTest extends UpgradeTestBase
         .nodesToUpgrade(1, 2, 3)
         .withConfig((cfg) -> cfg.with(Feature.NETWORK, Feature.GOSSIP)
                                 .set(Constants.KEY_DTEST_FULL_STARTUP, true))
-        .singleUpgradeToCurrentFrom(v41.toStrict())
+        .upgradesToCurrentFrom(v41)
         .setup((cluster) -> {
             cluster.schemaChange(withKeyspace("ALTER KEYSPACE %s WITH replication = {'class': 'SimpleStrategy', 'replication_factor':2}"));
             cluster.schemaChange("CREATE TABLE " + KEYSPACE + ".tbl (pk int, ck int, v int, PRIMARY KEY (pk, ck))");
@@ -190,13 +190,13 @@ public class ClusterMetadataUpgradeTest extends UpgradeTestBase
         .nodesToUpgrade(1)
         .withConfig((cfg) -> cfg.with(Feature.NETWORK, Feature.GOSSIP)
                                 .set(Constants.KEY_DTEST_FULL_STARTUP, true))
-        .singleUpgradeToCurrentFrom(v41.toStrict())
+        .upgradesToCurrentFrom(v41)
         .setup((cluster) -> {
             cluster.schemaChange(withKeyspace("ALTER KEYSPACE %s WITH replication = {'class': 'SimpleStrategy', 'replication_factor':1}"));
             cluster.schemaChange("CREATE TABLE " + KEYSPACE + ".tbl (pk int, ck int, v int, PRIMARY KEY (pk, ck))");
         })
         .runAfterClusterUpgrade((cluster) -> {
-            cluster.get(1).nodetoolResult("addtocms").asserts().success();
+            cluster.get(1).nodetoolResult("initializecms").asserts().success();
             // make sure we can execute transformations:
             cluster.schemaChange(withKeyspace("ALTER TABLE %s.tbl with comment = 'hello123'"));
         }).run();

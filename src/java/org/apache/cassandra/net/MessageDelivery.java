@@ -41,7 +41,7 @@ public interface MessageDelivery
     {
         Accumulator<Pair<InetAddressAndPort, RSP>> responses = new Accumulator<>(sendTo.size());
         CountDownLatch cdl = CountDownLatch.newCountDownLatch(sendTo.size());
-        RequestCallback<RSP> callback = new RequestCallbackWithFailure<RSP>()
+        RequestCallback<RSP> callback = new RequestCallbackWithFailure<>()
         {
             @Override
             public void onResponse(Message<RSP> msg)

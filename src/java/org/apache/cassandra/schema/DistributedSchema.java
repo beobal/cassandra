@@ -29,6 +29,7 @@ import java.util.UUID;
 
 import com.google.common.base.Preconditions;
 
+import org.apache.cassandra.auth.AuthKeyspace;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.Mutation;
 import org.apache.cassandra.io.util.DataInputPlus;
@@ -37,6 +38,7 @@ import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.MetadataValue;
 import org.apache.cassandra.tcm.serialization.MetadataSerializer;
 import org.apache.cassandra.tcm.serialization.Version;
+import org.apache.cassandra.tracing.TraceKeyspace;
 import org.apache.cassandra.utils.FBUtilities;
 
 import static org.apache.cassandra.db.TypeSizes.sizeof;
@@ -102,7 +104,10 @@ public class DistributedSchema implements MetadataValue<DistributedSchema>
     public static DistributedSchema fromSystemTables(Keyspaces keyspaces)
     {
         if (!keyspaces.containsKeyspace(SchemaConstants.METADATA_KEYSPACE_NAME))
-            keyspaces = keyspaces.with(DistributedMetadataLogKeyspace.initialMetadata());
+            keyspaces = keyspaces.withAddedOrReplaced(Keyspaces.of(DistributedMetadataLogKeyspace.initialMetadata(),
+                                                                   TraceKeyspace.metadata(),
+                                                                   SystemDistributedKeyspace.metadata(),
+                                                                   AuthKeyspace.metadata()));
         return new DistributedSchema(keyspaces, Epoch.UPGRADE_GOSSIP);
     }
 

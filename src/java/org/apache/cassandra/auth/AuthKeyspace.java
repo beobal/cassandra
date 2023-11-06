@@ -164,7 +164,6 @@ public final class AuthKeyspace
                                        KeyspaceParams.simple(Math.max(DEFAULT_RF, DatabaseDescriptor.getDefaultKeyspaceRF())),
                                        Tables.of(Roles, RoleMembers, RolePermissions,
                                                  ResourceRoleIndex, NetworkPermissions,
-                                                 CIDRPermissions, CIDRGroups,
-                                                 IdentityToRoles));
+                                                 CIDRPermissions, CIDRGroups, IdentityToRoles));
     }
 }
