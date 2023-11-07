@@ -283,30 +283,30 @@ public abstract  class AbstractReadRepairTest
         return replicaPlan(ks, consistencyLevel, replicas, replicas);
     }
 
-    static ReplicaPlan.ForReadRepair repairPlan(ReplicaPlan.ForRangeRead readPlan)
+    static ReplicaPlan.ForWrite repairPlan(ReplicaPlan.ForRangeRead readPlan)
     {
         return repairPlan(readPlan, readPlan.readCandidates());
     }
 
-    static ReplicaPlan.ForReadRepair repairPlan(EndpointsForRange liveAndDown, EndpointsForRange targets)
+    static ReplicaPlan.ForWrite repairPlan(EndpointsForRange liveAndDown, EndpointsForRange targets)
     {
         return repairPlan(replicaPlan(liveAndDown, targets), liveAndDown);
     }
 
-    static ReplicaPlan.ForReadRepair repairPlan(ReplicaPlan.ForRangeRead readPlan, EndpointsForRange liveAndDown)
+    static ReplicaPlan.ForWrite repairPlan(ReplicaPlan.ForRangeRead readPlan, EndpointsForRange liveAndDown)
     {
         Token token = readPlan.range().left.getToken();
         EndpointsForToken pending = EndpointsForToken.empty(token);
         EndpointsForToken live = liveAndDown.forToken(token);
-        return new ReplicaPlan.ForReadRepair(readPlan.keyspace(),
-                                             readPlan.replicationStrategy(),
-                                             ConsistencyLevel.TWO,
-                                             pending,
-                                             live,
-                                             live,
-                                             readPlan.contacts().forToken(token),
-                                             (cm) -> null,
-                                             Epoch.EMPTY);
+        return new ReplicaPlan.ForWrite(readPlan.keyspace(),
+                                        readPlan.replicationStrategy(),
+                                        ConsistencyLevel.TWO,
+                                        pending,
+                                        live,
+                                        live,
+                                        readPlan.contacts().forToken(token),
+                                        (cm) -> null,
+                                        Epoch.EMPTY);
     }
     static ReplicaPlan.ForRangeRead replicaPlan(EndpointsForRange replicas, EndpointsForRange targets)
     {

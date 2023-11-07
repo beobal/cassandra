@@ -61,30 +61,36 @@ public class BlockingPartitionRepair
         extends AsyncFuture<Object> implements RequestCallback<Object>
 {
     private final DecoratedKey key;
-    private final ReplicaPlan.ForReadRepair repairPlan;
+    private final ReplicaPlan.ForWrite repairPlan;
     private final Map<Replica, Mutation> pendingRepairs;
     private final CountDownLatch latch;
     private final Predicate<InetAddressAndPort> shouldBlockOn;
     private final int blockFor;
     private volatile long mutationsSentTime;
 
-    public BlockingPartitionRepair(DecoratedKey key, Map<Replica, Mutation> repairs, ReplicaPlan.ForReadRepair repairPlan)
+    public BlockingPartitionRepair(DecoratedKey key, Map<Replica, Mutation> repairs, ReplicaPlan.ForWrite repairPlan)
     {
         this(key, repairs, repairPlan,
              repairPlan.consistencyLevel().isDatacenterLocal() ? InOurDc.endpoints() : Predicates.alwaysTrue());
     }
 
     @VisibleForTesting
-    public BlockingPartitionRepair(DecoratedKey key, Map<Replica, Mutation> repairs, ReplicaPlan.ForReadRepair repairPlan, Predicate<InetAddressAndPort> shouldBlockOn)
+    public BlockingPartitionRepair(DecoratedKey key, Map<Replica, Mutation> repairs, ReplicaPlan.ForWrite repairPlan, Predicate<InetAddressAndPort> shouldBlockOn)
     {
         this.key = key;
         this.pendingRepairs = new ConcurrentHashMap<>(repairs);
         // Remove empty repair mutations from the block for total, since we're not sending them.
         // Besides, remote dcs can sometimes get involved in dc-local reads. We want to repair them if they do, but we
         // they shouldn't block for them.
-        this.repairPlan = repairPlan.skipBlockingFor((r) -> shouldBlockOn.test(r.endpoint()) && !repairs.containsKey(r));
+        int adjustedBlockFor = repairPlan.writeQuorum();
+        for (Replica participant : repairPlan.contacts())
+        {
+            if (!repairs.containsKey(participant) && shouldBlockOn.test(participant.endpoint()))
+                adjustedBlockFor--;
+        }
+        this.blockFor = adjustedBlockFor;
+        this.repairPlan = repairPlan;
         this.shouldBlockOn = shouldBlockOn;
-        this.blockFor = this.repairPlan.writeQuorum();
 
         // there are some cases where logically identical data can return different digests
         // For read repair, this would result in ReadRepairHandler being called with a map of
@@ -94,7 +100,7 @@ public class BlockingPartitionRepair
         latch = newCountDownLatch(Math.max(blockFor, 0));
     }
 
-    public ReplicaPlan.ForReadRepair repairPlan()
+    public ReplicaPlan.ForWrite repairPlan()
     {
         return repairPlan;
     }

@@ -83,7 +83,7 @@ public class BlockingReadRepair<E extends Endpoints<E>, P extends ReplicaPlan.Fo
     public void awaitWrites()
     {
         BlockingPartitionRepair timedOut = null;
-        ReplicaPlan.ForReadRepair repairPlan = null;
+        ReplicaPlan.ForWrite repairPlan = null;
 
         for (BlockingPartitionRepair repair : repairs)
         {
@@ -113,7 +113,7 @@ public class BlockingReadRepair<E extends Endpoints<E>, P extends ReplicaPlan.Fo
     }
 
     @Override
-    public void repairPartition(DecoratedKey partitionKey, Map<Replica, Mutation> mutations, ReplicaPlan.ForReadRepair writePlan)
+    public void repairPartition(DecoratedKey partitionKey, Map<Replica, Mutation> mutations, ReplicaPlan.ForWrite writePlan)
     {
         BlockingPartitionRepair blockingRepair = new BlockingPartitionRepair(partitionKey, mutations, writePlan);
         blockingRepair.sendInitialRepairs();

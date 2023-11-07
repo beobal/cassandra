@@ -68,7 +68,7 @@ public class RowIteratorMergeListener<E extends Endpoints<E>>
     private final Row.Builder[] currentRows;
     private final RowDiffListener diffListener;
     private final ReplicaPlan.ForRead<E, ?> readPlan;
-    private final ReplicaPlan.ForReadRepair repairPlan;
+    private final ReplicaPlan.ForWrite repairPlan;
 
     // The partition level deletion for the merge row.
     private DeletionTime partitionLevelDeletion;

@@ -400,7 +400,7 @@ public class ReplicaPlans
         return result;
     }
 
-    public static ReplicaPlan.ForReadRepair forReadRepair(ClusterMetadata metadata, Keyspace keyspace, ConsistencyLevel consistencyLevel, Token token, Predicate<Replica> isAlive) throws UnavailableException
+    public static ReplicaPlan.ForWrite forReadRepair(ClusterMetadata metadata, Keyspace keyspace, ConsistencyLevel consistencyLevel, Token token, Predicate<Replica> isAlive) throws UnavailableException
     {
         AbstractReplicationStrategy replicationStrategy = keyspace.getReplicationStrategy();
         ReplicaLayout.ForTokenRead forTokenRead = ReplicaLayout.forTokenReadLiveSorted(metadata, keyspace, replicationStrategy, token);
@@ -414,15 +414,15 @@ public class ReplicaPlans
 
         contacts = selector.select(consistencyLevel, liveAndDown, live);
         assureSufficientLiveReplicasForWrite(replicationStrategy, consistencyLevel, live.all(), liveAndDown.pending());
-        return new ReplicaPlan.ForReadRepair(keyspace,
-                                             replicationStrategy,
-                                             consistencyLevel,
-                                             liveAndDown.pending(),
-                                             liveAndDown.all(),
-                                             live.all(),
-                                             contacts,
-                                             (newClusterMetadata) -> forReadRepair(newClusterMetadata, keyspace, consistencyLevel, token, isAlive),
-                                             metadata.epoch);
+        return new ReplicaPlan.ForWrite(keyspace,
+                                        replicationStrategy,
+                                        consistencyLevel,
+                                        liveAndDown.pending(),
+                                        liveAndDown.all(),
+                                        live.all(),
+                                        contacts,
+                                        (newClusterMetadata) -> forReadRepair(newClusterMetadata, keyspace, consistencyLevel, token, isAlive),
+                                        metadata.epoch);
     }
 
     public static ReplicaPlan.ForWrite forWrite(Keyspace keyspace, ConsistencyLevel consistencyLevel, Token token, Selector selector) throws UnavailableException

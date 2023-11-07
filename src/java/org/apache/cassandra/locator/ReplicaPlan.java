@@ -196,7 +196,7 @@ public interface ReplicaPlan<E extends Endpoints<E>, P extends ReplicaPlan<E, P>
 
     public static class ForTokenRead extends AbstractForRead<EndpointsForToken, ForTokenRead>
     {
-        private final Supplier<ReplicaPlan.ForReadRepair> repairPlan;
+        private final Supplier<ReplicaPlan.ForWrite> repairPlan;
 
         public ForTokenRead(Keyspace keyspace,
                             AbstractReplicationStrategy replicationStrategy,
@@ -204,7 +204,7 @@ public interface ReplicaPlan<E extends Endpoints<E>, P extends ReplicaPlan<E, P>
                             EndpointsForToken candidates,
                             EndpointsForToken contacts,
                             Function<ClusterMetadata, ReplicaPlan.ForTokenRead> recompute,
-                            Supplier<ReplicaPlan.ForReadRepair> repairPlan,
+                            Supplier<ReplicaPlan.ForWrite> repairPlan,
                             Epoch epoch)
         {
             super(keyspace, replicationStrategy, consistencyLevel, candidates, contacts, recompute, epoch);
@@ -218,10 +218,10 @@ public interface ReplicaPlan<E extends Endpoints<E>, P extends ReplicaPlan<E, P>
             return res;
         }
 
-        public ForReadRepair repairPlan()
+        public ForWrite repairPlan()
         {
             if (repairPlan != null)
-                return repairPlan.get();
+                return repairPlan.get().withContacts(contacts);
 
             throw new IllegalStateException("Can not construct a repair plan on a derivative plan.");
         }
@@ -229,7 +229,7 @@ public interface ReplicaPlan<E extends Endpoints<E>, P extends ReplicaPlan<E, P>
 
     public static class ForRangeRead extends AbstractForRead<EndpointsForRange, ForRangeRead>
     {
-        private final Function<Token, ReplicaPlan.ForReadRepair> repairPlan;
+        private final Function<Token, ReplicaPlan.ForWrite> repairPlan;
         final AbstractBounds<PartitionPosition> range;
         final int vnodeCount;
 
@@ -241,7 +241,7 @@ public interface ReplicaPlan<E extends Endpoints<E>, P extends ReplicaPlan<E, P>
                             EndpointsForRange contact,
                             int vnodeCount,
                             Function<ClusterMetadata, ReplicaPlan.ForRangeRead> recompute,
-                            Function<Token, ReplicaPlan.ForReadRepair> repairPlan,
+                            Function<Token, ReplicaPlan.ForWrite> repairPlan,
                             Epoch epoch)
         {
             super(keyspace, replicationStrategy, consistencyLevel, candidates, contact, recompute, epoch);
@@ -264,7 +264,7 @@ public interface ReplicaPlan<E extends Endpoints<E>, P extends ReplicaPlan<E, P>
             return res;
         }
 
-        public ForReadRepair repairPlan(Token token)
+        public ForWrite repairPlan(Token token)
         {
             if (repairPlan != null)
             {
@@ -402,66 +402,6 @@ public interface ReplicaPlan<E extends Endpoints<E>, P extends ReplicaPlan<E, P>
         public String toString()
         {
             return "ReplicaPlan.ForWrite [ CL: " + consistencyLevel + " keyspace: " + keyspace + " liveAndDown: " + liveAndDown + " live: " + live + " contacts: " + contacts() +  " ]";
-        }
-    }
-
-
-    public static class ForReadRepair extends ForWrite
-    {
-        private final Predicate<Replica> skipBlockingFor;
-
-        public ForReadRepair(Keyspace keyspace,
-                             AbstractReplicationStrategy replicationStrategy,
-                             ConsistencyLevel consistencyLevel,
-                             EndpointsForToken pending,
-                             EndpointsForToken liveAndDown,
-                             EndpointsForToken live,
-                             EndpointsForToken contact,
-                             Function<ClusterMetadata, ForWrite> recompute,
-                             Epoch epoch)
-        {
-            this(keyspace, replicationStrategy, consistencyLevel, pending, liveAndDown, live, contact, recompute, (r) -> false, epoch);
-        }
-
-        private ForReadRepair(Keyspace keyspace,
-                              AbstractReplicationStrategy replicationStrategy,
-                              ConsistencyLevel consistencyLevel,
-                              EndpointsForToken pending,
-                              EndpointsForToken liveAndDown,
-                              EndpointsForToken live,
-                              EndpointsForToken contact,
-                              Function<ClusterMetadata, ForWrite> recompute,
-                              Predicate<Replica> skipBlockingFor,
-                              Epoch epoch)
-        {
-            super(keyspace, replicationStrategy, consistencyLevel, pending, liveAndDown, live, contact, recompute, epoch);
-            this.skipBlockingFor = skipBlockingFor;
-        }
-
-        @Override
-        public int writeQuorum()
-        {
-            int writeQuorum = super.writeQuorum();
-            for (Replica contact : contacts())
-            {
-                if (skipBlockingFor.test(contact))
-                    writeQuorum--;
-            }
-            return writeQuorum;
-        }
-
-        public ForReadRepair skipBlockingFor(Predicate<Replica> newVal)
-        {
-            return new ForReadRepair(keyspace,
-                                     replicationStrategy,
-                                     consistencyLevel,
-                                     pending,
-                                     liveAndDown,
-                                     live,
-                                     contacts,
-                                     recompute,
-                                     newVal,
-                                     epoch);
         }
     }
 

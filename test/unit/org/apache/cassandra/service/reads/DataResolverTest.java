@@ -1326,7 +1326,7 @@ public class DataResolverTest extends AbstractReadResponseTest
 
     private ReplicaPlan.SharedForRangeRead plan(EndpointsForRange replicas, ConsistencyLevel consistencyLevel)
     {
-        Function<Token, ReplicaPlan.ForReadRepair> repairPlan = (t) -> ReplicaPlans.forReadRepair(ClusterMetadata.current(), ks, consistencyLevel, t, (i) -> true);
+        Function<Token, ReplicaPlan.ForWrite> repairPlan = (t) -> ReplicaPlans.forReadRepair(ClusterMetadata.current(), ks, consistencyLevel, t, (i) -> true);
         return ReplicaPlan.shared(new ReplicaPlan.ForRangeRead(ks,
                                                                ks.getReplicationStrategy(),
                                                                consistencyLevel,
