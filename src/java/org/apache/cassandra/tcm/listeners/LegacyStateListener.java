@@ -136,6 +136,11 @@ public class LegacyStateListener implements ChangeListener.Async
                     InetAddressAndPort replacement = prev.directory.endpoint(change);
                     Collection<Token> tokens = GossipHelper.getTokensFromOperation(replace);
                     logger.info("Node {} will complete replacement of {} for tokens {}", replacement, replaced, tokens);
+                    if (!replacement.equals(replaced))
+                    {
+                        for (Token token : tokens)
+                            logger.warn("Token {} changing ownership from {} to {}", token, replaced, replacement);
+                    }
                 }
             }
             else

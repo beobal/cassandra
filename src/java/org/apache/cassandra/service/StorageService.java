@@ -1557,25 +1557,29 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         }
     }
 
-    public void abortBootstrap(String nodeStr, String endpoint)
+    public void abortBootstrap(String nodeStr, String endpointStr)
     {
+        logger.debug("Aborting bootstrap for {}/{}", nodeStr, endpointStr);
         ClusterMetadata metadata = ClusterMetadata.current();
         NodeId nodeId;
         if (!StringUtils.isEmpty(nodeStr))
             nodeId = NodeId.fromString(nodeStr);
         else
-            nodeId = metadata.directory.peerId(InetAddressAndPort.getByNameUnchecked(endpoint));
-        if (FailureDetector.instance.isAlive(metadata.directory.endpoint(nodeId)))
+            nodeId = metadata.directory.peerId(InetAddressAndPort.getByNameUnchecked(endpointStr));
+
+        InetAddressAndPort endpoint = metadata.directory.endpoint(nodeId);
+        if (Gossiper.instance.isKnownEndpoint(endpoint) && FailureDetector.instance.isAlive(endpoint))
             throw new RuntimeException("Can't abort bootstrap for " + nodeId + " - it is alive");
         NodeState nodeState = metadata.directory.peerState(nodeId);
         switch (nodeState)
         {
             case REGISTERED:
             case BOOTSTRAPPING:
+            case BOOT_REPLACING:
                 if (metadata.inProgressSequences.contains(nodeId))
                 {
                     MultiStepOperation<?> seq = metadata.inProgressSequences.get(nodeId);
-                    if (seq.kind() != MultiStepOperation.Kind.JOIN)
+                    if (seq.kind() != MultiStepOperation.Kind.JOIN && seq.kind() != MultiStepOperation.Kind.REPLACE)
                         throw new RuntimeException("Can't abort bootstrap for " + nodeId + " since it is not bootstrapping");
                     ClusterMetadataService.instance().commit(new CancelInProgressSequence(nodeId));
                 }

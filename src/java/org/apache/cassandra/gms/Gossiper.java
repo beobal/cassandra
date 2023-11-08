@@ -847,7 +847,7 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean, 
         {
             return false;
         }
-        return !isDeadState(epState) && !ClusterMetadata.current().directory.allAddresses().contains(endpoint);
+        return !isDeadState(epState) && !ClusterMetadata.current().directory.allJoinedEndpoints().contains(endpoint);
     }
 
     @VisibleForTesting
