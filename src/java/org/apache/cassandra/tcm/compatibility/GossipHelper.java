@@ -21,6 +21,7 @@ package org.apache.cassandra.tcm.compatibility;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Collection;
 import java.util.Collections;
@@ -294,7 +295,7 @@ public class GossipHelper
 
     /**
      * reads state for the local host from system keyspaces and creates an EndpointState, only to be used
-     * in the single-node upgrade case
+     * if we can't contact any peers during upgrade
      */
     public static Map<InetAddressAndPort, EndpointState> storedEpstate()
     {
@@ -311,7 +312,13 @@ public class GossipHelper
         Collection<Token> tokens = SystemKeyspace.getSavedTokens();
         epstate.addApplicationState(STATUS_WITH_PORT, vf.normal(tokens));
         epstate.addApplicationState(TOKENS, vf.tokens(tokens));
-        return ImmutableMap.of(FBUtilities.getBroadcastAddressAndPort(), epstate);
+        epstate.addApplicationState(INTERNAL_ADDRESS_AND_PORT, vf.internalAddressAndPort(SystemKeyspace.getPreferredIP(FBUtilities.getLocalAddressAndPort())));
+        epstate.addApplicationState(NATIVE_ADDRESS_AND_PORT, vf.nativeaddressAndPort(FBUtilities.getBroadcastNativeAddressAndPort()));
+
+        Map<InetAddressAndPort, EndpointState> epstates = new HashMap<>();
+        epstates.put(FBUtilities.getBroadcastAddressAndPort(), epstate);
+        epstates.putAll(SystemKeyspace.peerEndpointStates());
+        return epstates;
     }
 
     @VisibleForTesting

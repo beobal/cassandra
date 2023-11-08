@@ -75,6 +75,9 @@ import org.apache.cassandra.dht.LocalPartitioner;
 import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.exceptions.ConfigurationException;
+import org.apache.cassandra.gms.EndpointState;
+import org.apache.cassandra.gms.HeartBeatState;
+import org.apache.cassandra.gms.VersionedValue;
 import org.apache.cassandra.io.sstable.SSTableId;
 import org.apache.cassandra.io.sstable.SequenceBasedSSTableId;
 import org.apache.cassandra.io.util.DataInputBuffer;
@@ -97,6 +100,7 @@ import org.apache.cassandra.schema.Tables;
 import org.apache.cassandra.schema.Types;
 import org.apache.cassandra.schema.UserFunctions;
 import org.apache.cassandra.schema.Views;
+import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.service.paxos.Ballot;
 import org.apache.cassandra.service.paxos.Commit;
 import org.apache.cassandra.service.paxos.Commit.Accepted;
@@ -128,6 +132,14 @@ import static org.apache.cassandra.config.DatabaseDescriptor.paxosStatePurging;
 import static org.apache.cassandra.cql3.QueryProcessor.executeInternal;
 import static org.apache.cassandra.cql3.QueryProcessor.executeInternalWithNowInSec;
 import static org.apache.cassandra.cql3.QueryProcessor.executeOnceInternal;
+import static org.apache.cassandra.gms.ApplicationState.DC;
+import static org.apache.cassandra.gms.ApplicationState.HOST_ID;
+import static org.apache.cassandra.gms.ApplicationState.INTERNAL_ADDRESS_AND_PORT;
+import static org.apache.cassandra.gms.ApplicationState.NATIVE_ADDRESS_AND_PORT;
+import static org.apache.cassandra.gms.ApplicationState.RACK;
+import static org.apache.cassandra.gms.ApplicationState.RELEASE_VERSION;
+import static org.apache.cassandra.gms.ApplicationState.STATUS_WITH_PORT;
+import static org.apache.cassandra.gms.ApplicationState.TOKENS;
 import static org.apache.cassandra.service.paxos.Commit.latest;
 import static org.apache.cassandra.utils.CassandraVersion.NULL_VERSION;
 import static org.apache.cassandra.utils.CassandraVersion.UNREADABLE_VERSION;
@@ -2057,5 +2069,42 @@ public final class SystemKeyspace
         executeInternal(query, epoch.getEpoch(), period);
         query = String.format("UPDATE %s.%s SET period = ?, epoch = ? WHERE key = 'latest'", SchemaConstants.SYSTEM_KEYSPACE_NAME, LAST_SEALED_PERIOD_TABLE_NAME);
         executeInternal(query, period, epoch.getEpoch());
+    }
+
+    public static Map<InetAddressAndPort, EndpointState> peerEndpointStates()
+    {
+        Map<InetAddressAndPort, EndpointState> epstates = new HashMap<>();
+        VersionedValue.VersionedValueFactory vf = StorageService.instance.valueFactory;
+        String query = String.format("select * from %s.%s", SchemaConstants.SYSTEM_KEYSPACE_NAME, PEERS_V2);
+        UntypedResultSet res = executeInternal(query);
+        for (UntypedResultSet.Row row : res)
+        {
+            EndpointState epstate = new EndpointState(new HeartBeatState(0, 0));
+            InetAddressAndPort endpoint = InetAddressAndPort.getByAddressOverrideDefaults(row.getInetAddress("peer"), row.getInt("peer_port"));
+            epstate.addApplicationState(DC, vf.datacenter(row.getString("data_center")));
+            epstate.addApplicationState(RACK, vf.rack(row.getString("rack")));
+            epstate.addApplicationState(RELEASE_VERSION, vf.releaseVersion(row.getString("release_version")));
+            epstate.addApplicationState(HOST_ID, vf.hostId(row.getUUID("host_id")));
+            Collection<Token> tokens = deserializeTokens(row.getSet("tokens", UTF8Type.instance));
+            epstate.addApplicationState(STATUS_WITH_PORT, vf.normal(tokens));
+            epstate.addApplicationState(TOKENS, vf.tokens(tokens));
+
+            if (row.has("preferred_ip"))
+            {
+                epstate.addApplicationState(INTERNAL_ADDRESS_AND_PORT,
+                                            vf.internalAddressAndPort(InetAddressAndPort.getByAddressOverrideDefaults(row.getInetAddress("preferred_ip"),
+                                                                                                                      row.getInt("preferred_port"))));
+            }
+
+            if (row.has("native_ip"))
+            {
+                epstate.addApplicationState(NATIVE_ADDRESS_AND_PORT,
+                                            vf.nativeaddressAndPort(InetAddressAndPort.getByAddressOverrideDefaults(row.getInetAddress("native_ip"),
+                                                                                                                    row.getInt("native_port"))));
+            }
+
+            epstates.put(endpoint, epstate);
+        }
+        return epstates;
     }
 }

@@ -21,6 +21,7 @@ package org.apache.cassandra.gms;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -64,14 +65,22 @@ public class NewGossiper
         ShadowRoundHandler shadowRoundHandler = new ShadowRoundHandler(peers);
         handler = shadowRoundHandler;
 
-        try
+        int tries = 0;
+        while (true)
         {
-            return shadowRoundHandler.doShadowRound().get(30, TimeUnit.SECONDS);
+            try
+            {
+                return shadowRoundHandler.doShadowRound().get(15, TimeUnit.SECONDS);
+            }
+            catch (InterruptedException | ExecutionException | TimeoutException e)
+            {
+                if (++tries > 3)
+                    break;
+                logger.warn("Got no response for shadow round");
+            }
         }
-        catch (InterruptedException | ExecutionException | TimeoutException e)
-        {
-            throw new RuntimeException(e);
-        }
+        logger.warn("Not able to construct initial cluster metadata from gossip, using system tables instead");
+        return GossipHelper.storedEpstate();
     }
 
 
