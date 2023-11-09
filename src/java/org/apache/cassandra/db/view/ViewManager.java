@@ -152,7 +152,7 @@ public class ViewManager
         }
 
         View view = new View(definition, keyspace.getColumnFamilyStore(definition.baseTableId));
-        forTable(view.getDefinition().baseTableMetadata()).add(view);
+        forTable(keyspace.getMetadata().tables.getNullable(view.getDefinition().baseTableId)).add(view);
         viewsByName.put(definition.name(), view);
     }
 
