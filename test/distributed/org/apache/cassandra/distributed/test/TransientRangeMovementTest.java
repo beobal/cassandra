@@ -44,6 +44,7 @@ import static com.google.common.collect.Lists.newArrayList;
 import static org.apache.cassandra.config.CassandraRelevantProperties.BOOTSTRAP_SKIP_SCHEMA_CHECK;
 import static org.apache.cassandra.distributed.shared.ClusterUtils.awaitRingJoin;
 import static org.apache.cassandra.distributed.shared.ClusterUtils.replaceHostAndStart;
+import static org.apache.cassandra.distributed.shared.ClusterUtils.stopUnchecked;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -100,6 +101,7 @@ public class TransientRangeMovementTest extends TestBaseImpl
                                            .start()))
         {
             populate(cluster);
+            stopUnchecked(cluster.get(2));
             IInvokableInstance replacingNode = replaceHostAndStart(cluster, cluster.get(2), props -> {
                 // since we have a downed host there might be a schema version which is old show up but
                 // can't be fetched since the host is down...
@@ -107,7 +109,7 @@ public class TransientRangeMovementTest extends TestBaseImpl
             });
             awaitRingJoin(cluster.get(1), replacingNode);
             awaitRingJoin(replacingNode, cluster.get(1));
-            cluster.forEach(i -> i.nodetoolResult("cleanup").asserts().success());
+            cluster.forEach(i -> { if (i.config().num() != 2) i.nodetoolResult("cleanup").asserts().success();} );
             assertAllContained(localStrs(cluster.get(1)),
                                newArrayList("12", "14", "16", "18", "20"),
                                Pair.create("00", "10"),

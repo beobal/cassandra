@@ -59,6 +59,7 @@ import static org.apache.cassandra.distributed.api.TokenSupplier.evenlyDistribut
 import static org.apache.cassandra.distributed.impl.DistributedTestSnitch.toCassandraInetAddressAndPort;
 import static org.apache.cassandra.distributed.shared.ClusterUtils.pauseBeforeCommit;
 import static org.apache.cassandra.distributed.shared.ClusterUtils.replaceHostAndStart;
+import static org.apache.cassandra.distributed.shared.ClusterUtils.stopUnchecked;
 import static org.apache.cassandra.distributed.shared.NetworkTopology.singleDcNetworkTopology;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -256,11 +257,13 @@ public class GossipTest extends TestBaseImpl
         {
             // 4 nodes, stop node3 from catching up
             cluster.filters().verbs(Verb.TCM_REPLICATION.id).to(3).drop();
-            String node4 = cluster.get(4).config().broadcastAddress().getAddress().getHostAddress();
-            replaceHostAndStart(cluster, cluster.get(4));
+            IInvokableInstance toRemove = cluster.get(4);
+            String node4 = toRemove.config().broadcastAddress().getAddress().getHostAddress();
+            stopUnchecked(toRemove);
+            replaceHostAndStart(cluster, toRemove);
             Uninterruptibles.sleepUninterruptibly(10, TimeUnit.SECONDS); // wait a few gossip rounds
             cluster.get(2).runOnInstance(() -> assertFalse(Gossiper.instance.endpointStateMap.containsKey(InetAddressAndPort.getByNameUnchecked(node4))));
-            cluster.get(3).runOnInstance(() -> assertTrue(Gossiper.instance.endpointStateMap.containsKey(InetAddressAndPort.getByNameUnchecked(node4))));
+            cluster.get(3).runOnInstance(() -> assertFalse(Gossiper.instance.endpointStateMap.containsKey(InetAddressAndPort.getByNameUnchecked(node4))));
             cluster.get(3).nodetoolResult("disablegossip").asserts().success();
             cluster.get(3).nodetoolResult("enablegossip").asserts().success();
             Uninterruptibles.sleepUninterruptibly(10, TimeUnit.SECONDS);

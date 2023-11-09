@@ -22,7 +22,6 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
-import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -113,9 +112,8 @@ public class HostReplacementTest extends TestBaseImpl
     /**
      * Attempt to do a host replacement on a alive host
      */
-    @Test @Ignore
+    @Test
     // TODO this might actually be safe now (though probably still undesirable),
-    //  ignoring while we decide whether to preserve current restriction
     public void replaceAliveHost() throws IOException
     {
         // start with 2 nodes, stop both nodes, start the seed, host replace the down node)
