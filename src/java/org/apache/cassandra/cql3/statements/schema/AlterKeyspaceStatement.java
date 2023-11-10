@@ -29,8 +29,6 @@ import org.apache.cassandra.audit.AuditLogEntryType;
 import org.apache.cassandra.auth.Permission;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.cql3.CQLStatement;
-import org.apache.cassandra.db.ColumnFamilyStore;
-import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.guardrails.Guardrails;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.locator.AbstractReplicationStrategy;
@@ -43,6 +41,7 @@ import org.apache.cassandra.schema.KeyspaceMetadata.KeyspaceDiff;
 import org.apache.cassandra.schema.Keyspaces;
 import org.apache.cassandra.schema.Keyspaces.KeyspacesDiff;
 import org.apache.cassandra.schema.SchemaConstants;
+import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.ClientState;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.membership.NodeId;
@@ -98,7 +97,7 @@ public final class AlterKeyspaceStatement extends AlterSchemaStatement
         newKeyspace.replicationStrategy.validate(metadata);
 
         validateNoRangeMovements();
-        validateTransientReplication(keyspace.replicationStrategy, newKeyspace.replicationStrategy);
+        validateTransientReplication(keyspace, newKeyspace);
 
         // Because we used to not properly validate unrecognized options, we only log a warning if we find one.
         try
@@ -167,15 +166,15 @@ public final class AlterKeyspaceStatement extends AlterSchemaStatement
         }
     }
 
-    private void validateTransientReplication(AbstractReplicationStrategy oldStrategy, AbstractReplicationStrategy newStrategy)
+    private void validateTransientReplication(KeyspaceMetadata current, KeyspaceMetadata proposed)
     {
         //If there is no read traffic there are some extra alterations you can safely make, but this is so atypical
         //that a good default is to not allow unsafe changes
         if (allow_unsafe_transient_changes)
             return;
 
-        ReplicationFactor oldRF = oldStrategy.getReplicationFactor();
-        ReplicationFactor newRF = newStrategy.getReplicationFactor();
+        ReplicationFactor oldRF = current.replicationStrategy.getReplicationFactor();
+        ReplicationFactor newRF = proposed.replicationStrategy.getReplicationFactor();
 
         int oldTrans = oldRF.transientReplicas();
         int oldFull = oldRF.fullReplicas;
@@ -187,19 +186,13 @@ public final class AlterKeyspaceStatement extends AlterSchemaStatement
             if (DatabaseDescriptor.getNumTokens() > 1)
                 throw new ConfigurationException(String.format("Transient replication is not supported with vnodes yet"));
 
-            Keyspace ks = Keyspace.open(keyspaceName);
-            for (ColumnFamilyStore cfs : ks.getColumnFamilyStores())
-            {
-                if (cfs.viewManager.hasViews())
-                {
-                    throw new ConfigurationException("Cannot use transient replication on keyspaces using materialized views");
-                }
 
-                if (cfs.indexManager.hasIndexes())
-                {
+            if (!current.views.isEmpty())
+                throw new ConfigurationException("Cannot use transient replication on keyspaces using materialized views");
+
+            for (TableMetadata table : current.tables)
+                if (!table.indexes.isEmpty())
                     throw new ConfigurationException("Cannot use transient replication on keyspaces using secondary indexes");
-                }
-            }
         }
 
         //This is true right now because the transition from transient -> full lacks the pending state

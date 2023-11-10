@@ -31,7 +31,6 @@ import org.apache.cassandra.cql3.CQLStatement;
 import org.apache.cassandra.cql3.ColumnIdentifier;
 import org.apache.cassandra.cql3.QualifiedName;
 import org.apache.cassandra.cql3.statements.schema.IndexTarget.Type;
-import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.guardrails.Guardrails;
 import org.apache.cassandra.db.marshal.MapType;
 import org.apache.cassandra.exceptions.InvalidRequestException;
@@ -146,7 +145,7 @@ public final class CreateIndexStatement extends AlterSchemaStatement
         if (table.isView())
             throw ire(MATERIALIZED_VIEWS_NOT_SUPPORTED);
 
-        if (Keyspace.open(table.keyspace).getReplicationStrategy().hasTransientReplicas())
+        if (keyspace.replicationStrategy.hasTransientReplicas())
             throw new InvalidRequestException(TRANSIENTLY_REPLICATED_KEYSPACE_NOT_SUPPORTED);
 
         // guardrails to limit number of secondary indexes per table.

@@ -44,7 +44,6 @@ import org.apache.cassandra.cql3.CQLStatement;
 import org.apache.cassandra.cql3.ColumnIdentifier;
 import org.apache.cassandra.cql3.QualifiedName;
 import org.apache.cassandra.cql3.functions.masking.ColumnMask;
-import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.guardrails.Guardrails;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.exceptions.InvalidRequestException;
@@ -52,7 +51,6 @@ import org.apache.cassandra.gms.ApplicationState;
 import org.apache.cassandra.gms.Gossiper;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.schema.ColumnMetadata;
-import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.Keyspaces;
 import org.apache.cassandra.schema.Keyspaces.KeyspacesDiff;
@@ -75,7 +73,6 @@ import org.apache.cassandra.utils.NoSpamLogger;
 import static com.google.common.collect.Iterables.isEmpty;
 import static com.google.common.collect.Iterables.transform;
 import static java.lang.String.format;
-import static java.lang.String.join;
 import static org.apache.cassandra.schema.TableMetadata.Flag;
 
 public abstract class AlterTableStatement extends AlterSchemaStatement
@@ -409,12 +406,12 @@ public abstract class AlterTableStatement extends AlterSchemaStatement
                 throw ire("Cannot drop non-frozen column %s of user type %s", column, currentColumn.type.asCQL3Type());
 
             // TODO: some day try and find a way to not rely on Keyspace/IndexManager/Index to find dependent indexes
-            Set<IndexMetadata> dependentIndexes = Keyspace.openAndGetStore(table).indexManager.getDependentIndexes(currentColumn);
-            if (!dependentIndexes.isEmpty())
+            // TODO CEP-21: fix before beta
+            if (!table.indexes.isEmpty())
             {
-                throw ire("Cannot drop column %s because it has dependent secondary indexes (%s)",
-                          currentColumn,
-                          join(", ", transform(dependentIndexes, i -> i.name)));
+                throw ire("Cannot drop column %s because %s.%s has secondary indexes (%s). " +
+                          "This currently requires indexes to be dropped and recreated after the rename",
+                          currentColumn, table.keyspace, table.name, transform(table.indexes, i -> i.name));
             }
 
             if (!isEmpty(keyspace.views.forTable(table.id)))
@@ -487,12 +484,12 @@ public abstract class AlterTableStatement extends AlterSchemaStatement
             }
 
             // TODO: some day try and find a way to not rely on Keyspace/IndexManager/Index to find dependent indexes
-            Set<IndexMetadata> dependentIndexes = Keyspace.openAndGetStore(table).indexManager.getDependentIndexes(column);
-            if (!dependentIndexes.isEmpty())
+            // TODO CEP-21: fix before beta
+            if (!table.indexes.isEmpty())
             {
-                throw ire("Can't rename column %s because it has dependent secondary indexes (%s)",
-                          oldName,
-                          join(", ", transform(dependentIndexes, i -> i.name)));
+                throw ire("Can't rename column %s because %s.%s has secondary indexes (%s). " +
+                          "This currently requires indexes to be dropped and recreated after the rename",
+                          oldName, table.keyspace, table.name, transform(table.indexes, i -> i.name));
             }
 
             for (ViewMetadata view : keyspace.views.forTable(table.id))
