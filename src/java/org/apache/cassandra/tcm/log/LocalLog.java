@@ -27,6 +27,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -89,6 +90,10 @@ public abstract class LocalLog implements Closeable
     private static final Logger logger = LoggerFactory.getLogger(LocalLog.class);
 
     protected final AtomicReference<ClusterMetadata> committed;
+    // Indicates that, during process startup, the intial replay of persisted log entries has been performed
+    // and the log made ready for use. This involves adding the listeners and firing a one time post-commit
+    // notification to them all.
+    private final AtomicBoolean replayComplete = new AtomicBoolean();
 
     /**
      * Custom comparator for pending entries. In general, we would like entries in the pending set to be ordered by epoch,
@@ -114,7 +119,7 @@ public abstract class LocalLog implements Closeable
     protected final Set<ChangeListener> changeListeners;
     protected final Set<ChangeListener.Async> asyncChangeListeners;
 
-    private LocalLog(LogStorage persistence, ClusterMetadata initial, boolean addListeners, boolean isReset)
+    private LocalLog(LogStorage persistence, ClusterMetadata initial, boolean withListeners, boolean isReset)
     {
         assert initial.epoch.is(EMPTY) || initial.epoch.is(Epoch.UPGRADE_STARTUP) || isReset;
         committed = new AtomicReference<>(initial);
@@ -122,7 +127,7 @@ public abstract class LocalLog implements Closeable
         listeners = Sets.newConcurrentHashSet();
         changeListeners = Sets.newConcurrentHashSet();
         asyncChangeListeners = Sets.newConcurrentHashSet();
-        if (addListeners)
+        if (withListeners)
             addListeners();
     }
 
@@ -187,9 +192,9 @@ public abstract class LocalLog implements Closeable
         return new Async(LogStorage.SystemKeyspace, initial, true, false);
     }
 
-    public static LocalLog async(ClusterMetadata initial, boolean isReset)
+    public static LocalLog async(ClusterMetadata initial, boolean isReset, boolean withListeners)
     {
-        return new Async(LogStorage.SystemKeyspace, initial, true, isReset);
+        return new Async(LogStorage.SystemKeyspace, initial, withListeners, isReset);
     }
 
     public boolean hasGaps()
@@ -475,9 +480,9 @@ public abstract class LocalLog implements Closeable
         private final AsyncRunnable runnable;
         private final Interruptible executor;
 
-        private Async(LogStorage storage, ClusterMetadata initial, boolean addListeners, boolean isReset)
+        private Async(LogStorage storage, ClusterMetadata initial, boolean withListeners, boolean isReset)
         {
-            super(storage, initial, addListeners, isReset);
+            super(storage, initial, withListeners, isReset);
             this.runnable = new AsyncRunnable();
             this.executor = ExecutorFactory.Global.executorFactory().infiniteLoop("GlobalLogFollower", runnable, SAFE, NON_DAEMON, UNSYNCHRONIZED);
         }
@@ -651,9 +656,9 @@ public abstract class LocalLog implements Closeable
 
     private static class Sync extends LocalLog
     {
-        private Sync(ClusterMetadata initial, LogStorage logStorage, boolean addListeners, boolean isReset)
+        private Sync(ClusterMetadata initial, LogStorage logStorage, boolean withListeners, boolean isReset)
         {
-            super(logStorage, initial, addListeners, isReset);
+            super(logStorage, initial, withListeners, isReset);
         }
 
         void runOnce(DurationSpec durationSpec)
@@ -684,12 +689,26 @@ public abstract class LocalLog implements Closeable
     {
         addListener(snapshotListener());
         addListener(new InitializationListener());
-        addListener(SchemaListener.INSTANCE_FOR_STARTUP);
+        addListener(new SchemaListener());
         addListener(new LegacyStateListener());
         addListener(new PlacementsChangeListener());
         addListener(new MetadataSnapshotListener());
         addListener(new ClientNotificationListener());
         addListener(new UpgradeMigrationListener());
+
+    }
+
+    public void replayCompleted(ClusterMetadata intial)
+    {
+        if (!replayComplete.compareAndSet(false, true))
+            throw new IllegalStateException("Log is already fully initialised");
+
+        logger.debug("LocalLog replay complete, at epoch {}", committed.get().epoch);
+        listeners.clear();
+        changeListeners.clear();
+        asyncChangeListeners.clear();
+        addListeners();
+        notifyPostCommit(intial, committed.get(), true);
     }
 
     private LogListener snapshotListener()

@@ -150,7 +150,8 @@ public class ClusterMetadataService
                            ClusterMetadata initial,
                            Function<Processor, Processor> wrapProcessor,
                            Supplier<State> cmsStateSupplier,
-                           boolean isReset)
+                           boolean isReset,
+                           boolean withListeners)
     {
         this.placementProvider = placementProvider;
         this.snapshots = new MetadataSnapshots.SystemKeyspaceMetadataSnapshots();
@@ -159,13 +160,13 @@ public class ClusterMetadataService
         if (CassandraRelevantProperties.TCM_USE_ATOMIC_LONG_PROCESSOR.getBoolean())
         {
             LogStorage logStorage = LogStorage.SystemKeyspace;
-            log = LocalLog.sync(initial, logStorage, true, isReset);
+            log = LocalLog.sync(initial, logStorage, withListeners, isReset);
             localProcessor = wrapProcessor.apply(new AtomicLongBackedProcessor(log, isReset));
             fetchLogHandler = new FetchCMSLog.Handler((e, ignored) -> logStorage.getLogState(e));
         }
         else
         {
-            log = LocalLog.async(initial, isReset);
+            log = LocalLog.async(initial, isReset, withListeners);
             localProcessor = wrapProcessor.apply(new PaxosBackedProcessor(log));
             fetchLogHandler = new FetchCMSLog.Handler();
         }

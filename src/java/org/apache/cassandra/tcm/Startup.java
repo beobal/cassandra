@@ -36,8 +36,6 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.config.CassandraRelevantProperties;
 import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.db.ColumnFamilyStore;
-import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.SystemKeyspace;
 import org.apache.cassandra.db.commitlog.CommitLog;
 import org.apache.cassandra.dht.BootStrapper;
@@ -49,7 +47,6 @@ import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.net.MessagingService;
 import org.apache.cassandra.schema.DistributedSchema;
 import org.apache.cassandra.service.StorageService;
-import org.apache.cassandra.tcm.listeners.SchemaListener;
 import org.apache.cassandra.tcm.log.SystemKeyspaceStorage;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.membership.NodeState;
@@ -143,18 +140,15 @@ import static org.apache.cassandra.utils.FBUtilities.getBroadcastAddressAndPort;
                                                                       initial,
                                                                       wrapProcessor,
                                                                       ClusterMetadataService::state,
+                                                                      false,
                                                                       false));
         ClusterMetadataService.instance().initRecentlySealedPeriodsIndex();
         ClusterMetadataService.instance().log().replayPersisted();
-        ClusterMetadataService.instance().log().removeListener(SchemaListener.INSTANCE_FOR_STARTUP);
-        DistributedSchema schema = ClusterMetadata.current().schema;
-        schema.getKeyspaces().forEach(ksm -> {
-            Keyspace ks = schema.getKeyspace(ksm.name);
-            ks.getColumnFamilyStores().forEach(cfs -> {
-                cfs.concatWithIndexes().forEach(ColumnFamilyStore::loadInitialSSTables);
-            });
-        });
-        ClusterMetadataService.instance().log().addListener(new SchemaListener());
+
+        ClusterMetadata replayed = ClusterMetadata.current();
+        replayed.schema.initializeKeyspaceInstances(initial.schema);
+        ClusterMetadataService.instance().log().replayCompleted(initial);
+
         NodeId nodeId = ClusterMetadata.current().myNodeId();
         UUID currentHostId = SystemKeyspace.getLocalHostId();
         if (nodeId != null && !Objects.equals(nodeId.toUUID(), currentHostId))
@@ -233,7 +227,8 @@ import static org.apache.cassandra.utils.FBUtilities.getBroadcastAddressAndPort;
                                                                       emptyFromSystemTables,
                                                                       wrapProcessor,
                                                                       ClusterMetadataService::state,
-                                                                      false));
+                                                                      false,
+                                                                      true));
         initMessaging.run();
         try
         {
@@ -255,6 +250,7 @@ import static org.apache.cassandra.utils.FBUtilities.getBroadcastAddressAndPort;
         Gossiper.instance.maybeInitializeLocalState(SystemKeyspace.incrementAndGetGeneration());
         for (Map.Entry<NodeId, NodeState> entry : initial.directory.states.entrySet())
             Gossiper.instance.mergeNodeToGossip(entry.getKey(), initial);
+
         // double check that everything was added, can remove once we are confident
         ClusterMetadata cmGossip = fromEndpointStates(emptyFromSystemTables.schema, Gossiper.instance.getEndpointStates());
         assert cmGossip.equals(initial) : cmGossip + " != " + initial;
@@ -286,9 +282,8 @@ import static org.apache.cassandra.utils.FBUtilities.getBroadcastAddressAndPort;
                                                                       metadata,
                                                                       wrapProcessor,
                                                                       ClusterMetadataService::state,
+                                                                      true,
                                                                       true));
-        ClusterMetadataService.instance().log().removeListener(SchemaListener.INSTANCE_FOR_STARTUP);
-        ClusterMetadataService.instance().log().addListener(new SchemaListener());
         ClusterMetadataService.instance().log().notifyListeners(emptyFromSystemTables);
         initMessaging.run();
         ClusterMetadataService.instance().forceSnapshot(metadata.forceEpoch(metadata.nextEpoch()));

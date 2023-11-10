@@ -38,4 +38,5 @@ public interface ChangeListener
     default void notifyPostCommit(ClusterMetadata prev, ClusterMetadata next, boolean fromSnapshot) {}
 
     interface Async extends ChangeListener {}
+
 }

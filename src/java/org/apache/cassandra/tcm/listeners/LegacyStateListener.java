@@ -91,8 +91,8 @@ public class LegacyStateListener implements ChangeListener.Async
                             logger.info("JOINING: calculation complete, ready to bootstrap");
                         }
                         break;
+                    case BOOT_REPLACING:
                     case REGISTERED:
-                        Gossiper.instance.maybeInitializeLocalState(SystemKeyspace.incrementAndGetGeneration());
                         break;
                     case JOINED:
                         SystemKeyspace.updateTokens(next.directory.endpoint(change), next.tokenMap.tokens(change));
@@ -105,6 +105,10 @@ public class LegacyStateListener implements ChangeListener.Async
                             logger.info("Node {} state jump to NORMAL", next.directory.endpoint(change));
                         break;
                 }
+                // Maybe intitialise local epstate whatever the node state because we could be processing after a
+                // replay and so may have not seen any previous local states, making this the first mutation of gossip
+                // state for the local node.
+                Gossiper.instance.maybeInitializeLocalState(SystemKeyspace.incrementAndGetGeneration());
                 Gossiper.instance.addLocalApplicationState(SCHEMA, StorageService.instance.valueFactory.schema(next.schema.getVersion()));
             }
 
