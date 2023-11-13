@@ -263,6 +263,15 @@ public class CassandraDaemon
 
         try
         {
+            scrubDataDirectories();
+        }
+        catch (StartupException e)
+        {
+            exitOrFail(e.returnCode, e.getMessage(), e.getCause());
+        }
+
+        try
+        {
             Startup.initialize(DatabaseDescriptor.getSeeds());
             CMSOperations.initJmx();
         }
@@ -289,26 +298,13 @@ public class CassandraDaemon
 
         SystemKeyspaceMigrator41.migrate();
 
-        // TODO (TM/alexp)
-        // Populate token metadata before flushing, for token-aware sstable partitioning (#6696)
-        // StorageService.instance.populateTokenMetadata();
         setupVirtualKeyspaces();
-
-        try
-        {
-            scrubDataDirectories();
-        }
-        catch (StartupException e)
-        {
-            exitOrFail(e.returnCode, e.getMessage(), e.getCause());
-        }
 
         // initialize keyspaces
         for (String keyspaceName : Schema.instance.getKeyspaces())
         {
             if (logger.isDebugEnabled())
                 logger.debug("opening keyspace {}", keyspaceName);
-            // TODO (TM/alexp)
             // disable auto compaction until gossip settles since disk boundaries may be affected by ring layout
             for (ColumnFamilyStore cfs : Keyspace.open(keyspaceName).getColumnFamilyStores())
             {
