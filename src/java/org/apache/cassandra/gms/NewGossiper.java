@@ -36,6 +36,7 @@ import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.SystemKeyspace;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.net.Message;
+import org.apache.cassandra.net.MessageDelivery;
 import org.apache.cassandra.net.MessagingService;
 import org.apache.cassandra.tcm.compatibility.GossipHelper;
 import org.apache.cassandra.utils.concurrent.Accumulator;
@@ -83,7 +84,6 @@ public class NewGossiper
         return GossipHelper.storedEpstate();
     }
 
-
     public boolean isInShadowRound()
     {
         ShadowRoundHandler srh = handler;
@@ -103,13 +103,20 @@ public class NewGossiper
         private final Set<InetAddressAndPort> peers;
         private final Accumulator<Map<InetAddressAndPort, EndpointState>> responses;
         private final int requiredResponses;
+        private final MessageDelivery messageDelivery;
         private final Promise<Map<InetAddressAndPort, EndpointState>> promise = new AsyncPromise<>();
 
         public ShadowRoundHandler(Set<InetAddressAndPort> peers)
         {
+            this(peers, MessagingService.instance());
+        }
+
+        public ShadowRoundHandler(Set<InetAddressAndPort> peers, MessageDelivery messageDelivery)
+        {
             this.peers = peers;
-            requiredResponses = Math.max(peers.size() / 10, 1);
+            requiredResponses = Math.max(peers.size() / 10, 1); // todo: is 10% reasonable?
             responses = new Accumulator<>(requiredResponses);
+            this.messageDelivery = messageDelivery;
         }
 
         public boolean isDone()
@@ -127,7 +134,7 @@ public class NewGossiper
             for (InetAddressAndPort peer : peers)
             {
                 if (!peer.equals(getBroadcastAddressAndPort()))
-                    MessagingService.instance().send(message, peer);
+                    messageDelivery.send(message, peer);
             }
             return promise;
         }
@@ -143,14 +150,29 @@ public class NewGossiper
                 if (responses.size() >= requiredResponses)
                 {
                     isDone = true;
-                    promise.setSuccess(merge(responses.snapshot()));
+                    Map<InetAddressAndPort, EndpointState> merged = merge(responses.snapshot());
+                    if (GossipHelper.isValidForClusterMetadata(merged))
+                        promise.setSuccess(merged);
+                    else
+                        promise.setFailure(new IllegalStateException("Did not get all required application states during shadow round"));
                 }
             }
         }
 
         private Map<InetAddressAndPort, EndpointState> merge(Collection<Map<InetAddressAndPort, EndpointState>> snapshot)
         {
-            return snapshot.iterator().next(); // todo; actually merge/verify the responses
+            Map<InetAddressAndPort, EndpointState> mergedStates = new HashMap<>();
+            for (Map<InetAddressAndPort, EndpointState> states : snapshot)
+            {
+                for (Map.Entry<InetAddressAndPort, EndpointState> entry : states.entrySet())
+                {
+                    InetAddressAndPort endpoint = entry.getKey();
+                    EndpointState state = entry.getValue();
+                    if (!mergedStates.containsKey(entry.getKey()) || mergedStates.get(endpoint).isSupersededBy(state))
+                        mergedStates.put(endpoint, state);
+                }
+            }
+            return mergedStates;
         }
     }
 }
