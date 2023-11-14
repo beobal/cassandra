@@ -61,7 +61,7 @@ public class ReconfigureCMSTest extends FuzzTestBase
             cluster.get(1).runOnInstance(() -> {
                 ClusterMetadata metadata = ClusterMetadata.current();
                 Assert.assertEquals(5, metadata.fullCMSMembers().size());
-                Assert.assertEquals(ReplicationParams.simpleMeta(5),
+                Assert.assertEquals(ReplicationParams.simpleMeta(5, metadata.directory.knownDatacenters()),
                                     metadata.placements.keys().stream().filter(ReplicationParams::isMeta).findFirst().get());
             });
             cluster.stream().forEach(i -> {
@@ -72,7 +72,7 @@ public class ReconfigureCMSTest extends FuzzTestBase
             cluster.get(1).runOnInstance(() -> {
                 ClusterMetadata metadata = ClusterMetadata.current();
                 Assert.assertEquals(1, metadata.fullCMSMembers().size());
-                Assert.assertEquals(ReplicationParams.simpleMeta(1),
+                Assert.assertEquals(ReplicationParams.simpleMeta(1, metadata.directory.knownDatacenters()),
                                     metadata.placements.keys().stream().filter(ReplicationParams::isMeta).findFirst().get());
             });
         }

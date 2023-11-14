@@ -221,7 +221,7 @@ import static org.apache.cassandra.utils.FBUtilities.getBroadcastAddressAndPort;
      */
     public static void initializeFromGossip(Function<Processor, Processor> wrapProcessor, Runnable initMessaging)
     {
-        ClusterMetadata emptyFromSystemTables = emptyWithSchemaFromSystemTables();
+        ClusterMetadata emptyFromSystemTables = emptyWithSchemaFromSystemTables(SystemKeyspace.allKnownDatacenters());
         emptyFromSystemTables.schema.initializeKeyspaceInstances(DistributedSchema.empty());
         ClusterMetadataService.setInstance(new ClusterMetadataService(new UniformRangePlacement(),
                                                                       emptyFromSystemTables,
@@ -274,7 +274,8 @@ import static org.apache.cassandra.utils.FBUtilities.getBroadcastAddressAndPort;
 
         if (!metadata.isCMSMember(FBUtilities.getBroadcastAddressAndPort()))
             throw new IllegalStateException("When reinitializing with cluster metadata, we must be in the CMS");
-        ClusterMetadata emptyFromSystemTables = emptyWithSchemaFromSystemTables();
+        // can use local dc here since we know local host in the cms:
+        ClusterMetadata emptyFromSystemTables = emptyWithSchemaFromSystemTables(Collections.singleton(DatabaseDescriptor.getLocalDataCenter()));
         metadata.schema.initializeKeyspaceInstances(DistributedSchema.empty());
         metadata = metadata.forceEpoch(metadata.epoch.nextEpoch());
         ClusterMetadataService.unsetInstance();

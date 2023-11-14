@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -273,13 +274,13 @@ public class GossipHelper
         return NodeVersion.fromCassandraVersion(cassandraVersion);
     }
 
-    public static ClusterMetadata emptyWithSchemaFromSystemTables()
+    public static ClusterMetadata emptyWithSchemaFromSystemTables(Set<String> allKnownDatacenters)
     {
         return new ClusterMetadata(Epoch.UPGRADE_STARTUP,
                                    Period.EMPTY,
                                    true,
                                    DatabaseDescriptor.getPartitioner(),
-                                   DistributedSchema.fromSystemTables(SchemaKeyspace.fetchNonSystemKeyspaces()),
+                                   DistributedSchema.fromSystemTables(SchemaKeyspace.fetchNonSystemKeyspaces(), allKnownDatacenters),
                                    Directory.EMPTY,
                                    new TokenMap(DatabaseDescriptor.getPartitioner()),
                                    DataPlacements.empty(),

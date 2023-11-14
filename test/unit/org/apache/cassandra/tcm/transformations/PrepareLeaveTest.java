@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
+import com.google.common.collect.Sets;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -81,7 +82,7 @@ public class PrepareLeaveTest
     @Test
     public void testCheckRF_Simple() throws Throwable
     {
-        Keyspaces kss = Keyspaces.of(DistributedMetadataLogKeyspace.initialMetadata(), KSM);
+        Keyspaces kss = Keyspaces.of(DistributedMetadataLogKeyspace.initialMetadata(Sets.newHashSet(hostDc.values())), KSM);
         ClusterMetadata metadata = prepMetadata(kss, 2, 2);
         assertTrue(executeLeave(metadata));
         // should be rejected:
@@ -92,7 +93,7 @@ public class PrepareLeaveTest
     @Test
     public void testCheckRF_NTS() throws Throwable
     {
-        Keyspaces kss = Keyspaces.of(DistributedMetadataLogKeyspace.initialMetadata(), KSM_NTS);
+        Keyspaces kss = Keyspaces.of(DistributedMetadataLogKeyspace.initialMetadata(Sets.newHashSet(hostDc.values())), KSM_NTS);
         ClusterMetadata metadata = prepMetadata(kss, 4, 4);
         assertTrue(executeLeave(metadata));
         // should be accepted (4 nodes in dc1 where we remove the host):

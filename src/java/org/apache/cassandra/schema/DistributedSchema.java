@@ -21,15 +21,18 @@ package org.apache.cassandra.schema;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 import com.google.common.base.Preconditions;
 
 import org.apache.cassandra.auth.AuthKeyspace;
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.Mutation;
 import org.apache.cassandra.io.util.DataInputPlus;
@@ -57,7 +60,7 @@ public class DistributedSchema implements MetadataValue<DistributedSchema>
 
     public static DistributedSchema first()
     {
-        return new DistributedSchema(Keyspaces.of(DistributedMetadataLogKeyspace.initialMetadata()), Epoch.FIRST);
+        return new DistributedSchema(Keyspaces.of(DistributedMetadataLogKeyspace.initialMetadata(Collections.singleton(DatabaseDescriptor.getLocalDataCenter()))), Epoch.FIRST);
     }
 
     private final Keyspaces keyspaces;
@@ -101,10 +104,10 @@ public class DistributedSchema implements MetadataValue<DistributedSchema>
         return keyspaces.get(keyspace).get();
     }
 
-    public static DistributedSchema fromSystemTables(Keyspaces keyspaces)
+    public static DistributedSchema fromSystemTables(Keyspaces keyspaces, Set<String> knownDatacenters)
     {
         if (!keyspaces.containsKeyspace(SchemaConstants.METADATA_KEYSPACE_NAME))
-            keyspaces = keyspaces.withAddedOrReplaced(Keyspaces.of(DistributedMetadataLogKeyspace.initialMetadata(),
+            keyspaces = keyspaces.withAddedOrReplaced(Keyspaces.of(DistributedMetadataLogKeyspace.initialMetadata(knownDatacenters),
                                                                    TraceKeyspace.metadata(),
                                                                    SystemDistributedKeyspace.metadata(),
                                                                    AuthKeyspace.metadata()));

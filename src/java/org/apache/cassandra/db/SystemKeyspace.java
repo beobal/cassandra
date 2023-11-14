@@ -1368,6 +1368,20 @@ public final class SystemKeyspace
         return null;
     }
 
+    public static Set<String> allKnownDatacenters()
+    {
+        Set<String> dcs = new HashSet<>();
+        dcs.add(getDatacenter());
+        String req = "SELECT data_center FROM system.%s";
+        UntypedResultSet result = executeInternal(format(req, PEERS_V2));
+        if (result != null)
+        {
+            for (UntypedResultSet.Row row : result)
+                dcs.add(row.getString("data_center"));
+        }
+        return dcs;
+    }
+
     /**
      * Load the current paxos state for the table and key
      */

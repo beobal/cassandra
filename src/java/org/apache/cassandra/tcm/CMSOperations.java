@@ -75,7 +75,7 @@ public class CMSOperations implements CMSOperationsMBean
     @Override
     public void reconfigureCMS(int rf, boolean sync)
     {
-        Runnable r = () -> cms.reconfigureCMS(ReplicationParams.simpleMeta(rf));
+        Runnable r = () -> cms.reconfigureCMS(ReplicationParams.simpleMeta(rf, ClusterMetadata.current().directory.knownDatacenters()));
         if (sync)
             r.run();
         else

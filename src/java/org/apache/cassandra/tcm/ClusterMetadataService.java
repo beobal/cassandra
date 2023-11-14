@@ -21,6 +21,7 @@ package org.apache.cassandra.tcm;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -244,7 +245,7 @@ public class ClusterMetadataService
     {
         if (instance != null)
             return;
-        ClusterMetadata emptyFromSystemTables = emptyWithSchemaFromSystemTables();
+        ClusterMetadata emptyFromSystemTables = emptyWithSchemaFromSystemTables(Collections.singleton("DC1"));
         emptyFromSystemTables.schema.initializeKeyspaceInstances(DistributedSchema.empty(), loadSSTables);
         emptyFromSystemTables = emptyFromSystemTables.forceEpoch(Epoch.EMPTY);
         LocalLog log = LocalLog.sync(emptyFromSystemTables, new AtomicLongBackedProcessor.InMemoryStorage(), false, false);

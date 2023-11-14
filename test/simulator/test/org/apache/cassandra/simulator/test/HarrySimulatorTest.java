@@ -416,7 +416,7 @@ public class HarrySimulatorTest
                                                                                                  }
                                                                                                  else
                                                                                                  {
-                                                                                                     params = ReplicationParams.simpleMeta(rf);
+                                                                                                     params = ReplicationParams.simpleMeta(rf, ClusterMetadata.current().directory.knownDatacenters());
                                                                                                  }
                                                                                                  ClusterMetadataService.instance().reconfigureCMS(params);
                                                                                              })));

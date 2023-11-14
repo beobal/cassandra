@@ -18,8 +18,10 @@
 package org.apache.cassandra.schema;
 
 import java.io.IOException;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
@@ -119,13 +121,15 @@ public final class ReplicationParams
         return new ReplicationParams(SimpleStrategy.class, ImmutableMap.of("replication_factor", replicationFactor));
     }
 
-    public static ReplicationParams simpleMeta(int replicationFactor)
+    public static ReplicationParams simpleMeta(int replicationFactor, Set<String> knownDatacenters)
     {
         if (replicationFactor <= 0)
             throw new IllegalStateException("Replication factor should be strictly positive");
-
+        if (knownDatacenters.isEmpty())
+            throw new IllegalStateException("No known datacenters");
+        String dc = knownDatacenters.stream().min(Comparator.comparing(s -> s)).get();
         Map<String, Integer> dcRf = new HashMap<>();
-        dcRf.put(DatabaseDescriptor.getLocalDataCenter(), replicationFactor);
+        dcRf.put(dc, replicationFactor);
         return ntsMeta(dcRf);
     }
 
