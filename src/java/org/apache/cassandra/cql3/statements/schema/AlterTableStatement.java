@@ -24,6 +24,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -49,8 +50,10 @@ import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.gms.ApplicationState;
 import org.apache.cassandra.gms.Gossiper;
+import org.apache.cassandra.index.TargetParser;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.schema.ColumnMetadata;
+import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.Keyspaces;
 import org.apache.cassandra.schema.Keyspaces.KeyspacesDiff;
@@ -69,10 +72,11 @@ import org.apache.cassandra.transport.Event.SchemaChange.Change;
 import org.apache.cassandra.transport.Event.SchemaChange.Target;
 import org.apache.cassandra.utils.CassandraVersion;
 import org.apache.cassandra.utils.NoSpamLogger;
+import org.apache.cassandra.utils.Pair;
 
 import static com.google.common.collect.Iterables.isEmpty;
-import static com.google.common.collect.Iterables.transform;
 import static java.lang.String.format;
+import static java.lang.String.join;
 import static org.apache.cassandra.schema.TableMetadata.Flag;
 
 public abstract class AlterTableStatement extends AlterSchemaStatement
@@ -358,6 +362,38 @@ public abstract class AlterTableStatement extends AlterSchemaStatement
         }
     }
 
+    private static void validateIndexesForColumnModification(TableMetadata table,
+                                                             ColumnIdentifier colId,
+                                                             boolean isRename)
+    {
+        ColumnMetadata column = table.getColumn(colId);
+        Set<String> dependentIndexes = new HashSet<>();
+        for (IndexMetadata index : table.indexes)
+        {
+            Optional<Pair<ColumnMetadata, IndexTarget.Type>> target = TargetParser.tryParse(table, index);
+            if (target.isEmpty())
+            {
+                // The target column(s) of this index is not trivially discernible from its metadata.
+                // This implies an external custom index implementation and without instantiating the
+                // index itself we cannot be sure that the column metadata is safe to modify.
+                dependentIndexes.add(index.name);
+            }
+            else if (target.get().left.equals(column))
+            {
+                // The index metadata declares an explicit dependency on the column being modified, so
+                // the mutation must be rejected.
+                dependentIndexes.add(index.name);
+            }
+        }
+        if (!dependentIndexes.isEmpty())
+        {
+            throw ire("Cannot %s column %s because it has dependent secondary indexes (%s)",
+                      isRename ? "rename" : "drop",
+                      colId,
+                      join(", ", dependentIndexes));
+        }
+    }
+
     /**
      * {@code ALTER TABLE [IF EXISTS] <table> DROP [IF EXISTS] <column>}
      * {@code ALTER TABLE [IF EXISTS] <table> DROP [IF EXISTS] ( <column>, <column1>, ... <columnn>)}
@@ -405,14 +441,8 @@ public abstract class AlterTableStatement extends AlterSchemaStatement
             if (currentColumn.type.isUDT() && currentColumn.type.isMultiCell())
                 throw ire("Cannot drop non-frozen column %s of user type %s", column, currentColumn.type.asCQL3Type());
 
-            // TODO: some day try and find a way to not rely on Keyspace/IndexManager/Index to find dependent indexes
-            // TODO CEP-21: fix before beta
             if (!table.indexes.isEmpty())
-            {
-                throw ire("Cannot drop column %s because %s.%s has secondary indexes (%s). " +
-                          "This currently requires indexes to be dropped and recreated after the rename",
-                          currentColumn, table.keyspace, table.name, transform(table.indexes, i -> i.name));
-            }
+                AlterTableStatement.validateIndexesForColumnModification(table, column, false);
 
             if (!isEmpty(keyspace.views.forTable(table.id)))
                 throw ire("Cannot drop column %s on base table %s with materialized views", currentColumn, table.name);
@@ -483,14 +513,8 @@ public abstract class AlterTableStatement extends AlterSchemaStatement
                           table);
             }
 
-            // TODO: some day try and find a way to not rely on Keyspace/IndexManager/Index to find dependent indexes
-            // TODO CEP-21: fix before beta
             if (!table.indexes.isEmpty())
-            {
-                throw ire("Can't rename column %s because %s.%s has secondary indexes (%s). " +
-                          "This currently requires indexes to be dropped and recreated after the rename",
-                          oldName, table.keyspace, table.name, transform(table.indexes, i -> i.name));
-            }
+                AlterTableStatement.validateIndexesForColumnModification(table, oldName, true);
 
             for (ViewMetadata view : keyspace.views.forTable(table.id))
             {

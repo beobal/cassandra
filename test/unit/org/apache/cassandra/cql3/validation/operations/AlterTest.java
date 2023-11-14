@@ -31,6 +31,7 @@ import org.apache.cassandra.distributed.test.log.ClusterMetadataTestHelper;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.exceptions.SyntaxException;
+import org.apache.cassandra.index.StubIndex;
 import org.apache.cassandra.schema.MemtableParams;
 import org.apache.cassandra.schema.SchemaConstants;
 import org.apache.cassandra.schema.SchemaKeyspaceTables;
@@ -224,6 +225,44 @@ public class AlterTest extends CQLTester
                    row(1, 4, 4, 4, 4),
                    row(1, 100, 100, 100, 100));
     }
+
+    @Test
+    public void testDropColumnWithIndex() throws Throwable
+    {
+        createTable("CREATE TABLE %s(k int, c int, v1 int, v2 int, v3 int, v4 int, PRIMARY KEY (k, c))");
+        createIndex(String.format("CREATE CUSTOM INDEX multi_idx ON %%s(v1, v2) USING '%s'", StubIndex.class.getName()));
+        createIndex("CREATE INDEX v3_idx ON %s(v3)");
+
+        assertInvalidMessage("Cannot drop column v1 because it has dependent secondary indexes",
+                             "ALTER TABLE %s DROP (v1)");
+        assertInvalidMessage("Cannot drop column v2 because it has dependent secondary indexes",
+                             "ALTER TABLE %s DROP (v2)");
+        // targets for a multi column custom index cannot be trivially derived from IndexMetadata so for now we
+        // assume that any such index may be depenendant on all columns
+        assertInvalidMessage("Cannot drop column v3 because it has dependent secondary indexes",
+                             "ALTER TABLE %s DROP (v3)");
+        // current implementation will only complain about 1 of the columns (previous behaviour preserved for now)
+        assertInvalidMessage("because it has dependent secondary indexes",
+                             "ALTER TABLE %s DROP (v1, v2)");
+    }
+
+    @Test
+    public void testRenameColumnWithIndex() throws Throwable
+    {
+        createTable("CREATE TABLE %s(k int, c1 int, c2 int, c3 int, v int, PRIMARY KEY (k, c1, c2, c3))");
+        createIndex(String.format("CREATE CUSTOM INDEX multi_idx ON %%s(c1, c2) USING '%s'", StubIndex.class.getName()));
+        createIndex("CREATE INDEX v3_idx ON %s(c3)");
+
+        assertInvalidMessage("Cannot rename column c1 because it has dependent secondary indexes (multi_idx)",
+                             "ALTER TABLE %s RENAME c1 TO c99");
+        assertInvalidMessage("Cannot rename column c2 because it has dependent secondary indexes (multi_idx)",
+                             "ALTER TABLE %s RENAME c2 TO c99");
+        // targets for a multi column custom index cannot be trivially derived from IndexMetadata so for now we
+        // assume that any such index may be depenendant on all columns
+        assertInvalidMessage("Cannot rename column c3 because it has dependent secondary indexes",
+                             "ALTER TABLE %s RENAME c3 to v99");
+    }
+
 
 
     @Test
