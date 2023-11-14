@@ -48,6 +48,7 @@ import org.apache.cassandra.utils.ExecutorUtils;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.concurrent.AsyncPromise;
 import org.apache.cassandra.utils.concurrent.FutureCombiner;
+import org.apache.cassandra.utils.concurrent.Promise;
 
 import static java.util.Collections.synchronizedList;
 import static java.util.concurrent.TimeUnit.MINUTES;
@@ -436,6 +437,28 @@ public class MessagingService extends MessagingServiceMBeanImpl implements Messa
     public <V> void respond(V response, Message<?> message)
     {
         send(message.responseWith(response), message.respondTo());
+    }
+
+    public <RSP> Future<RSP> sendWithResponse(InetAddressAndPort to, Message<?> msg)
+    {
+        Promise<RSP> future = AsyncPromise.uncancellable();
+        MessagingService.instance().sendWithCallback(msg, to,
+                                                     new RequestCallback<RSP>()
+                                                     {
+                                                         @Override
+                                                         public void onResponse(Message<RSP> msg)
+                                                         {
+                                                             future.setSuccess(msg.payload);
+                                                         }
+
+                                                         @Override
+                                                         public void onFailure(InetAddressAndPort from, RequestFailureReason failureReason)
+                                                         {
+                                                             future.setFailure(new RuntimeException(failureReason.toString()));
+                                                         }
+                                                     });
+
+        return future;
     }
 
     public <V> void respondWithFailure(RequestFailureReason reason, Message<?> message)
