@@ -283,9 +283,14 @@ public interface ReplicaPlan<E extends Endpoints<E>, P extends ReplicaPlan<E, P>
                                 AbstractBounds<PartitionPosition> range,
                                 EndpointsForRange candidates,
                                 EndpointsForRange contact,
-                                int vnodeCount)
+                                int vnodeCount,
+                                Epoch epoch)
         {
-            super(keyspace, replicationStrategy, consistencyLevel, range, candidates, contact, vnodeCount);
+            // A FullRangeRead plan, as part of a top K query, is not recomputed to check that it still applies should
+            // the epoch change during the course of query execution so no recomputation function is supplied. Likewise,
+            // no read repair is expected to be performed during this type of query so a null is also used in place of a
+            // function for calculating the repair plan.
+            super(keyspace, replicationStrategy, consistencyLevel, range, candidates, contact, vnodeCount, null, null, epoch);
         }
 
         @Override

@@ -839,7 +839,11 @@ public class ReplicaPlans
      *   - endpoints should be alive and satifies consistency requirement.
      *   - each endpoint will be considered as replica of entire token ring, so coordinator can execute request with given range
      */
-    public static ReplicaPlan.ForRangeRead forFullRangeRead(Keyspace keyspace, ConsistencyLevel consistencyLevel, AbstractBounds<PartitionPosition> range, Set<InetAddressAndPort> endpointsToContact, int vnodeCount)
+    public static ReplicaPlan.ForRangeRead forFullRangeRead(Keyspace keyspace,
+                                                            ConsistencyLevel consistencyLevel,
+                                                            AbstractBounds<PartitionPosition> range,
+                                                            Set<InetAddressAndPort> endpointsToContact,
+                                                            int vnodeCount)
     {
         AbstractReplicationStrategy replicationStrategy = keyspace.getReplicationStrategy();
         EndpointsForRange.Builder builder = EndpointsForRange.Builder.builder(FULL_TOKEN_RANGE);
@@ -848,7 +852,8 @@ public class ReplicaPlans
 
         EndpointsForRange contacts = builder.build();
 
-        return new ReplicaPlan.ForFullRangeRead(keyspace, replicationStrategy, consistencyLevel, range, contacts, contacts, vnodeCount);
+        ClusterMetadata metadata = ClusterMetadata.current();
+        return new ReplicaPlan.ForFullRangeRead(keyspace, replicationStrategy, consistencyLevel, range, contacts, contacts, vnodeCount, metadata.epoch);
     }
 
     /**

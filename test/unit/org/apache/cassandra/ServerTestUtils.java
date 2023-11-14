@@ -36,6 +36,7 @@ import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.SystemKeyspace;
 import org.apache.cassandra.db.commitlog.CommitLog;
+import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.sstable.format.big.BigTableReader;
 import org.apache.cassandra.io.sstable.indexsummary.IndexSummarySupport;
@@ -123,9 +124,14 @@ public final class ServerTestUtils
 
     public static NodeId registerLocal()
     {
+        return registerLocal(Collections.singleton(DatabaseDescriptor.getPartitioner().getRandomToken()));
+    }
+
+    public static NodeId registerLocal(Set<Token> tokens)
+    {
         NodeId nodeId = Register.maybeRegister();
         ClusterMetadataService.instance().commit(new UnsafeJoin(nodeId,
-                                                                Collections.singleton(DatabaseDescriptor.getPartitioner().getRandomToken()),
+                                                                tokens,
                                                                 ClusterMetadataService.instance().placementProvider()));
         SystemKeyspace.setLocalHostId(nodeId.toUUID());
         return nodeId;
