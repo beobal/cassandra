@@ -155,99 +155,6 @@ public class TransientRangeMovementTest extends TestBaseImpl
         }
     }
 
-
-
-    @Test
-    public void testMoveBackward() throws IOException, ExecutionException, InterruptedException
-    {
-        try (Cluster cluster = init(Cluster.build(4)
-                                           .withTokenSupplier(new OPPTokens())
-                                           .withNodeIdTopology(NetworkTopology.singleDcNetworkTopology(4, "dc0", "rack0"))
-                                           .withConfig(conf -> conf.set("transient_replication_enabled","true")
-                                                                   .set("partitioner", "OrderPreservingPartitioner") // just makes it easier to read the tokens in the log
-                                                                   .with(Feature.NETWORK, Feature.GOSSIP))
-                                           .start()))
-        {
-            populate(cluster);
-            cluster.get(3).nodetoolResult("move", "25").asserts().success();
-            cluster.forEach(i -> i.nodetoolResult("cleanup").asserts().success());
-
-            assertAllContained(localStrs(cluster.get(1)),
-                               newArrayList("22", "24"),
-                               Pair.create("00", "10"),
-                               Pair.create("26", "50"));
-            assertAllContained(localStrs(cluster.get(2)),
-                               newArrayList("26", "28", "30", "32", "34", "36", "38", "40"),
-                               Pair.create("00", "20"),
-                               Pair.create("41", "50"));
-            assertAllContained(localStrs(cluster.get(3)),
-                               newArrayList("42", "44", "46", "48", "00", "02", "04", "06", "08", "10"),
-                               Pair.create("11", "25"));
-            assertAllContained(localStrs(cluster.get(4)),
-                               newArrayList("12", "14", "16", "18", "20"),
-                               Pair.create("21", "40"));
-        }
-    }
-
-    @Test
-    public void testMoveForward() throws IOException, ExecutionException, InterruptedException
-    {
-
-        try (Cluster cluster = init(Cluster.build(4)
-                                           .withTokenSupplier(new OPPTokens())
-                                           .withNodeIdTopology(NetworkTopology.singleDcNetworkTopology(4, "dc0", "rack0"))
-                                           .withConfig(conf -> conf.set("transient_replication_enabled","true")
-                                                                   .set("partitioner", "OrderPreservingPartitioner") // just makes it easier to read the tokens in the log
-                                                                   .set("hinted_handoff_enabled", "false")
-                                                                   .with(Feature.NETWORK, Feature.GOSSIP))
-                                           .start()))
-        {
-            populate(cluster);
-            cluster.get(1).nodetoolResult("move", "15").asserts().success();
-            cluster.forEach((i) -> i.nodetoolResult("cleanup").asserts().success());
-            assertAllContained(localStrs(cluster.get(1)),
-                               newArrayList("22", "24", "26", "28", "30"),
-                               Pair.create("00", "15"),
-                               Pair.create("31", "50"));
-            assertAllContained(localStrs(cluster.get(2)),
-                               newArrayList("32", "34", "36", "38", "40"),
-                               Pair.create("00", "20"),
-                               Pair.create("41", "50"));
-            assertAllContained(localStrs(cluster.get(3)),
-                               newArrayList("42", "44", "46", "48", "00", "02", "04", "06", "08", "10", "12", "14"),
-                               Pair.create("16", "30"));
-            assertAllContained(localStrs(cluster.get(4)),
-                               newArrayList("16", "18", "20"),
-                               Pair.create("21", "40"));
-        }
-    }
-
-    @Test
-    public void testRebuild() throws ExecutionException, InterruptedException, IOException
-    {
-        try (Cluster cluster = init(Cluster.build(3)
-                                           .withTokenSupplier(new OPPTokens())
-                                           .withNodeIdTopology(NetworkTopology.singleDcNetworkTopology(4, "dc0", "rack0"))
-                                           .withConfig(conf -> conf.set("transient_replication_enabled","true")
-                                                                   .set("partitioner", "OrderPreservingPartitioner")
-                                                                   .set("hinted_handoff_enabled", "false")
-                                                                   .with(Feature.NETWORK, Feature.GOSSIP))
-                                           .start()))
-        {
-            populate(cluster);
-            IInstanceConfig config = cluster.newInstanceConfig();
-            config.set("auto_bootstrap", false);
-            IInvokableInstance newInstance = cluster.bootstrap(config);
-            newInstance.startup();
-            cluster.forEach(i -> i.nodetoolResult("cleanup").asserts().success());
-            cluster.get(4).nodetoolResult("rebuild", "-ks", "tr", "--tokens", "(15, 18],(20,25]").asserts().success();
-            assertAllContained(localStrs(cluster.get(4)),
-                               newArrayList(),
-                               Pair.create("16", "18"),
-                               Pair.create("21", "25"));
-        }
-    }
-
     @Test
     public void testRemoveNode() throws IOException, ExecutionException, InterruptedException
     {
@@ -285,7 +192,7 @@ public class TransientRangeMovementTest extends TestBaseImpl
         }
     }
 
-    private void assertAllContained(List<String> current, List<String> expectedTransientKeys, Pair<String, String> ... ranges)
+    public static void assertAllContained(List<String> current, List<String> expectedTransientKeys, Pair<String, String> ... ranges)
     {
         Set<String> cur = Sets.newHashSet(current);
         Set<String> expectTransient = Sets.newHashSet(expectedTransientKeys);
@@ -303,7 +210,7 @@ public class TransientRangeMovementTest extends TestBaseImpl
         assertTrue(expectTransient.toString(), expectTransient.isEmpty());
     }
 
-    List<String> localStrs(IInvokableInstance inst)
+    public static List<String> localStrs(IInvokableInstance inst)
     {
         List<String> l = new ArrayList<>();
         for (int i = 0; i < 50; i++)
@@ -315,20 +222,21 @@ public class TransientRangeMovementTest extends TestBaseImpl
         return l;
     }
 
-    private String toStr(int x)
+    private static String toStr(int x)
     {
         return (x < 10 ? "0" : "") + x;
     }
 
     //  ranges [a, b] (not (a, b]) for simplicity
-    private boolean contained(String key, Pair<String, String> ... ranges)
+    private static boolean contained(String key, Pair<String, String> ... ranges)
     {
         for (Pair<String, String> range : ranges)
             if (range.left.compareTo(key) <= 0 && range.right.compareTo(key) >= 0)
                 return true;
         return false;
     }
-    private static class OPPTokens implements TokenSupplier
+
+    public static class OPPTokens implements TokenSupplier
     {
         @Override
         public Collection<String> tokens(int i)
@@ -349,7 +257,7 @@ public class TransientRangeMovementTest extends TestBaseImpl
         }
     }
 
-    private void populate(Cluster cluster) throws ExecutionException, InterruptedException
+    public static void populate(Cluster cluster) throws ExecutionException, InterruptedException
     {
         cluster.schemaChange("create keyspace tr with replication = {'class':'NetworkTopologyStrategy', 'dc0':'3/1'}");
         cluster.schemaChange("create table tr.x (id varchar primary key) with read_repair = 'NONE'");
