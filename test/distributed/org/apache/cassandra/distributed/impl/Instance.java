@@ -699,6 +699,10 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
 
         CommitLog.instance.start();
         CassandraDaemon.getInstanceForTesting().runStartupChecks();
+
+        // clean up debris in data directories
+        CassandraDaemon.getInstanceForTesting().scrubDataDirectories();
+
         Keyspace.setInitialized(); // TODO: this seems to be superfluous by now
         if (!config.has(NETWORK))
         {
@@ -737,9 +741,6 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
 
         // Start up virtual table support
         CassandraDaemon.getInstanceForTesting().setupVirtualKeyspaces();
-
-        // clean up debris in data directories
-        CassandraDaemon.getInstanceForTesting().scrubDataDirectories();
 
         // Replay any CommitLogSegments found on disk
         try
