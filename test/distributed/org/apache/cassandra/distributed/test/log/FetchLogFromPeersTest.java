@@ -274,9 +274,10 @@ public class FetchLogFromPeersTest extends TestBaseImpl
             long mark = cluster.get(4).logs().mark();
             cluster.coordinator(1).execute(withKeyspace("alter table %s.tbl with comment='test 123'"), ConsistencyLevel.ONE);
             cluster.get(4).logs().watchFor(mark, "AlterOptions");
+
             mark = cluster.get(2).logs().mark();
             cluster.get(1).shutdown().get();
-            cluster.get(2).logs().watchFor(mark, "/127.0.0.1:7012 is now DOWN");
+            cluster.get(2).logs().watchFor(mark, "/127.0.0.1:7012 state jump to shutdown");
             // node2, a CMS member, is now behind and node1 is shut down.
             // Try reading at QUORUM from node4, node2 should detect it's behind and catch up from node4
             int before = fetchedFromPeer.get();
