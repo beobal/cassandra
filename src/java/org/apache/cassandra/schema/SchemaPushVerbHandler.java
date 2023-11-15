@@ -34,8 +34,9 @@ import org.apache.cassandra.net.Message;
  * Such happens when user makes local schema migration on one of the nodes in the ring
  * (which is going to act as coordinator) and that node sends (pushes) it's updated schema state
  * (in form of mutations) to all the alive nodes in the cluster.
+ * @deprecated See CEP-21
  */
-@Deprecated
+@Deprecated(since = "CEP-21")
 public final class SchemaPushVerbHandler implements IVerbHandler<Collection<Mutation>>
 {
     public static final SchemaPushVerbHandler instance = new SchemaPushVerbHandler();

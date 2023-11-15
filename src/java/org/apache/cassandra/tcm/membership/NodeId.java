@@ -66,7 +66,7 @@ public class NodeId implements Comparable<NodeId>, MultiStepOperation.SequenceKe
                 (uuid.getMostSignificantBits() == 0 && uuid.getLeastSignificantBits() < Integer.MAX_VALUE); // old check, for existing cluster upgrades, no need upstream
     }
 
-    @Deprecated
+    @Deprecated(since = "CEP-21")
     public UUID toUUID()
     {
         long lsb = 0xC000000000000000L | id;

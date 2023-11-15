@@ -56,12 +56,12 @@ import static org.apache.cassandra.tcm.sequences.SequenceState.continuable;
  * does the sequence start in earnest, performing streaming for the global log tables before executing the
  * second and final logical step of promoting the candidate to a full read/write member of the CMS.
  *
- * @deprecated in favour of ReconfigureCMS
  * This class along with AddToCMS & RemoveFromCMS, contain a high degree of duplication with their intended
  * replacements ReconfigureCMS and AdvanceCMSReconfiguration. This shouldn't be a big problem as the intention is to
  * remove this superceded version asap.
+ * @deprecated in favour of ReconfigureCMS
  */
-@Deprecated
+@Deprecated(since = "CEP-21")
 public class AddToCMS extends MultiStepOperation<Epoch>
 {
     private static final Logger logger = LoggerFactory.getLogger(AddToCMS.class);

@@ -54,7 +54,7 @@ import static org.apache.cassandra.tcm.MultiStepOperation.Kind.RECONFIGURE_CMS;
  * node as a passive member of the CMS that only receives committed log updates, while the second enables it to begin
  * participating in reads and in quorums for commit. Each of these two steps will be implemented by an instance of this
  * class. Removing a member is more straightforward and so is done in a single step.
- * See the {@link #startAdd, #finishAdd and #remove methods}.
+ * See the {@link #startAdd}, {@link #finishAdd} and {@link #executeRemove} emove} methods.
  */
 public class AdvanceCMSReconfiguration implements Transformation
 {

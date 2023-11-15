@@ -53,7 +53,7 @@ public abstract class MultiStepOperation<CONTEXT>
 {
     public enum Kind
     {
-        @Deprecated
+        @Deprecated(since = "CEP-21")
         JOIN_OWNERSHIP_GROUP(AddToCMS.serializer),
 
         JOIN(BootstrapAndJoin.serializer),

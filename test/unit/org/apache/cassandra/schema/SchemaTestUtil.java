@@ -134,7 +134,7 @@ public class SchemaTestUtil
         Schema.instance.submit((metadata) -> metadata.schema.getKeyspaces().withAddedOrUpdated(ksm));
     }
 
-    @Deprecated // TODO remove this
+    @Deprecated(since = "CEP-21") // TODO remove this
     public static void addOrUpdateKeyspace(KeyspaceMetadata ksm, boolean locally)
     {
         Schema.instance.submit((metadata) -> metadata.schema.getKeyspaces().withAddedOrUpdated(ksm));

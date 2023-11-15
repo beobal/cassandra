@@ -1159,7 +1159,7 @@ public interface StorageServiceMBean extends NotificationEmitter
      */
     @Deprecated(since = "4.0")
     public Map<String, Set<InetAddress>> getOutstandingSchemaVersions();
-    @Deprecated
+    @Deprecated(since = "CEP-21")
     public Map<String, Set<String>> getOutstandingSchemaVersionsWithPort();
 
     // see CASSANDRA-3200

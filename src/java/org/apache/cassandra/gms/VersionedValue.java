@@ -72,31 +72,31 @@ public class VersionedValue implements Comparable<VersionedValue>
     public final static String DELIMITER_STR = new String(new char[]{ DELIMITER });
 
     // values for ApplicationState.STATUS
-    @Deprecated
+    @Deprecated(since = "CEP-21")
     public final static String STATUS_BOOTSTRAPPING = "BOOT";
-    @Deprecated
+    @Deprecated(since = "CEP-21")
     public final static String STATUS_BOOTSTRAPPING_REPLACE = "BOOT_REPLACE";
-    @Deprecated
+    @Deprecated(since = "CEP-21")
     public final static String STATUS_NORMAL = "NORMAL";
-    @Deprecated
+    @Deprecated(since = "CEP-21")
     public final static String STATUS_LEAVING = "LEAVING";
-    @Deprecated
+    @Deprecated(since = "CEP-21")
     public final static String STATUS_LEFT = "LEFT";
-    @Deprecated
+    @Deprecated(since = "CEP-21")
     public final static String STATUS_MOVING = "MOVING";
 
-    @Deprecated
+    @Deprecated(since = "CEP-21")
     public final static String REMOVING_TOKEN = "removing";
-    @Deprecated
+    @Deprecated(since = "CEP-21")
     public final static String REMOVED_TOKEN = "removed";
 
-    @Deprecated
+    @Deprecated(since = "CEP-21")
     public final static String HIBERNATE = "hibernate";
-    @Deprecated
+    @Deprecated(since = "CEP-21")
     public final static String SHUTDOWN = "shutdown";
 
     // values for ApplicationState.REMOVAL_COORDINATOR
-    @Deprecated
+    @Deprecated(since = "CEP-21")
     public final static String REMOVAL_COORDINATOR = "REMOVER";
 
     public static Set<String> BOOTSTRAPPING_STATUS = ImmutableSet.of(STATUS_BOOTSTRAPPING, STATUS_BOOTSTRAPPING_REPLACE);
@@ -176,13 +176,13 @@ public class VersionedValue implements Comparable<VersionedValue>
             return new VersionedValue(versionString(VersionedValue.STATUS_BOOTSTRAPPING_REPLACE, oldNode.getHostAddress()), versionSupplier.get());
         }
 
-        @Deprecated
+        @Deprecated(since = "CEP-21")
         public VersionedValue bootReplacingWithPort(InetAddressAndPort oldNode)
         {
             return new VersionedValue(versionString(VersionedValue.STATUS_BOOTSTRAPPING_REPLACE, oldNode.getHostAddressAndPort()), versionSupplier.get());
         }
 
-        @Deprecated
+        @Deprecated(since = "CEP-21")
         public VersionedValue bootstrapping(Collection<Token> tokens)
         {
             return new VersionedValue(versionString(VersionedValue.STATUS_BOOTSTRAPPING,
@@ -190,7 +190,7 @@ public class VersionedValue implements Comparable<VersionedValue>
                                       versionSupplier.get());
         }
 
-        @Deprecated
+        @Deprecated(since = "CEP-21")
         public VersionedValue normal(Collection<Token> tokens)
         {
             return new VersionedValue(versionString(VersionedValue.STATUS_NORMAL,
@@ -219,7 +219,7 @@ public class VersionedValue implements Comparable<VersionedValue>
             return new VersionedValue(newVersion.toString(), versionSupplier.get());
         }
 
-        @Deprecated
+        @Deprecated(since = "CEP-21")
         public VersionedValue leaving(Collection<Token> tokens)
         {
             return new VersionedValue(versionString(VersionedValue.STATUS_LEAVING,
@@ -227,7 +227,7 @@ public class VersionedValue implements Comparable<VersionedValue>
                                       versionSupplier.get());
         }
 
-        @Deprecated
+        @Deprecated(since = "CEP-21")
         public VersionedValue left(Collection<Token> tokens, long expireTime)
         {
             return new VersionedValue(versionString(VersionedValue.STATUS_LEFT,
@@ -236,7 +236,7 @@ public class VersionedValue implements Comparable<VersionedValue>
                                       versionSupplier.get());
         }
 
-        @Deprecated
+        @Deprecated(since = "CEP-21")
         @VisibleForTesting
         public VersionedValue left(Collection<Token> tokens, long expireTime, int generation)
         {
@@ -245,20 +245,20 @@ public class VersionedValue implements Comparable<VersionedValue>
                                                     Long.toString(expireTime)), generation);
         }
 
-        @Deprecated
+        @Deprecated(since = "CEP-21")
         public VersionedValue moving(Token token)
         {
             return new VersionedValue(VersionedValue.STATUS_MOVING + VersionedValue.DELIMITER + partitioner.getTokenFactory().toString(token),
                                       versionSupplier.get());
         }
 
-        @Deprecated
+        @Deprecated(since = "CEP-21")
         public VersionedValue hostId(UUID hostId)
         {
             return new VersionedValue(hostId.toString(), versionSupplier.get());
         }
 
-        @Deprecated
+        @Deprecated(since = "CEP-21")
         public VersionedValue tokens(Collection<Token> tokens)
         {
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -274,25 +274,24 @@ public class VersionedValue implements Comparable<VersionedValue>
             return new VersionedValue(new String(bos.toByteArray(), ISO_8859_1), versionSupplier.get());
         }
 
-        @Deprecated
+        @Deprecated(since = "CEP-21")
         public VersionedValue removingNonlocal(UUID hostId)
         {
             return new VersionedValue(versionString(VersionedValue.REMOVING_TOKEN, hostId.toString()), versionSupplier.get());
         }
 
-        @Deprecated
+        @Deprecated(since = "CEP-21")
         public VersionedValue removedNonlocal(UUID hostId, long expireTime)
         {
             return new VersionedValue(versionString(VersionedValue.REMOVED_TOKEN, hostId.toString(), Long.toString(expireTime)), versionSupplier.get());
         }
 
-        @Deprecated
+        @Deprecated(since = "CEP-21")
         public VersionedValue removalCoordinator(UUID hostId)
         {
             return new VersionedValue(versionString(VersionedValue.REMOVAL_COORDINATOR, hostId.toString()), versionSupplier.get());
         }
 
-        @Deprecated
         public VersionedValue hibernate(boolean value)
         {
             return new VersionedValue(VersionedValue.HIBERNATE + VersionedValue.DELIMITER + value, versionSupplier.get());

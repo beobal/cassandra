@@ -197,11 +197,11 @@ public interface Transformation
 
         CANCEL_SEQUENCE(() -> CancelInProgressSequence.serializer),
 
-        @Deprecated
+        @Deprecated(since = "CEP-21")
         START_ADD_TO_CMS(() -> StartAddToCMS.serializer),
-        @Deprecated
+        @Deprecated(since = "CEP-21")
         FINISH_ADD_TO_CMS(() -> FinishAddToCMS.serializer),
-        @Deprecated
+        @Deprecated(since = "CEP-21")
         REMOVE_FROM_CMS(() -> RemoveFromCMS.serializer),
 
         STARTUP(() -> Startup.serializer),

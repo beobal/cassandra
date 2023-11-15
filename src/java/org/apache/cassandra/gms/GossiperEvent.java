@@ -46,7 +46,7 @@ public final class GossiperEvent extends DiagnosticEvent
     private final long lastProcessedMessageAt;
     private final Set<InetAddressAndPort> liveEndpoints;
     private final List<String> seeds;
-    @Deprecated
+    @Deprecated(since = "CEP-21")
     private final Set<InetAddressAndPort> seedsInShadowRound;
     private final Map<InetAddressAndPort, Long> unreachableEndpoints;
 

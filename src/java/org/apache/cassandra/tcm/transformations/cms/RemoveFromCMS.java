@@ -45,12 +45,12 @@ import static org.apache.cassandra.exceptions.ExceptionCode.INVALID;
 import static org.apache.cassandra.tcm.ownership.EntireRange.entireRange;
 
 /**
- * @deprecated in favour of ReconfigureCMS
  * This class along with AddToCMS, StartAddToCMS & FinishAddToCMS, contain a high degree of duplication with their intended
  * replacements ReconfigureCMS and AdvanceCMSReconfiguration. This shouldn't be a big problem as the intention is to
  * remove this superceded version asap.
+ * @deprecated in favour of ReconfigureCMS
  */
-@Deprecated
+@Deprecated(since = "CEP-21")
 public class RemoveFromCMS extends BaseMembershipTransformation
 {
     private static final Logger logger = LoggerFactory.getLogger(RemoveFromCMS.class);

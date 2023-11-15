@@ -197,7 +197,6 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
         this(config, classLoader, null);
     }
 
-    @Deprecated
     Instance(IInstanceConfig config, ClassLoader classLoader, FileSystem fileSystem)
     {
         this(config, classLoader, fileSystem, null);

@@ -386,25 +386,25 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         return new OwnedRanges(getReplicas(keyspaceName, broadcastAddress).ranges());
     }
 
-    @Deprecated
+    @Deprecated(since = "CEP-21")
     public Collection<Range<Token>> getPrimaryRanges(String keyspace)
     {
         return getPrimaryRangesForEndpoint(keyspace, getBroadcastAddressAndPort());
     }
 
-    @Deprecated
+    @Deprecated(since = "CEP-21")
     public Collection<Range<Token>> getPrimaryRangesForEndpoint(String keyspace, InetAddressAndPort ep)
     {
         return TokenRingUtils.getPrimaryRangesForEndpoint(keyspace, ep);
     }
 
-    @Deprecated
+    @Deprecated(since = "CEP-21")
     public Collection<Range<Token>> getPrimaryRangesWithinDC(String keyspace)
     {
         return getPrimaryRangeForEndpointWithinDC(keyspace, getBroadcastAddressAndPort());
     }
 
-    @Deprecated
+    @Deprecated(since = "CEP-21")
     public Collection<Range<Token>> getLocalPrimaryRangeForEndpoint(InetAddressAndPort referenceEndpoint)
     {
         ClusterMetadata metadata = ClusterMetadata.current();
@@ -414,13 +414,13 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         return SizeEstimatesRecorder.getLocalPrimaryRange(metadata, node);
     }
 
-    @Deprecated
+    @Deprecated(since = "CEP-21")
     public Collection<Range<Token>> getPrimaryRangeForEndpointWithinDC(String keyspace, InetAddressAndPort endpoint)
     {
         return TokenRingUtils.getPrimaryRangeForEndpointWithinDC(keyspace, endpoint);
     }
 
-    @Deprecated
+    @Deprecated(since = "CEP-21")
     public static List<Range<Token>> getAllRanges(List<Token> sortedTokens)
     {
         return TokenRingUtils.getAllRanges(sortedTokens);
@@ -657,7 +657,6 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         return initialized;
     }
 
-    @Deprecated
     public boolean isGossipActive()
     {
         return isGossipRunning();
@@ -2299,7 +2298,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
                                                .collect(toSet());
     }
 
-    @Deprecated
+    @Deprecated(since = "4.0")
     public List<String> getLeavingNodes()
     {
         return stringify(endpointsWithState(NodeState.LEAVING), false);
@@ -3648,7 +3647,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     /*
     - Use system_views.local to get information about the node (todo: we might still need a jmx endpoint for that since you can't run cql queries on drained etc nodes)
      */
-    @Deprecated
+    @Deprecated(since = "CEP-21")
     public String getOperationMode()
     {
         return operationMode().toString();
@@ -4970,12 +4969,14 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     }
 
     @Override
+    @Deprecated(since = "4.0")
     public Map<String, Set<InetAddress>> getOutstandingSchemaVersions()
     {
         throw new RuntimeException("Deprecated");
     }
 
     @Override
+    @Deprecated(since = "CEP-21")
     public Map<String, Set<String>> getOutstandingSchemaVersionsWithPort()
     {
         throw new RuntimeException("Deprecated");
