@@ -400,19 +400,15 @@ public class ReplicaPlans
         return result;
     }
 
-    public static ReplicaPlan.ForWrite forReadRepair(ClusterMetadata metadata, Keyspace keyspace, ConsistencyLevel consistencyLevel, Token token, Predicate<Replica> isAlive) throws UnavailableException
+    public static ReplicaPlan.ForWrite forReadRepair(ReplicaPlan<?, ?> forRead, ClusterMetadata metadata, Keyspace keyspace, ConsistencyLevel consistencyLevel, Token token, Predicate<Replica> isAlive) throws UnavailableException
     {
         AbstractReplicationStrategy replicationStrategy = keyspace.getReplicationStrategy();
-        ReplicaLayout.ForTokenRead forTokenRead = ReplicaLayout.forTokenReadLiveSorted(metadata, keyspace, replicationStrategy, token);
-        EndpointsForToken candidates = candidatesForRead(keyspace, null /*TODO TCM, check?*/, consistencyLevel, forTokenRead.natural());
-        EndpointsForToken contacts = contactForRead(replicationStrategy, consistencyLevel, true, candidates);
-
-        Selector selector = writeReadRepair(contacts);
+        Selector selector = writeReadRepair(forRead);
 
         ReplicaLayout.ForTokenWrite liveAndDown = ReplicaLayout.forTokenWriteLiveAndDown(metadata, keyspace, token);
         ReplicaLayout.ForTokenWrite live = liveAndDown.filter(isAlive);
 
-        contacts = selector.select(consistencyLevel, liveAndDown, live);
+        EndpointsForToken contacts = selector.select(consistencyLevel, liveAndDown, live);
         assureSufficientLiveReplicasForWrite(replicationStrategy, consistencyLevel, live.all(), liveAndDown.pending());
         return new ReplicaPlan.ForWrite(keyspace,
                                         replicationStrategy,
@@ -421,7 +417,7 @@ public class ReplicaPlans
                                         liveAndDown.all(),
                                         live.all(),
                                         contacts,
-                                        (newClusterMetadata) -> forReadRepair(newClusterMetadata, keyspace, consistencyLevel, token, isAlive),
+                                        (newClusterMetadata) -> forReadRepair(forRead, newClusterMetadata, keyspace, consistencyLevel, token, isAlive),
                                         metadata.epoch);
     }
 
@@ -556,7 +552,7 @@ public class ReplicaPlans
      * the minimal number of nodes to meet the consistency level, and prefer nodes we contacted on read to minimise
      * data transfer.
      */
-    public static Selector writeReadRepair(EndpointsForToken originalContacts)
+    public static Selector writeReadRepair(ReplicaPlan<?, ?> readPlan)
     {
         return new Selector()
         {
@@ -568,7 +564,7 @@ public class ReplicaPlans
 
                 ReplicaCollection.Builder<E> contacts = live.all().newBuilder(live.all().size());
                 // add all live nodes we might write to that we have already contacted on read
-                contacts.addAll(filter(live.all(), r -> originalContacts.endpoints().contains(r.endpoint())));
+                contacts.addAll(filter(live.all(), r -> readPlan.contacts().endpoints().contains(r.endpoint())));
 
                 // finally, add sufficient nodes to achieve our consistency level
                 if (consistencyLevel != EACH_QUORUM)
@@ -717,7 +713,7 @@ public class ReplicaPlans
 
         return new ReplicaPlan.ForTokenRead(keyspace, keyspace.getReplicationStrategy(), ConsistencyLevel.ONE, one, one,
                                             (newClusterMetadata) -> forSingleReplicaRead(newClusterMetadata, keyspace, token, replica),
-                                            () -> {
+                                            (self) -> {
                                                 throw new IllegalStateException("Read repair is not supported for short read/replica filtering protection.");
                                             },
                                             metadata.epoch);
@@ -738,7 +734,7 @@ public class ReplicaPlans
 
         return new ReplicaPlan.ForRangeRead(keyspace, keyspace.getReplicationStrategy(), ConsistencyLevel.ONE, range, one, one, vnodeCount,
                                             (newClusterMetadata) -> forSingleReplicaRead(metadata, keyspace, range, replica, vnodeCount),
-                                            (token) -> {
+                                            (self, token) -> {
                                                 throw new IllegalStateException("Read repair is not supported for short read/replica filtering protection.");
                                             },
                                             metadata.epoch);
@@ -783,7 +779,7 @@ public class ReplicaPlans
 
         return new ReplicaPlan.ForTokenRead(keyspace, replicationStrategy, consistencyLevel, candidates, contacts,
                                             (newClusterMetadata) -> forRead(newClusterMetadata, keyspace, token, indexQueryPlan, consistencyLevel, retry, false),
-                                            () -> forReadRepair(metadata, keyspace, consistencyLevel, token, FailureDetector.isReplicaAlive),
+                                            (self) -> forReadRepair(self, metadata, keyspace, consistencyLevel, token, FailureDetector.isReplicaAlive),
                                             metadata.epoch);
     }
 
@@ -827,7 +823,7 @@ public class ReplicaPlans
                                             contacts,
                                             vnodeCount,
                                             (newClusterMetadata) -> forRangeRead(newClusterMetadata, keyspace, indexQueryPlan, consistencyLevel, range, vnodeCount, false),
-                                            (token) -> forReadRepair(metadata, keyspace, consistencyLevel, token, FailureDetector.isReplicaAlive),
+                                            (self, token) -> forReadRepair(self, metadata, keyspace, consistencyLevel, token, FailureDetector.isReplicaAlive),
                                             metadata.epoch);
     }
 
@@ -900,10 +896,10 @@ public class ReplicaPlans
                                                                                  newRange,
                                                                                  newVnodeCount,
                                                                                  false),
-                                            (token) -> {
+                                            (self, token) -> {
                                                 // It might happen that the ring has moved forward since the operation has started, but because we'll be recomputing a quorum
                                                 // after the operation is complete, we will catch inconsistencies either way.
-                                                return forReadRepair(ClusterMetadata.current(), keyspace, consistencyLevel, token, FailureDetector.isReplicaAlive);
+                                                return forReadRepair(self, ClusterMetadata.current(), keyspace, consistencyLevel, token, FailureDetector.isReplicaAlive);
                                             },
                                             left.epoch);
     }

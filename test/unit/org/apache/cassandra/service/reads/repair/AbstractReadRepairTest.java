@@ -326,7 +326,7 @@ public abstract  class AbstractReadRepairTest
                                             targets,
                                             1,
                                             null,
-                                            (token) -> forReadRepair(ClusterMetadata.current(), keyspace, consistencyLevel, token, (r) -> true),
+                                            (self, token) -> forReadRepair(self, ClusterMetadata.current(), keyspace, consistencyLevel, token, (r) -> true),
                                             Epoch.EMPTY);
     }
 

@@ -21,7 +21,7 @@ import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.Iterator;
-import java.util.function.Function;
+import java.util.function.BiFunction;
 
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Sets;
@@ -1326,7 +1326,7 @@ public class DataResolverTest extends AbstractReadResponseTest
 
     private ReplicaPlan.SharedForRangeRead plan(EndpointsForRange replicas, ConsistencyLevel consistencyLevel)
     {
-        Function<Token, ReplicaPlan.ForWrite> repairPlan = (t) -> ReplicaPlans.forReadRepair(ClusterMetadata.current(), ks, consistencyLevel, t, (i) -> true);
+        BiFunction<ReplicaPlan<?, ?>, Token, ReplicaPlan.ForWrite> repairPlan = (self, t) -> ReplicaPlans.forReadRepair(self, ClusterMetadata.current(), ks, consistencyLevel, t, (i) -> true);
         return ReplicaPlan.shared(new ReplicaPlan.ForRangeRead(ks,
                                                                ks.getReplicationStrategy(),
                                                                consistencyLevel,

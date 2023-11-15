@@ -31,6 +31,7 @@ import org.apache.cassandra.utils.FBUtilities;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -196,7 +197,7 @@ public interface ReplicaPlan<E extends Endpoints<E>, P extends ReplicaPlan<E, P>
 
     public static class ForTokenRead extends AbstractForRead<EndpointsForToken, ForTokenRead>
     {
-        private final Supplier<ReplicaPlan.ForWrite> repairPlan;
+        private final Function<ReplicaPlan<?, ?>, ForWrite> repairPlan;
 
         public ForTokenRead(Keyspace keyspace,
                             AbstractReplicationStrategy replicationStrategy,
@@ -204,7 +205,7 @@ public interface ReplicaPlan<E extends Endpoints<E>, P extends ReplicaPlan<E, P>
                             EndpointsForToken candidates,
                             EndpointsForToken contacts,
                             Function<ClusterMetadata, ReplicaPlan.ForTokenRead> recompute,
-                            Supplier<ReplicaPlan.ForWrite> repairPlan,
+                            Function<ReplicaPlan<?, ?>, ReplicaPlan.ForWrite> repairPlan,
                             Epoch epoch)
         {
             super(keyspace, replicationStrategy, consistencyLevel, candidates, contacts, recompute, epoch);
@@ -221,7 +222,7 @@ public interface ReplicaPlan<E extends Endpoints<E>, P extends ReplicaPlan<E, P>
         public ForWrite repairPlan()
         {
             if (repairPlan != null)
-                return repairPlan.get().withContacts(contacts);
+                return repairPlan.apply(this); //.get(); //.withContacts(contacts);
 
             throw new IllegalStateException("Can not construct a repair plan on a derivative plan.");
         }
@@ -229,7 +230,7 @@ public interface ReplicaPlan<E extends Endpoints<E>, P extends ReplicaPlan<E, P>
 
     public static class ForRangeRead extends AbstractForRead<EndpointsForRange, ForRangeRead>
     {
-        private final Function<Token, ReplicaPlan.ForWrite> repairPlan;
+        private final BiFunction<ReplicaPlan<?, ?>, Token, ReplicaPlan.ForWrite> repairPlan;
         final AbstractBounds<PartitionPosition> range;
         final int vnodeCount;
 
@@ -241,7 +242,7 @@ public interface ReplicaPlan<E extends Endpoints<E>, P extends ReplicaPlan<E, P>
                             EndpointsForRange contact,
                             int vnodeCount,
                             Function<ClusterMetadata, ReplicaPlan.ForRangeRead> recompute,
-                            Function<Token, ReplicaPlan.ForWrite> repairPlan,
+                            BiFunction<ReplicaPlan<?, ?>, Token, ReplicaPlan.ForWrite> repairPlan,
                             Epoch epoch)
         {
             super(keyspace, replicationStrategy, consistencyLevel, candidates, contact, recompute, epoch);
@@ -268,7 +269,7 @@ public interface ReplicaPlan<E extends Endpoints<E>, P extends ReplicaPlan<E, P>
         {
             if (repairPlan != null)
             {
-                return repairPlan.apply(token);
+                return repairPlan.apply(this, token);
             }
 
             throw new IllegalStateException("Can not construct a repair plan on a derivative plan.");
