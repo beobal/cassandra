@@ -145,7 +145,7 @@ public final class InternodeEncryptionEnforcementTest extends TestBaseImpl
         {
             long mark = cluster.get(1).logs().mark();
             executorService.submit(() -> {
-                openConnections(cluster, 2, 1, Verb.PING_REQ, ConnectionType.SMALL_MESSAGES, false);
+                openConnections(cluster, 2, 1, Verb.PING_REQ, ConnectionType.LARGE_MESSAGES, false);
                 openConnections(cluster, 1, 2, Verb.PING_REQ, ConnectionType.SMALL_MESSAGES, true);
 
             });
