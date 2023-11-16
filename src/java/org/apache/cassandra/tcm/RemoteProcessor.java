@@ -145,16 +145,16 @@ public final class RemoteProcessor implements Processor
     {
         try (Timer.Context ctx = TCMMetrics.instance.fetchCMSLogLatency.time())
         {
-            Epoch lastConsecutive = log.replayPersisted();
+            Epoch currentEpoch = log.metadata().epoch;
             LogState replay = sendWithCallback(Verb.TCM_FETCH_CMS_LOG_REQ,
-                                               new FetchCMSLog(lastConsecutive, ClusterMetadataService.state() == REMOTE),
+                                               new FetchCMSLog(currentEpoch, ClusterMetadataService.state() == REMOTE),
                                                candidateIterator,
                                                new Retry.Backoff(TCMMetrics.instance.fetchLogRetries));
             if (!replay.isEmpty())
             {
                 logger.info("Replay request returned replay data: {}", replay);
                 log.append(replay);
-                TCMMetrics.instance.cmsLogEntriesFetched(lastConsecutive, replay.latestEpoch());
+                TCMMetrics.instance.cmsLogEntriesFetched(currentEpoch, replay.latestEpoch());
             }
 
             return log.waitForHighestConsecutive();
