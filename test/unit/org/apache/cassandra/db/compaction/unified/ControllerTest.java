@@ -547,11 +547,11 @@ public class ControllerTest
 
         PartitionPosition min = Util.testPartitioner().getMinimumToken().minKeyBound();
         diskBoundaries = new DiskBoundaries(cfs, null, ImmutableList.of(min, min, min), Epoch.FIRST, 0);
-        controller = controller.fromOptions(cfs, options);
-        assertEquals(1, controller.baseShardCount);
+        controller = Controller.fromOptions(cfs, options);
+        assertEquals(4, controller.baseShardCount);
 
         diskBoundaries = new DiskBoundaries(cfs, null, ImmutableList.of(min), Epoch.FIRST, 0);
-        controller = controller.fromOptions(cfs, options);
+        controller = Controller.fromOptions(cfs, options);
         assertEquals(Controller.DEFAULT_BASE_SHARD_COUNT, controller.baseShardCount);
     }
 }
