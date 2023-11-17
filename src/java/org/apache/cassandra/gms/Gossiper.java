@@ -1142,6 +1142,10 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean, 
             logger.trace("marking as down {}", addr);
         silentlyMarkDead(addr, localState);
         logger.info("InetAddress {} is now DOWN", addr);
+
+        // if the node isn't registered, don't notify
+        if (ClusterMetadata.current().directory.peerId(addr) == null)
+            return;
         for (IEndpointStateChangeSubscriber subscriber : subscribers)
             subscriber.onDead(addr, localState);
         if (logger.isTraceEnabled())
