@@ -263,15 +263,6 @@ public class CassandraDaemon
 
         try
         {
-            scrubDataDirectories();
-        }
-        catch (StartupException e)
-        {
-            exitOrFail(e.returnCode, e.getMessage(), e.getCause());
-        }
-
-        try
-        {
             Startup.initialize(DatabaseDescriptor.getSeeds());
             CMSOperations.initJmx();
         }
@@ -288,6 +279,15 @@ public class CassandraDaemon
         catch (IOException e)
         {
             exitOrFail(StartupException.ERR_WRONG_DISK_STATE, e.getMessage(), e.getCause());
+        }
+
+        try
+        {
+            scrubDataDirectories();
+        }
+        catch (StartupException e)
+        {
+            exitOrFail(e.returnCode, e.getMessage(), e.getCause());
         }
 
         // We need to persist this as soon as possible after startup checks.
