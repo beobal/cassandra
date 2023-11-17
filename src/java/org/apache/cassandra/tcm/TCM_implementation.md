@@ -16,7 +16,7 @@ Since the node executing register is not a CMS node, it is going to use a `Remot
 
 ## Commit Request: PaxosBackedProcessor, DistributedMetadataLogKeyspace, Retry
 
-When a CMS node receives a commit request, it deserializes and attempts to execute the transformation using `PaxosBackedProcessor`. Paxos backed processor stores an entire cluster metadata log in the `cluster_metadata.``distributed_metadata_log` table. It performs a simple CAS LWT that attempts to append a new entry to the log with an `Epoch` that is strictly consecutive to the last one. `Epoch` is a monotonically incrementing counter of `ClusterMetadata` versions.
+When a CMS node receives a commit request, it deserializes and attempts to execute the transformation using `PaxosBackedProcessor`. Paxos backed processor stores an entire cluster metadata log in the `system_cluster_metadata.``distributed_metadata_log` table. It performs a simple CAS LWT that attempts to append a new entry to the log with an `Epoch` that is strictly consecutive to the last one. `Epoch` is a monotonically incrementing counter of `ClusterMetadata` versions.
 
 Both remote and paxos-backed processors are using `Retry` class for managing retries. Remote processor sets a deadline for its retries using `tcm_await_timeout`. CMS-local processor permits itself to use at most `tcm_rpc_timeout` for its attempts to retry.
 

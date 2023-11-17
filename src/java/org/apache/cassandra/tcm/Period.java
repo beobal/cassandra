@@ -53,7 +53,7 @@ public class Period
      * we start there and walk backwards through the log table. Otherwise, we walk forwards.
      * Note, this method is only used (and should only be used) as a last resort in case the local index of
      * max epoch to period (in system.metadata_sealed_periods) is not available.
-     * @param logTable which table to scan, system.local_metadata_log or cluster_metadata.distributed_metadata_log
+     * @param logTable which table to scan, system.local_metadata_log or system_cluster_metadata.distributed_metadata_log
      * @param since the target epoch
      * @return the period at which to begin reading when contstructing a list of log entries which follow the
      *         target epoch
@@ -72,7 +72,7 @@ public class Period
      * Scan the log table (could be either local or distributed, but in practice only the local is used),
      * to find the n most recently sealed periods, beginning and including at a given start point.
      * Used when initialising the in-memory index of max epoch to sealed period at startup.
-     * @param logTable which table to scan, system.local_metadata_log or cluster_metadata.distributed_metadata_log
+     * @param logTable which table to scan, system.local_metadata_log or system_cluster_metadata.distributed_metadata_log
      * @param startPeriod the period to begin reading from
      * @param max maximum number of sealed periods to collect
      * @return the list of most recently sealed periods, starting from & including startPeriod

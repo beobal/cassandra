@@ -135,7 +135,7 @@ public class DistributedLogStateTest extends LogStateTestBase
             @Override
             public void dumpTables() throws IOException
             {
-                UntypedResultSet r = executeInternal("SELECT period, epoch, entry_id, kind FROM cluster_metadata.distributed_metadata_log");
+                UntypedResultSet r = executeInternal("SELECT period, epoch, entry_id, kind FROM system_cluster_metadata.distributed_metadata_log");
                 r.forEach(row -> {
                     long p = row.getLong("period");
                     long e = row.getLong("epoch");
