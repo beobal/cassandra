@@ -706,6 +706,8 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
             propagateMessagingVersions(cluster); // fake messaging needs to know messaging version for filters
         }
         internodeMessagingStarted = true;
+
+        CassandraDaemon.disableAutoCompaction(Schema.instance.localKeyspaces().names());
         Startup.initialize(DatabaseDescriptor.getSeeds(),
                            TestProcessor::new,
                            () -> {
@@ -729,6 +731,7 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
                                 registerInboundFilter(cluster);
                                 registerOutboundFilter(cluster);
         });
+        CassandraDaemon.disableAutoCompaction(Schema.instance.distributedKeyspaces().names());
         QueryProcessor.registerStatementInvalidatingListener();
         TestChangeListener.register();
 
@@ -808,14 +811,8 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
             StorageService.instance.unsafeSetInitialized();
         }
 
-        // clean up debris in data directories
-        CassandraDaemon.getInstanceForTesting().scrubDataDirectories();
-
-        // Populate tokenMetadata for the second time,
-        // see org.apache.cassandra.service.CassandraDaemon.setup
-        //StorageService.instance.populateTokenMetadata();
-
         CassandraDaemon.getInstanceForTesting().completeSetup();
+        CassandraDaemon.enableAutoCompaction(Schema.instance.getKeyspaces());
 
         if (config.has(NATIVE_PROTOCOL))
         {
@@ -828,6 +825,7 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
             throw new IllegalStateException(String.format("%s != %s", FBUtilities.getBroadcastAddressAndPort(), broadcastAddress()));
 
         ClusterMetadataService.instance().processor().fetchLogAndWait();
+
 
         ActiveRepairService.instance().start();
         StreamManager.instance.start();

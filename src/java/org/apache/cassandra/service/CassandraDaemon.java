@@ -25,6 +25,7 @@ import java.net.UnknownHostException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -68,7 +69,6 @@ import org.apache.cassandra.metrics.DefaultNameFactory;
 import org.apache.cassandra.net.StartupClusterConnectivityChecker;
 import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.SchemaConstants;
-import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.security.ThreadAwareSecurityManager;
 import org.apache.cassandra.service.paxos.PaxosState;
 import org.apache.cassandra.streaming.StreamManager;
@@ -261,15 +261,23 @@ public class CassandraDaemon
         CommitLog.instance.start();
         runStartupChecks();
 
+
         try
         {
+            disableAutoCompaction(Schema.instance.localKeyspaces().names());
             Startup.initialize(DatabaseDescriptor.getSeeds());
+            disableAutoCompaction(Schema.instance.distributedKeyspaces().names());
             CMSOperations.initJmx();
         }
         catch (InterruptedException | ExecutionException | IOException e)
         {
             throw new AssertionError("Can't initialize cluster metadata service");
         }
+        catch (StartupException e)
+        {
+            exitOrFail(e.returnCode, e.getMessage(), e.getCause());
+        }
+
         QueryProcessor.registerStatementInvalidatingListener();
 
         try
@@ -281,15 +289,6 @@ public class CassandraDaemon
             exitOrFail(StartupException.ERR_WRONG_DISK_STATE, e.getMessage(), e.getCause());
         }
 
-        try
-        {
-            scrubDataDirectories();
-        }
-        catch (StartupException e)
-        {
-            exitOrFail(e.returnCode, e.getMessage(), e.getCause());
-        }
-
         // We need to persist this as soon as possible after startup checks.
         // This should be the first write to SystemKeyspace (CASSANDRA-11742)
         SystemKeyspace.persistLocalMetadata();
@@ -297,23 +296,7 @@ public class CassandraDaemon
         Thread.setDefaultUncaughtExceptionHandler(JVMStabilityInspector::uncaughtException);
 
         SystemKeyspaceMigrator41.migrate();
-
         setupVirtualKeyspaces();
-
-        // initialize keyspaces
-        for (String keyspaceName : Schema.instance.getKeyspaces())
-        {
-            if (logger.isDebugEnabled())
-                logger.debug("opening keyspace {}", keyspaceName);
-            // disable auto compaction until gossip settles since disk boundaries may be affected by ring layout
-            for (ColumnFamilyStore cfs : Keyspace.open(keyspaceName).getColumnFamilyStores())
-            {
-                for (ColumnFamilyStore store : cfs.concatWithIndexes())
-                {
-                    store.disableAutoCompaction();
-                }
-            }
-        }
 
         try
         {
@@ -410,28 +393,8 @@ public class CassandraDaemon
 
         StorageService.instance.doAuthSetup();
 
-        // re-enable auto-compaction after gossip is settled, so correct disk boundaries are used
-        for (Keyspace keyspace : Keyspace.all())
-        {
-            for (ColumnFamilyStore cfs : keyspace.getColumnFamilyStores())
-            {
-                for (final ColumnFamilyStore store : cfs.concatWithIndexes())
-                {
-                    store.reload(store.metadata()); //reload CFs in case there was a change of disk boundaries
-                    if (store.getCompactionStrategyManager().shouldBeEnabled())
-                    {
-                        if (DatabaseDescriptor.getAutocompactionOnStartupEnabled())
-                        {
-                            store.enableAutoCompaction();
-                        }
-                        else
-                        {
-                            logger.info("Not enabling compaction for {}.{}; autocompaction_on_startup_enabled is set to false", store.getKeyspaceName(), store.name);
-                        }
-                    }
-                }
-            }
-        }
+        // re-enable auto-compaction after replay, so correct disk boundaries are used
+        enableAutoCompaction(Schema.instance.getKeyspaces());
 
         AuditLogManager.instance.initialize();
 
@@ -538,6 +501,49 @@ public class CassandraDaemon
         }
     }
 
+    public static void disableAutoCompaction(Collection<String> keyspaces)
+    {
+        for (String keyspaceName : keyspaces)
+        {
+            if (logger.isDebugEnabled())
+                logger.debug("opening keyspace {}", keyspaceName);
+            // disable auto compaction until gossip settles since disk boundaries may be affected by ring layout
+            for (ColumnFamilyStore cfs : Keyspace.open(keyspaceName).getColumnFamilyStores())
+            {
+                for (ColumnFamilyStore store : cfs.concatWithIndexes())
+                {
+                    store.disableAutoCompaction();
+                }
+            }
+        }
+    }
+
+    public static void enableAutoCompaction(Collection<String> keyspaces)
+    {
+        for (String ksNme : keyspaces)
+        {
+            Keyspace keyspace = Keyspace.open(ksNme);
+            for (ColumnFamilyStore cfs : keyspace.getColumnFamilyStores())
+            {
+                for (final ColumnFamilyStore store : cfs.concatWithIndexes())
+                {
+                    store.reload(store.metadata()); //reload CFs in case there was a change of disk boundaries
+                    if (store.getCompactionStrategyManager().shouldBeEnabled())
+                    {
+                        if (DatabaseDescriptor.getAutocompactionOnStartupEnabled())
+                        {
+                            store.enableAutoCompaction();
+                        }
+                        else
+                        {
+                            logger.info("Not enabling compaction for {}.{}; autocompaction_on_startup_enabled is set to false", store.getKeyspaceName(), store.name);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     public void setupVirtualKeyspaces()
     {
         VirtualKeyspaceRegistry.instance.register(VirtualSchemaKeyspace.instance);
@@ -548,22 +554,6 @@ public class CassandraDaemon
         LoggingSupportFactory.getLoggingSupport()
                              .getAppender(VirtualTableAppender.class, VirtualTableAppender.APPENDER_NAME)
                              .ifPresent(appender -> ((VirtualTableAppender) appender).flushBuffer());
-    }
-
-    public void scrubDataDirectories() throws StartupException
-    {
-        // clean up debris in the rest of the keyspaces
-        for (String keyspaceName : Schema.instance.getKeyspaces())
-        {
-            // Skip system as we've already cleaned it
-            if (keyspaceName.equals(SchemaConstants.SYSTEM_KEYSPACE_NAME))
-                continue;
-
-            for (TableMetadata cfm : Schema.instance.getTablesAndViews(keyspaceName))
-            {
-                ColumnFamilyStore.scrubDataDirectories(cfm);
-            }
-        }
     }
 
     public synchronized void initializeClientTransports()

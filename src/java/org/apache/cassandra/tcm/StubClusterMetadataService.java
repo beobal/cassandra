@@ -18,38 +18,34 @@
 
 package org.apache.cassandra.tcm;
 
+import java.util.Collections;
+
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.schema.DistributedMetadataLogKeyspace;
 import org.apache.cassandra.schema.DistributedSchema;
 import org.apache.cassandra.schema.KeyspaceMetadata;
-import org.apache.cassandra.schema.KeyspaceParams;
 import org.apache.cassandra.schema.Keyspaces;
-import org.apache.cassandra.schema.ReplicationParams;
-import org.apache.cassandra.schema.SchemaConstants;
-import org.apache.cassandra.schema.Tables;
 import org.apache.cassandra.tcm.log.Entry;
 import org.apache.cassandra.tcm.log.LocalLog;
-import org.apache.cassandra.tcm.log.LogStorage;
 import org.apache.cassandra.tcm.membership.Directory;
 import org.apache.cassandra.tcm.ownership.UniformRangePlacement;
-
-import static org.apache.cassandra.schema.DistributedMetadataLogKeyspace.Log;
 
 public class StubClusterMetadataService extends ClusterMetadataService
 {
 
     public static StubClusterMetadataService forClientTools()
     {
-        KeyspaceMetadata ks = KeyspaceMetadata.create(SchemaConstants.METADATA_KEYSPACE_NAME,
-                                                      new KeyspaceParams(true,
-                                                                         ReplicationParams.local().asMeta()),
-                                                      Tables.of(Log));
+        DatabaseDescriptor.setLocalDataCenter("DC1");
+        KeyspaceMetadata ks = DistributedMetadataLogKeyspace.initialMetadata(Collections.singleton("DC1"));
+        DistributedSchema schema = new DistributedSchema(Keyspaces.of(ks));
         return new StubClusterMetadataService(new ClusterMetadata(DatabaseDescriptor.getPartitioner(),
                                                                   Directory.EMPTY,
-                                                                  new DistributedSchema(Keyspaces.of(ks))));
+                                                                  schema));
     }
 
     public static StubClusterMetadataService forClientTools(DistributedSchema initialSchema)
     {
+        DatabaseDescriptor.setLocalDataCenter("DC1");
         ClusterMetadata metadata = new ClusterMetadata(DatabaseDescriptor.getPartitioner());
         metadata = metadata.transformer().with(initialSchema).build().metadata.forceEpoch(Epoch.EMPTY);
         return new StubClusterMetadataService(metadata);
@@ -71,11 +67,12 @@ public class StubClusterMetadataService extends ClusterMetadataService
     {
         super(new UniformRangePlacement(),
               MetadataSnapshots.NO_OP,
-              LocalLog.sync(initial, LogStorage.None, false, false),
+              LocalLog.sync(new LocalLog.LogSpec().withInitialState(initial)),
               new StubProcessor(),
               Commit.Replicator.NO_OP,
               false);
         this.metadata = initial;
+        this.log().ready();
     }
 
     @Override

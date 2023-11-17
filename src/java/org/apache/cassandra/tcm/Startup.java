@@ -36,9 +36,11 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.config.CassandraRelevantProperties;
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.SystemKeyspace;
 import org.apache.cassandra.db.commitlog.CommitLog;
 import org.apache.cassandra.dht.BootStrapper;
+import org.apache.cassandra.exceptions.StartupException;
 import org.apache.cassandra.gms.EndpointState;
 import org.apache.cassandra.gms.FailureDetector;
 import org.apache.cassandra.gms.Gossiper;
@@ -46,7 +48,12 @@ import org.apache.cassandra.gms.NewGossiper;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.net.MessagingService;
 import org.apache.cassandra.schema.DistributedSchema;
+import org.apache.cassandra.schema.KeyspaceMetadata;
+import org.apache.cassandra.schema.SchemaConstants;
+import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.StorageService;
+import org.apache.cassandra.tcm.log.LocalLog;
+import org.apache.cassandra.tcm.log.LogStorage;
 import org.apache.cassandra.tcm.log.SystemKeyspaceStorage;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.membership.NodeState;
@@ -74,7 +81,7 @@ import static org.apache.cassandra.utils.FBUtilities.getBroadcastAddressAndPort;
 {
     private static final Logger logger = LoggerFactory.getLogger(Startup.class);
 
-    public static void initialize(Set<InetAddressAndPort> seeds) throws InterruptedException, ExecutionException, IOException
+    public static void initialize(Set<InetAddressAndPort> seeds) throws InterruptedException, ExecutionException, IOException, StartupException
     {
         initialize(seeds,
                    p -> p,
@@ -83,7 +90,7 @@ import static org.apache.cassandra.utils.FBUtilities.getBroadcastAddressAndPort;
 
     public static void initialize(Set<InetAddressAndPort> seeds,
                                   Function<Processor, Processor> wrapProcessor,
-                                  Runnable initMessaging) throws InterruptedException, ExecutionException, IOException
+                                  Runnable initMessaging) throws InterruptedException, ExecutionException, IOException, StartupException
     {
         switch (StartupMode.get(seeds))
         {
@@ -132,22 +139,20 @@ import static org.apache.cassandra.utils.FBUtilities.getBroadcastAddressAndPort;
         ClusterMetadataService.instance().commit(initialize);
     }
 
-    public static void initializeAsNonCmsNode(Function<Processor, Processor> wrapProcessor)
+    public static void initializeAsNonCmsNode(Function<Processor, Processor> wrapProcessor) throws StartupException
     {
-        ClusterMetadata initial = new ClusterMetadata(DatabaseDescriptor.getPartitioner());
-        initial.schema.initializeKeyspaceInstances(DistributedSchema.empty());
+        LocalLog.LogSpec logSpec = new LocalLog.LogSpec().withStorage(LogStorage.SystemKeyspace)
+                                                         .withDefaultListeners();
         ClusterMetadataService.setInstance(new ClusterMetadataService(new UniformRangePlacement(),
-                                                                      initial,
                                                                       wrapProcessor,
                                                                       ClusterMetadataService::state,
-                                                                      false,
-                                                                      false));
+                                                                      logSpec));
         ClusterMetadataService.instance().initRecentlySealedPeriodsIndex();
         ClusterMetadataService.instance().log().replayPersisted();
-
-        ClusterMetadata replayed = ClusterMetadata.current();
-        replayed.schema.initializeKeyspaceInstances(initial.schema);
-        ClusterMetadataService.instance().log().replayCompleted(initial);
+        ClusterMetadata replayed = ClusterMetadataService.instance().log().metadata();
+        scrubDataDirectories(replayed);
+        replayed.schema.initializeKeyspaceInstances(DistributedSchema.empty());
+        ClusterMetadataService.instance().log().ready();
 
         NodeId nodeId = ClusterMetadata.current().myNodeId();
         UUID currentHostId = SystemKeyspace.getLocalHostId();
@@ -155,6 +160,22 @@ import static org.apache.cassandra.utils.FBUtilities.getBroadcastAddressAndPort;
         {
             logger.info("NodeId is wrong, updating from {} to {}", currentHostId, nodeId.toUUID());
             SystemKeyspace.setLocalHostId(nodeId.toUUID());
+        }
+    }
+
+    public static void scrubDataDirectories(ClusterMetadata metadata) throws StartupException
+    {
+        // clean up debris in the rest of the keyspaces
+        for (KeyspaceMetadata keyspace : metadata.schema.getKeyspaces())
+        {
+            // Skip system as we've already cleaned it
+            if (keyspace.name.equals(SchemaConstants.SYSTEM_KEYSPACE_NAME))
+                continue;
+
+            for (TableMetadata cfm : keyspace.tables)
+            {
+                ColumnFamilyStore.scrubDataDirectories(cfm);
+            }
         }
     }
 
@@ -219,16 +240,19 @@ import static org.apache.cassandra.utils.FBUtilities.getBroadcastAddressAndPort;
     /**
      * This should only be called during startup.
      */
-    public static void initializeFromGossip(Function<Processor, Processor> wrapProcessor, Runnable initMessaging)
+    public static void initializeFromGossip(Function<Processor, Processor> wrapProcessor, Runnable initMessaging) throws StartupException
     {
         ClusterMetadata emptyFromSystemTables = emptyWithSchemaFromSystemTables(SystemKeyspace.allKnownDatacenters());
-        emptyFromSystemTables.schema.initializeKeyspaceInstances(DistributedSchema.empty());
+        LocalLog.LogSpec logSpec = new LocalLog.LogSpec().withInitialState(emptyFromSystemTables)
+                                                         .withStorage(LogStorage.SystemKeyspace)
+                                                         .withDefaultListeners();
         ClusterMetadataService.setInstance(new ClusterMetadataService(new UniformRangePlacement(),
-                                                                      emptyFromSystemTables,
                                                                       wrapProcessor,
                                                                       ClusterMetadataService::state,
-                                                                      false,
-                                                                      true));
+                                                                      logSpec));
+        scrubDataDirectories(emptyFromSystemTables);
+        emptyFromSystemTables.schema.initializeKeyspaceInstances(DistributedSchema.empty());
+        ClusterMetadataService.instance().log().ready();
         initMessaging.run();
         try
         {
@@ -279,13 +303,21 @@ import static org.apache.cassandra.utils.FBUtilities.getBroadcastAddressAndPort;
         metadata.schema.initializeKeyspaceInstances(DistributedSchema.empty());
         metadata = metadata.forceEpoch(metadata.epoch.nextEpoch());
         ClusterMetadataService.unsetInstance();
+        LocalLog.LogSpec logSpec = new LocalLog.LogSpec().withInitialState(metadata)
+                                                         .withStorage(LogStorage.SystemKeyspace)
+                                                         .withDefaultListeners()
+                                                         .isReset(true)
+                                                         .withReadyNotification(LocalLog.LogSpec.WhenReady.NONE);
+
         ClusterMetadataService.setInstance(new ClusterMetadataService(new UniformRangePlacement(),
-                                                                      metadata,
                                                                       wrapProcessor,
                                                                       ClusterMetadataService::state,
-                                                                      true,
-                                                                      true));
+                                                                      logSpec));
+        // When re-intializing from a loaded metadata instance we need to fire notifications using the delta between an
+        // empty metadata and the loaded one. So we configure the LogSpec not to do any notifications and handle it
+        // explicitly here.
         ClusterMetadataService.instance().log().notifyListeners(emptyFromSystemTables);
+        ClusterMetadataService.instance().log().ready();
         initMessaging.run();
         ClusterMetadataService.instance().forceSnapshot(metadata.forceEpoch(metadata.nextEpoch()));
         ClusterMetadataService.instance().sealPeriod();

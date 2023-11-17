@@ -20,6 +20,7 @@ package org.apache.cassandra.tcm.log;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
@@ -95,6 +96,86 @@ public abstract class LocalLog implements Closeable
     // notification to them all.
     private final AtomicBoolean replayComplete = new AtomicBoolean();
 
+    public static class LogSpec
+    {
+        public enum WhenReady { NONE, PRE_COMMIT_ONLY, POST_COMMIT_ONLY, ALL};
+
+        private ClusterMetadata initial = new ClusterMetadata(DatabaseDescriptor.getPartitioner());
+        private LogStorage storage = LogStorage.None;
+        private boolean defaultListeners = false;
+        private boolean reset = false;
+        private WhenReady whenReady = WhenReady.POST_COMMIT_ONLY;
+
+        private final Set<LogListener> listeners = new HashSet<>();
+        private final Set<ChangeListener> changeListeners = new HashSet<>();
+        private final Set<ChangeListener.Async> asyncChangeListeners = new HashSet<>();
+
+        public LogSpec withDefaultListeners()
+        {
+            return withDefaultListeners(true);
+        }
+
+        public LogSpec withDefaultListeners(boolean withDefaultListeners)
+        {
+            if (withDefaultListeners &&
+                !(listeners.isEmpty() && changeListeners.isEmpty() && asyncChangeListeners.isEmpty()))
+            {
+                throw new IllegalStateException("LogSpec can only require all listeners OR specific listeners");
+            }
+
+            defaultListeners = withDefaultListeners;
+            return this;
+        }
+
+        public LogSpec withLogListener(LogListener listener)
+        {
+            if (defaultListeners)
+                throw new IllegalStateException("LogSpec can only require all listeners OR specific listeners");
+            listeners.add(listener);
+            return this;
+        }
+
+        public LogSpec withListener(ChangeListener listener)
+        {
+            if (defaultListeners)
+                throw new IllegalStateException("LogSpec can only require all listeners OR specific listeners");
+            if (listener instanceof ChangeListener.Async)
+                asyncChangeListeners.add((ChangeListener.Async) listener);
+            else
+                changeListeners.add(listener);
+            return this;
+        }
+
+        public LogSpec isReset(boolean isReset)
+        {
+            reset = isReset;
+            return this;
+        }
+
+        public boolean isReset()
+        {
+            return reset;
+        }
+
+        public LogSpec withStorage(LogStorage storage)
+        {
+            this.storage = storage;
+            return this;
+        }
+
+        public LogSpec withInitialState(ClusterMetadata initial)
+        {
+            this.initial = initial;
+            return this;
+        }
+
+        public LogSpec withReadyNotification(WhenReady whenReady)
+        {
+            this.whenReady = whenReady;
+            return this;
+        }
+    }
+
     /**
      * Custom comparator for pending entries. In general, we would like entries in the pending set to be ordered by epoch,
      * from smallest to highest, so that `#first()` call would return the smallest entry.
@@ -114,21 +195,22 @@ public abstract class LocalLog implements Closeable
 
         return e1.epoch.compareTo(e2.epoch);
     });
+
     protected final LogStorage persistence;
     protected final Set<LogListener> listeners;
     protected final Set<ChangeListener> changeListeners;
     protected final Set<ChangeListener.Async> asyncChangeListeners;
+    private final LogSpec spec;
 
-    private LocalLog(LogStorage persistence, ClusterMetadata initial, boolean withListeners, boolean isReset)
+    private LocalLog(LogSpec spec)
     {
-        assert initial.epoch.is(EMPTY) || initial.epoch.is(Epoch.UPGRADE_STARTUP) || isReset;
-        committed = new AtomicReference<>(initial);
-        this.persistence = persistence;
+        assert spec.initial.epoch.is(EMPTY) || spec.initial.epoch.is(Epoch.UPGRADE_STARTUP) || spec.reset;
+        committed = new AtomicReference<>(spec.initial);
+        this.persistence = spec.storage;
         listeners = Sets.newConcurrentHashSet();
         changeListeners = Sets.newConcurrentHashSet();
         asyncChangeListeners = Sets.newConcurrentHashSet();
-        if (withListeners)
-            addListeners();
+        this.spec = spec;
     }
 
     public void bootstrap(InetAddressAndPort addr)
@@ -168,33 +250,32 @@ public abstract class LocalLog implements Closeable
         return pending.size();
     }
 
-    @VisibleForTesting
-    public static LocalLog sync(ClusterMetadata initial, LogStorage logStorage, boolean addListeners, boolean isReset)
+    public static LocalLog sync(LogSpec spec)
     {
-        return new Sync(initial, logStorage, addListeners, isReset);
+        return new Sync(spec);
+    }
+
+    public static LocalLog async(LogSpec spec)
+    {
+        return new Async(spec);
     }
 
     @VisibleForTesting
-    public static LocalLog sync(ClusterMetadata initial, LogStorage logStorage, boolean addListeners)
+    public static LocalLog asyncForTests()
     {
-        return new Sync(initial, logStorage, addListeners, false);
+        LogSpec logSpec = new LogSpec();
+        LocalLog log = new Async(logSpec);
+        log.ready();
+        return log;
     }
 
     @VisibleForTesting
-    public static LocalLog asyncForTests(LogStorage logStorage, ClusterMetadata initial, boolean addListeners)
+    public static LocalLog asyncForTests(ClusterMetadata initial)
     {
-        return new Async(logStorage, initial, addListeners, false);
-    }
-
-    @VisibleForTesting
-    public static LocalLog async(ClusterMetadata initial)
-    {
-        return new Async(LogStorage.SystemKeyspace, initial, true, false);
-    }
-
-    public static LocalLog async(ClusterMetadata initial, boolean isReset, boolean withListeners)
-    {
-        return new Async(LogStorage.SystemKeyspace, initial, withListeners, isReset);
+        LogSpec logSpec = new LogSpec().withInitialState(initial);
+        LocalLog log = new Async(logSpec);
+        log.ready();
+        return log;
     }
 
     public boolean hasGaps()
@@ -366,7 +447,8 @@ public abstract class LocalLog implements Closeable
                     String.format("Epoch %s for %s can either force snapshot, or immediately follow %s",
                                   next.epoch, pendingEntry.transform, prev.epoch);
 
-                    persistence.append(transformed.success().metadata.period, pendingEntry.maybeUnwrapExecuted());
+                    if (replayComplete.get())
+                        persistence.append(transformed.success().metadata.period, pendingEntry.maybeUnwrapExecuted());
 
                     notifyPreCommit(prev, next, isSnapshot);
 
@@ -420,10 +502,15 @@ public abstract class LocalLog implements Closeable
         }
     }
 
+    /**
+     * Replays items that were persisted during previous starts. Replayed items _will not_ be persisted again.
+     */
     public Epoch replayPersisted()
     {
-        LogState state = persistence.getLogState(metadata().epoch);
-        append(state);
+        if (replayComplete.get())
+            throw new IllegalStateException("Can only replay persisted once.");
+        LogState logState = persistence.getLogState(metadata().epoch);
+        append(logState);
         return waitForHighestConsecutive().epoch;
     }
 
@@ -480,9 +567,9 @@ public abstract class LocalLog implements Closeable
         private final AsyncRunnable runnable;
         private final Interruptible executor;
 
-        private Async(LogStorage storage, ClusterMetadata initial, boolean withListeners, boolean isReset)
+        private Async(LogSpec spec)
         {
-            super(storage, initial, withListeners, isReset);
+            super(spec);
             this.runnable = new AsyncRunnable();
             this.executor = ExecutorFactory.Global.executorFactory().infiniteLoop("GlobalLogFollower", runnable, SAFE, NON_DAEMON, UNSYNCHRONIZED);
         }
@@ -656,9 +743,9 @@ public abstract class LocalLog implements Closeable
 
     private static class Sync extends LocalLog
     {
-        private Sync(ClusterMetadata initial, LogStorage logStorage, boolean withListeners, boolean isReset)
+        private Sync(LogSpec spec)
         {
-            super(logStorage, initial, withListeners, isReset);
+            super(spec);
         }
 
         void runOnce(DurationSpec durationSpec)
@@ -685,8 +772,12 @@ public abstract class LocalLog implements Closeable
         }
     }
 
-    private void addListeners()
+    protected void addListeners()
     {
+        listeners.clear();
+        changeListeners.clear();
+        asyncChangeListeners.clear();
+
         addListener(snapshotListener());
         addListener(new InitializationListener());
         addListener(new SchemaListener());
@@ -695,20 +786,45 @@ public abstract class LocalLog implements Closeable
         addListener(new MetadataSnapshotListener());
         addListener(new ClientNotificationListener());
         addListener(new UpgradeMigrationListener());
-
     }
 
-    public void replayCompleted(ClusterMetadata intial)
+    public void ready()
     {
         if (!replayComplete.compareAndSet(false, true))
             throw new IllegalStateException("Log is already fully initialised");
 
-        logger.debug("LocalLog replay complete, at epoch {}", committed.get().epoch);
-        listeners.clear();
-        changeListeners.clear();
-        asyncChangeListeners.clear();
-        addListeners();
-        notifyPostCommit(intial, committed.get(), true);
+        logger.debug("Marking LocalLog ready at epoch {}", committed.get().epoch);
+        if (spec.defaultListeners)
+        {
+            logger.debug("Adding default listeners to LocalLog");
+            addListeners();
+        }
+        else
+        {
+            logger.debug("Adding specified listeners to LocalLog");
+            spec.listeners.forEach(this::addListener);
+            spec.changeListeners.forEach(this::addListener);
+            spec.asyncChangeListeners.forEach(this::addListener);
+        }
+
+        switch (spec.whenReady)
+        {
+            case ALL:
+                logger.debug("Notifying all registered listeners of both pre and post commit event");
+                notifyListeners(spec.initial);
+                break;
+            case PRE_COMMIT_ONLY:
+                logger.debug("Notifying all registered listeners of pre-commit event only");
+                notifyPreCommit(spec.initial, committed.get(), true);
+                break;
+            case POST_COMMIT_ONLY:
+                logger.debug("Notifying all registered listeners of post-commit event only");
+                notifyPostCommit(spec.initial, committed.get(), true);
+                break;
+            case NONE:
+                logger.debug("Not notifying registered listeners of pre or post commit events");
+                break;
+        }
     }
 
     private LogListener snapshotListener()

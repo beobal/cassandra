@@ -76,9 +76,6 @@ public class LogListenerNotificationTest
                                                   affectedMetadata(random))));
         }
 
-        ClusterMetadata metadata = cm();
-        LocalLog log = LocalLog.sync(metadata, LogStorage.None, false);
-        log.append(new Entry(Entry.Id.NONE, Epoch.FIRST, PreInitialize.forTesting()));
         LogListener listener = new LogListener()
         {
             int counter = 0;
@@ -97,8 +94,10 @@ public class LogListenerNotificationTest
                 counter++;
             }
         };
-
-        log.addListener(listener);
+        LocalLog.LogSpec logSpec = new LocalLog.LogSpec().withInitialState(cm()).withLogListener(listener);
+        LocalLog log = LocalLog.sync(logSpec);
+        log.append(new Entry(Entry.Id.NONE, Epoch.FIRST, PreInitialize.forTesting()));
+        log.ready();
         log.append(input);
     }
 

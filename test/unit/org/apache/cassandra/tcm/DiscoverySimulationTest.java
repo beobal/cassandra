@@ -46,7 +46,6 @@ import org.apache.cassandra.net.MessageDelivery;
 import org.apache.cassandra.net.RequestCallback;
 import org.apache.cassandra.net.Verb;
 import org.apache.cassandra.tcm.log.LocalLog;
-import org.apache.cassandra.tcm.log.LogStorage;
 import org.apache.cassandra.tcm.ownership.UniformRangePlacement;
 import org.apache.cassandra.utils.concurrent.Future;
 
@@ -61,7 +60,9 @@ public class DiscoverySimulationTest
     public static void setup()
     {
         ClusterMetadata initial = new ClusterMetadata(Murmur3Partitioner.instance);
-        LocalLog log = LocalLog.sync(initial, LogStorage.None, false);
+        LocalLog log = LocalLog.sync(new LocalLog.LogSpec().withInitialState(initial));
+        log.ready();
+
         ClusterMetadataService cms = new ClusterMetadataService(new UniformRangePlacement(),
                                                                 MetadataSnapshots.NO_OP,
                                                                 log,

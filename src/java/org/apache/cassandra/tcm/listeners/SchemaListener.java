@@ -29,20 +29,6 @@ import org.apache.cassandra.tcm.ClusterMetadata;
 
 public class SchemaListener implements ChangeListener
 {
-    // Special instance used during startup to ensure that SSTable files are not opened until
-    // replay of the locally persisted metadata log is complete. Failure to do this can result
-    // in deserialization errors if an SSTables written with schema at epoch X are opened before
-    // the log replay has replayed X. After replay is complete, this instance is replaced with
-    // a standard SchemaListener.
-    public static final SchemaListener INSTANCE_FOR_STARTUP = new SchemaListener()
-    {
-        @Override
-        public void notifyPreCommit(ClusterMetadata prev, ClusterMetadata next, boolean fromSnapshot)
-        {
-            notifyInternal(prev, next, fromSnapshot, false);
-        }
-    };
-
     @Override
     public void notifyPreCommit(ClusterMetadata prev, ClusterMetadata next, boolean fromSnapshot)
     {

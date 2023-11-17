@@ -649,7 +649,7 @@ public class StressCQLSSTableWriter implements Closeable
             Directories directories = new Directories(tableMetadata, directoryList.stream().map(f -> new Directories.DataDirectory(new org.apache.cassandra.io.util.File(f.toPath()))).collect(Collectors.toList()));
 
             Keyspace ks = Keyspace.openWithoutSSTables(keyspace);
-            return ColumnFamilyStore.createColumnFamilyStore(ks, tableMetadata.name, tableMetadata, directories, false, false, true);
+            return ColumnFamilyStore.createColumnFamilyStore(ks, tableMetadata.name, tableMetadata, directories, false, false);
         }
 
         private static TableId deterministicId(String keyspace, String table)

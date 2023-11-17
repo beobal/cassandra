@@ -63,7 +63,8 @@ public class LocalLogTest
     @Test
     public void appendToFillGapWithConsecutiveBufferedEntries()
     {
-        LocalLog log = LocalLog.sync(cm(), LogStorage.None, false);
+        LocalLog log = LocalLog.sync(new LocalLog.LogSpec().withInitialState(cm()));
+        log.ready();
         Epoch start = log.metadata().epoch;
         assertEquals(EMPTY, start);
 
@@ -86,7 +87,8 @@ public class LocalLogTest
     @Test
     public void sealPeriodForceSnapshotCollisionWithGap()
     {
-        LocalLog log = LocalLog.sync(cm(), LogStorage.None, false);
+        LocalLog log = LocalLog.sync(new LocalLog.LogSpec().withInitialState(cm()));
+        log.ready();
 
         List<Entry> entries =new ArrayList<>();
         for (int i = 1; i <= 9; i++)
@@ -110,7 +112,8 @@ public class LocalLogTest
     @Test
     public void multipleSnapshotEntries()
     {
-        LocalLog log = LocalLog.sync(cm(), LogStorage.None, false);
+        LocalLog log = LocalLog.sync(new LocalLog.LogSpec().withInitialState(cm()));
+        log.ready();
 
         List<Entry> entries =new ArrayList<>();
         for (int i = 1; i <= 9; i++)
@@ -162,7 +165,8 @@ public class LocalLogTest
         CountDownLatch finish = CountDownLatch.newCountDownLatch(threads);
         CountDownLatch finishReaders = CountDownLatch.newCountDownLatch(threads);
         ExecutorPlus executor = executorFactory().configurePooled("APPENDER", threads * 2).build();
-        LocalLog log = LocalLog.asyncForTests(LogStorage.None, cm(), false);
+        LocalLog log = LocalLog.asyncForTests(cm());
+
         List<Entry> committed = new CopyOnWriteArrayList<>(); // doesn't need to be concurrent, since log is single-threaded
         log.addListener((e, m) -> committed.add(e));
 

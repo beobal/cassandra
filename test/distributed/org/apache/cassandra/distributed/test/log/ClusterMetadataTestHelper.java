@@ -62,7 +62,6 @@ import org.apache.cassandra.tcm.MetadataSnapshots;
 import org.apache.cassandra.tcm.Period;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.log.LocalLog;
-import org.apache.cassandra.tcm.log.LogStorage;
 import org.apache.cassandra.tcm.membership.Location;
 import org.apache.cassandra.tcm.membership.NodeAddresses;
 import org.apache.cassandra.tcm.membership.NodeId;
@@ -120,7 +119,7 @@ public class ClusterMetadataTestHelper
     public static ClusterMetadataService instanceForTest()
     {
         ClusterMetadata current = new ClusterMetadata(DatabaseDescriptor.getPartitioner());
-        LocalLog log = LocalLog.asyncForTests(LogStorage.None, current, false);
+        LocalLog log = LocalLog.asyncForTests();
         ResettableClusterMetadataService service = new ResettableClusterMetadataService(new UniformRangePlacement(),
                                                                                         MetadataSnapshots.NO_OP,
                                                                                         log,
@@ -142,7 +141,7 @@ public class ClusterMetadataTestHelper
      */
     public static ClusterMetadataService instanceForTest(ClusterMetadata current)
     {
-        LocalLog log = LocalLog.asyncForTests(LogStorage.None, current, false);
+        LocalLog log = LocalLog.asyncForTests();
         ResettableClusterMetadataService service = new ResettableClusterMetadataService(new UniformRangePlacement(),
                                                                                         MetadataSnapshots.NO_OP,
                                                                                         log,
@@ -206,7 +205,8 @@ public class ClusterMetadataTestHelper
 
     public static ClusterMetadataService syncInstanceForTest()
     {
-        LocalLog log = LocalLog.sync(new ClusterMetadata(DatabaseDescriptor.getPartitioner()), LogStorage.None, false);
+        LocalLog log = LocalLog.sync(new LocalLog.LogSpec());
+        log.ready();
         return new ClusterMetadataService(new UniformRangePlacement(),
                                           MetadataSnapshots.NO_OP,
                                           log,

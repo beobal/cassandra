@@ -148,26 +148,24 @@ public class ClusterMetadataService
     }
 
     ClusterMetadataService(PlacementProvider placementProvider,
-                           ClusterMetadata initial,
                            Function<Processor, Processor> wrapProcessor,
                            Supplier<State> cmsStateSupplier,
-                           boolean isReset,
-                           boolean withListeners)
+                           LocalLog.LogSpec logSpec)
     {
         this.placementProvider = placementProvider;
         this.snapshots = new MetadataSnapshots.SystemKeyspaceMetadataSnapshots();
 
         Processor localProcessor;
+        LogStorage logStorage = LogStorage.SystemKeyspace;
         if (CassandraRelevantProperties.TCM_USE_ATOMIC_LONG_PROCESSOR.getBoolean())
         {
-            LogStorage logStorage = LogStorage.SystemKeyspace;
-            log = LocalLog.sync(initial, logStorage, withListeners, isReset);
-            localProcessor = wrapProcessor.apply(new AtomicLongBackedProcessor(log, isReset));
+            log = LocalLog.sync(logSpec);
+            localProcessor = wrapProcessor.apply(new AtomicLongBackedProcessor(log, logSpec.isReset()));
             fetchLogHandler = new FetchCMSLog.Handler((e, ignored) -> logStorage.getLogState(e));
         }
         else
         {
-            log = LocalLog.async(initial, isReset, withListeners);
+            log = LocalLog.async(logSpec);
             localProcessor = wrapProcessor.apply(new PaxosBackedProcessor(log));
             fetchLogHandler = new FetchCMSLog.Handler();
         }
@@ -248,7 +246,10 @@ public class ClusterMetadataService
         ClusterMetadata emptyFromSystemTables = emptyWithSchemaFromSystemTables(Collections.singleton("DC1"));
         emptyFromSystemTables.schema.initializeKeyspaceInstances(DistributedSchema.empty(), loadSSTables);
         emptyFromSystemTables = emptyFromSystemTables.forceEpoch(Epoch.EMPTY);
-        LocalLog log = LocalLog.sync(emptyFromSystemTables, new AtomicLongBackedProcessor.InMemoryStorage(), false, false);
+        LocalLog.LogSpec logSpec = new LocalLog.LogSpec().withInitialState(emptyFromSystemTables)
+                                                         .withStorage(new AtomicLongBackedProcessor.InMemoryStorage());
+        LocalLog log = LocalLog.sync(logSpec);
+        log.ready();
         ClusterMetadataService cms = new ClusterMetadataService(new UniformRangePlacement(),
                                                                 MetadataSnapshots.NO_OP,
                                                                 log,
@@ -271,6 +272,7 @@ public class ClusterMetadataService
 
         ClusterMetadataService.setInstance(StubClusterMetadataService.forClientTools());
     }
+
     public static void initializeForClients(DistributedSchema initialSchema)
     {
         if (instance != null)

@@ -483,8 +483,7 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean, Memtable.Owner
                              TableMetadata initMetadata,
                              Directories directories,
                              boolean loadSSTables,
-                             boolean registerBookeeping,
-                             boolean offline)
+                             boolean registerBookeeping)
     {
         assert directories != null;
         assert initMetadata != null : "null metadata for " + keyspace + ':' + columnFamilyName;
@@ -574,21 +573,6 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean, Memtable.Owner
             topPartitions = null;
         else
             topPartitions = new TopPartitionTracker(initMetadata);
-    }
-
-    public void loadInitialSSTables()
-    {
-        if (data.loadsstables)
-        {
-            logger.info("Attempted to load initial SSTables for {}.{} but this was done during construction, ignoring",
-                        keyspace.getName(), name);
-            return;
-        }
-        Collection<SSTableReader> sstables;
-        Directories.SSTableLister sstableFiles = directories.sstableLister(Directories.OnTxnErr.IGNORE).skipTemporary(true);
-        sstables = SSTableReader.openAll(this, sstableFiles.list().entrySet(), metadata);
-        data.addInitialSSTablesWithoutUpdatingSize(sstables, this);
-        data.updateInitialSSTableSize(sstables);
     }
 
     public static String getTableMBeanName(String ks, String name, boolean isIndex)
@@ -777,7 +761,7 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean, Memtable.Owner
                                                             boolean loadSSTables)
     {
         Directories directories = new Directories(metadata);
-        return createColumnFamilyStore(keyspace, columnFamily, metadata, directories, loadSSTables, true, false);
+        return createColumnFamilyStore(keyspace, columnFamily, metadata, directories, loadSSTables, true);
     }
 
     /** This is only directly used by offline tools */
@@ -786,12 +770,11 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean, Memtable.Owner
                                                                          TableMetadata metadata,
                                                                          Directories directories,
                                                                          boolean loadSSTables,
-                                                                         boolean registerBookkeeping,
-                                                                         boolean offline)
+                                                                         boolean registerBookkeeping)
     {
         return new ColumnFamilyStore(keyspace, columnFamily,
                                      directories.getUIDGenerator(SSTableIdFactory.instance.defaultBuilder()),
-                                     metadata, directories, loadSSTables, registerBookkeeping, offline);
+                                     metadata, directories, loadSSTables, registerBookkeeping);
     }
 
     /**

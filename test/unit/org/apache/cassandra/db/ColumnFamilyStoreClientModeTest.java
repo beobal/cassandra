@@ -93,7 +93,7 @@ public class ColumnFamilyStoreClientModeTest
         Keyspace.setInitialized();
         Directories directories = new Directories(tableMetadata, new Directories.DataDirectory[]{ new Directories.DataDirectory(new org.apache.cassandra.io.util.File(tempFolder.newFolder("datadir"))) });
         Keyspace ks = Keyspace.openWithoutSSTables(KEYSPACE);
-        ColumnFamilyStore cfs = ColumnFamilyStore.createColumnFamilyStore(ks, TABLE, TableMetadataRef.forOfflineTools(tableMetadata).get(), directories, false, false, true);
+        ColumnFamilyStore cfs = ColumnFamilyStore.createColumnFamilyStore(ks, TABLE, TableMetadataRef.forOfflineTools(tableMetadata).get(), directories, false, false);
 
         assertNull(cfs.topPartitions);
     }

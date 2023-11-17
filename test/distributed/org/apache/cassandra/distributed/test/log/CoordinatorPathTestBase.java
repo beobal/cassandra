@@ -639,8 +639,10 @@ public abstract class CoordinatorPathTestBase extends FuzzTestBase
         {
             assert executor == null;
             LogStorage logStorage = new AtomicLongBackedProcessor.InMemoryStorage();
-            LocalLog log = LocalLog.sync(new ClusterMetadata(partitioner), logStorage, false);
-
+            ClusterMetadata initial = new ClusterMetadata(partitioner);
+            LocalLog.LogSpec logSpec = new LocalLog.LogSpec().withInitialState(initial).withStorage(logStorage);
+            LocalLog log = LocalLog.sync(logSpec);
+            log.ready();
             // Replicator only replicates to the node under test, as there are no other nodes in reality
             Commit.Replicator replicator = (result, source) -> {
                 realCluster.deliverMessage(realCluster.get(1).broadcastAddress(),
@@ -716,7 +718,8 @@ public abstract class CoordinatorPathTestBase extends FuzzTestBase
 
             // We need to create a second node to be able to send and receive messages.
             RealSimulatedNode driver = createNode();
-            LocalLog log = LocalLog.sync(new ClusterMetadata(DatabaseDescriptor.getPartitioner()), LogStorage.None, false);
+            LocalLog log = LocalLog.sync(new LocalLog.LogSpec());
+            log.ready();
 
             ClusterMetadataService metadataService =
             new ClusterMetadataService(new UniformRangePlacement(),

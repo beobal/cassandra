@@ -18,10 +18,13 @@
 
 package org.apache.cassandra.schema;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import javax.annotation.Nullable;
-
-import com.google.common.base.Preconditions;
 
 import org.apache.cassandra.cql3.functions.Function;
 import org.apache.cassandra.cql3.functions.FunctionName;
@@ -119,13 +122,7 @@ public interface SchemaProvider
      * @param keyspaceName The name of the keyspace
      * @return metadata about ColumnFamilies the belong to the given keyspace
      */
-    default Iterable<TableMetadata> getTablesAndViews(String keyspaceName)
-    {
-        Preconditions.checkNotNull(keyspaceName);
-        Keyspace ks = getKeyspaceInstance(keyspaceName);
-        Preconditions.checkNotNull(ks, "Keyspace %s not found", keyspaceName);
-        return ks.getMetadata().tablesAndViews();
-    }
+    Iterable<TableMetadata> getTablesAndViews(String keyspaceName);
 
     @Nullable
     Keyspace getKeyspaceInstance(String keyspaceName);

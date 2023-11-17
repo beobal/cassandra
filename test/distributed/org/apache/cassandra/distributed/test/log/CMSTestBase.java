@@ -39,7 +39,6 @@ import org.apache.cassandra.tcm.MetadataSnapshots;
 import org.apache.cassandra.tcm.Processor;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.log.LocalLog;
-import org.apache.cassandra.tcm.log.LogStorage;
 import org.apache.cassandra.tcm.ownership.EntireRange;
 import org.apache.cassandra.tcm.ownership.UniformRangePlacement;
 import org.apache.cassandra.tcm.transformations.AlterSchema;
@@ -96,7 +95,9 @@ public class CMSTestBase
             this.rf = rf;
             schemaProvider = Mockito.mock(SchemaProvider.class);
             ClusterMetadata initial = new ClusterMetadata(partitioner);
-            log = LocalLog.sync(initial, LogStorage.None, addListeners);
+            LocalLog.LogSpec logSpec = new LocalLog.LogSpec().withInitialState(initial).withDefaultListeners(addListeners);
+            log = LocalLog.sync(logSpec);
+            log.ready();
 
             service = new ClusterMetadataService(new UniformRangePlacement(),
                                                  MetadataSnapshots.NO_OP,

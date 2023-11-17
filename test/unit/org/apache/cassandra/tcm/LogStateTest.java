@@ -55,8 +55,11 @@ public class LogStateTest
         MetadataSnapshots snapshots = new MetadataSnapshots.SystemKeyspaceMetadataSnapshots();
         ClusterMetadata initial = new ClusterMetadata(DatabaseDescriptor.getPartitioner());
         initial.schema.initializeKeyspaceInstances(DistributedSchema.empty());
-        LocalLog log = LocalLog.sync(initial, logStorage, false);
-        log.addListener(new MetadataSnapshotListener());
+        LocalLog.LogSpec logSpec = new LocalLog.LogSpec().withInitialState(initial)
+                                                         .withStorage(logStorage)
+                                                         .withLogListener(new MetadataSnapshotListener());
+        LocalLog log = LocalLog.sync(logSpec);
+        log.ready();
         ClusterMetadataService cms = new ClusterMetadataService(new UniformRangePlacement(),
                                                                 snapshots,
                                                                 log,

@@ -19,8 +19,6 @@
 package org.apache.cassandra.schema;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Optional;
@@ -32,7 +30,10 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import javax.annotation.Nullable;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
+
+import org.apache.commons.lang3.ObjectUtils;
 
 import org.apache.cassandra.Util;
 import org.apache.cassandra.config.DatabaseDescriptor;
@@ -84,12 +85,6 @@ public class MockSchema
     public static SSTableId sstableId(int idx)
     {
         return sstableIds.computeIfAbsent(idx, ignored -> sstableIdGenerator.get());
-    }
-
-    public static Collection<Object[]> sstableIdGenerators()
-    {
-        return Arrays.asList(new Object[]{ Util.newSeqGen() },
-                             new Object[]{ Util.newUUIDGen() });
     }
 
     private static final File tempFile = temp("mocksegmentedfile");
@@ -329,7 +324,7 @@ public class MockSchema
                         ? mockKS.tables.with(metadata)
                         : mockKS.tables.withSwapped(metadata);
         mockKS = mockKS.withSwapped(tables);
-        return new ColumnFamilyStore(new Keyspace(mockKS), metadata.name, Util.newSeqGen(), metadata, new Directories(metadata), false, false, false);
+        return new ColumnFamilyStore(new Keyspace(mockKS), metadata.name, Util.newSeqGen(), metadata, new Directories(metadata), false, false);
     }
 
     private static TableMetadata newTableMetadata(String ksname)
@@ -452,6 +447,16 @@ public class MockSchema
         public Optional<TableMetadata> getIndexMetadata(String keyspace, String index)
         {
             return originalSchemaProvider.getIndexMetadata(keyspace, index);
+        }
+
+        @Override
+        public Iterable<TableMetadata> getTablesAndViews(String keyspaceName)
+        {
+            Preconditions.checkNotNull(keyspaceName);
+            KeyspaceMetadata ksm = ObjectUtils.getFirstNonNull(() -> distributedKeyspaces().getNullable(keyspaceName),
+                                                               () -> localKeyspaces().getNullable(keyspaceName));
+            Preconditions.checkNotNull(ksm, "Keyspace %s not found", keyspaceName);
+            return ksm.tablesAndViews();
         }
 
         @Nullable

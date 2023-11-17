@@ -278,7 +278,10 @@ public final class ServerTestUtils
         if (!Keyspace.isInitialized())
             Keyspace.setInitialized();
 
-        LocalLog log = LocalLog.sync(initial, LogStorage.None, addListeners);
+        LocalLog.LogSpec logSpec = new LocalLog.LogSpec().withInitialState(initial)
+                                                         .withDefaultListeners(addListeners);
+        LocalLog log = LocalLog.async(logSpec);
+        log.ready();
         ResettableClusterMetadataService service = new ResettableClusterMetadataService(new UniformRangePlacement(),
                                                                                         MetadataSnapshots.NO_OP,
                                                                                         log,
@@ -306,7 +309,11 @@ public final class ServerTestUtils
         // |-- ServerTestUtils.recreateCMS                        # recreates the CMS using the updated partitioner
         ClusterMetadata initial = new ClusterMetadata(DatabaseDescriptor.getPartitioner());
         initial.schema.initializeKeyspaceInstances(DistributedSchema.empty());
-        LocalLog log = LocalLog.async(initial);
+        LocalLog.LogSpec logSpec = new LocalLog.LogSpec().withInitialState(initial)
+                                                         .withStorage(LogStorage.SystemKeyspace)
+                                                         .withDefaultListeners();
+        LocalLog log = LocalLog.async(logSpec);
+        log.ready();
         ResettableClusterMetadataService cms = new ResettableClusterMetadataService(new UniformRangePlacement(),
                                                                                     MetadataSnapshots.NO_OP,
                                                                                     log,
