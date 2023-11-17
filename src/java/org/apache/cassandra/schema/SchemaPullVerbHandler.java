@@ -17,10 +17,6 @@
  */
 package org.apache.cassandra.schema;
 
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.Consumer;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,20 +36,8 @@ public final class SchemaPullVerbHandler implements IVerbHandler<NoPayload>
 
     private static final Logger logger = LoggerFactory.getLogger(SchemaPullVerbHandler.class);
 
-    private final List<Consumer<Message<NoPayload>>> handlers = new CopyOnWriteArrayList<>();
-
-    public void register(Consumer<Message<NoPayload>> handler)
-    {
-        handlers.add(handler);
-    }
-
     public void doVerb(Message<NoPayload> message)
     {
-        logger.trace("Received schema pull request from {}", message.from());
-        List<Consumer<Message<NoPayload>>> handlers = this.handlers;
-        if (handlers.isEmpty())
-            throw new UnsupportedOperationException("There is no handler registered for schema pull verb");
-
-        handlers.forEach(h -> h.accept(message));
+        logger.warn("Schema pull request from {} ignored - please upgrade", message.from());
     }
 }
