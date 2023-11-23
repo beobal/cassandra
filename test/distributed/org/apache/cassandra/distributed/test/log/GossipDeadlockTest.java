@@ -60,6 +60,7 @@ public class GossipDeadlockTest extends TestBaseImpl
                                              .withConfig(config -> config.with(NETWORK, GOSSIP)
                                                                          .set("progress_barrier_default_consistency_level", "NODE_LOCAL")
                                                                          .set("progress_barrier_min_consistency_level", "NODE_LOCAL"))
+                                             .withoutVNodes()
                                              .withInstanceInitializer(BB::install) // make GossipTask.run slower to increase the deadlock window
                                              .start()))
         {

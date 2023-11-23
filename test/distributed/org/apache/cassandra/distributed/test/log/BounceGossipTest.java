@@ -149,6 +149,7 @@ public class BounceGossipTest extends TestBaseImpl
     {
         try (Cluster cluster = init(builder().withNodes(3)
                                              .withConfig(config -> config.with(NETWORK, GOSSIP))
+                                             .withoutVNodes()
                                              .start()))
         {
             cluster.schemaChange(withKeyspace("create table %s.tbl (id int primary key)"));
