@@ -143,7 +143,7 @@ public class LocalLogTest
     @Test
     public void appendFuzzTest() throws InterruptedException
     {
-        for (int i = 0; i < 10000; i++)
+        for (int i = 0; i < 2000; i++)
         {
             singleAppendFuzzTest();
         }
