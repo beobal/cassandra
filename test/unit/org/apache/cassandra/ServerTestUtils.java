@@ -31,6 +31,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.audit.AuditLogManager;
+import org.apache.cassandra.config.CassandraRelevantProperties;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.Keyspace;
@@ -184,6 +185,7 @@ public final class ServerTestUtils
 
         ThreadAwareSecurityManager.install();
 
+        CassandraRelevantProperties.GOSSIPER_SKIP_WAITING_TO_SETTLE.setInt(0);
         initCMS();
         SystemKeyspace.persistLocalMetadata();
         AuditLogManager.instance.initialize();
@@ -274,14 +276,9 @@ public final class ServerTestUtils
         IPartitioner partitioner = DatabaseDescriptor.getPartitioner();
         boolean addListeners = true;
         ClusterMetadata initial = new ClusterMetadata(partitioner);
-        initial.schema.initializeKeyspaceInstances(DistributedSchema.empty());
-        if (!Keyspace.isInitialized())
-            Keyspace.setInitialized();
-
         LocalLog.LogSpec logSpec = new LocalLog.LogSpec().withInitialState(initial)
                                                          .withDefaultListeners(addListeners);
         LocalLog log = LocalLog.async(logSpec);
-        log.ready();
         ResettableClusterMetadataService service = new ResettableClusterMetadataService(new UniformRangePlacement(),
                                                                                         MetadataSnapshots.NO_OP,
                                                                                         log,
@@ -290,6 +287,10 @@ public final class ServerTestUtils
                                                                                         true);
 
         ClusterMetadataService.setInstance(service);
+        initial.schema.initializeKeyspaceInstances(DistributedSchema.empty());
+        if (!Keyspace.isInitialized())
+            Keyspace.setInitialized();
+        log.ready();
         log.bootstrap(FBUtilities.getBroadcastAddressAndPort());
         service.commit(new Initialize(ClusterMetadata.current()));
         QueryProcessor.registerStatementInvalidatingListener();
