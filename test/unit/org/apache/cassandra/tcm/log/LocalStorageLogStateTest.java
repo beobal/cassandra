@@ -52,7 +52,7 @@ public class LocalStorageLogStateTest extends LogStateTestBase
     {
         DatabaseDescriptor.daemonInitialization();
         StorageService.instance.setPartitionerUnsafe(Murmur3Partitioner.instance);
-        ServerTestUtils.cleanupAndLeaveDirs();
+        ServerTestUtils.prepareServerNoRegister();
         CommitLog.instance.start();
     }
 

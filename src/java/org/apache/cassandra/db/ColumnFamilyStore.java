@@ -1535,7 +1535,9 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean, Memtable.Owner
             return ShardBoundaries.NONE;
 
         ShardBoundaries shardBoundaries = cachedShardBoundaries;
-        ClusterMetadata metadata = ClusterMetadata.current();
+        ClusterMetadata metadata = ClusterMetadata.currentNullable();
+        if (metadata == null)
+            return ShardBoundaries.NONE;
 
         if (shardBoundaries == null ||
             shardBoundaries.shardCount() != shardCount ||
