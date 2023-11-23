@@ -46,7 +46,7 @@ public interface ShardManager
     {
         final ImmutableList<PartitionPosition> diskPositions = cfs.getDiskBoundaries().positions;
         ColumnFamilyStore.VersionedLocalRanges localRanges = cfs.localRangesWeighted();
-        IPartitioner partitioner = ClusterMetadata.current().partitioner;
+        IPartitioner partitioner = cfs.getPartitioner();
 
         if (diskPositions != null && diskPositions.size() > 1)
             return new ShardManagerDiskAware(localRanges, diskPositions.stream()
