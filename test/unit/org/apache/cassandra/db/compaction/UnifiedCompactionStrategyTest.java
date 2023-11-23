@@ -54,7 +54,7 @@ import org.apache.cassandra.dht.Splitter;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.TableMetadata;
-import org.apache.cassandra.tcm.Epoch;
+import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.Overlaps;
 import org.apache.cassandra.utils.Pair;
@@ -111,9 +111,9 @@ public class UnifiedCompactionStrategyTest
         long seed = System.currentTimeMillis();
         random.setSeed(seed);
         System.out.println("Random seed: " + seed);
-        ServerTestUtils.prepareServerNoRegister();
         DatabaseDescriptor.daemonInitialization(); // because of all the static initialization in CFS
         DatabaseDescriptor.setPartitionerUnsafe(Murmur3Partitioner.instance);
+        ServerTestUtils.prepareServerNoRegister();
     }
 
 
@@ -141,7 +141,7 @@ public class UnifiedCompactionStrategyTest
             assertNotNull("Splitter is required with multiple compaction shards", splitter);
 
         when(cfs.getPartitioner()).thenReturn(partitioner);
-        localRanges = cfs.fullWeightedRange(Epoch.FIRST, partitioner);
+        localRanges = cfs.fullWeightedRange(ClusterMetadata.current().epoch, partitioner);
 
         when(cfs.metadata()).thenReturn(metadata);
         when(cfs.getTableName()).thenReturn(table);
