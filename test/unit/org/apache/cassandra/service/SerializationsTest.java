@@ -245,7 +245,7 @@ public class SerializationsTest extends AbstractSerializationsTester
         try (FileInputStreamPlus in = getInput("service.SyncComplete.bin"))
         {
             // success
-            SyncResponse message = SyncResponse.serializer.deserialize(in, getVersion());
+            SyncResponse message = SyncResponse.serializer.deserialize(in, DatabaseDescriptor.getPartitioner(), getVersion());
             assert DESC.equals(message.desc);
 
             System.out.println(nodes);

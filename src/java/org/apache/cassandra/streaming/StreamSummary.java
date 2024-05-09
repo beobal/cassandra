@@ -23,7 +23,7 @@ import java.util.List;
 
 import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableList;
-
+import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.TypeSizes;
 import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.IPartitionerDependentSerializer;
@@ -93,18 +93,31 @@ public class StreamSummary implements Serializable
             summary.tableId.serialize(out);
             out.writeInt(summary.files);
             out.writeLong(summary.totalSize);
+            Token.logPartitioner = true;
             if (version >= MessagingService.VERSION_51)
                 CollectionSerializers.serializeCollection(summary.ranges, out, version, Range.rangeSerializer);
+            Token.logPartitioner = false;
         }
 
         public StreamSummary deserialize(DataInputPlus in, IPartitioner p, int version) throws IOException
         {
             TableId tableId = TableId.deserialize(in);
+
+            if (p == null)
+            {
+                ColumnFamilyStore cfs = ColumnFamilyStore.getIfExists(tableId);
+                if (cfs == null)
+                    throw new RuntimeException("Unknown table " + tableId);
+                p = cfs.getPartitioner();
+            }
+
             int files = in.readInt();
             long totalSize = in.readLong();
             List<Range<Token>> ranges = ImmutableList.of();
+            Token.logPartitioner = true;
             if (version >= MessagingService.VERSION_51)
                 ranges = CollectionSerializers.deserializeList(in, p, version, Range.rangeSerializer);
+            Token.logPartitioner = false;
             return new StreamSummary(tableId, ranges, files, totalSize);
         }
 
