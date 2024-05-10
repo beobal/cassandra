@@ -43,7 +43,7 @@ public class PrepareSynAckMessage extends StreamMessage
             PrepareSynAckMessage message = new PrepareSynAckMessage();
             int numSummaries = input.readInt();
             for (int i = 0; i < numSummaries; i++)
-                message.summaries.add(StreamSummary.serializer.deserialize(input, null, version));
+                message.summaries.add(StreamSummary.serializer.deserialize(input, version));
             return message;
         }
 
