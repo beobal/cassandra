@@ -75,8 +75,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -94,8 +94,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -182,8 +182,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -201,8 +201,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -299,8 +299,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -318,8 +318,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -364,8 +364,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -383,8 +383,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -453,8 +453,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -472,8 +472,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -586,8 +586,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -605,8 +605,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -651,8 +651,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -670,8 +670,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -769,8 +769,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -788,8 +788,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -877,8 +877,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -896,8 +896,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -1031,8 +1031,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -1050,8 +1050,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -1163,8 +1163,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -1182,8 +1182,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -1272,8 +1272,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -1291,8 +1291,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -1389,8 +1389,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -1408,8 +1408,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -1479,8 +1479,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -1498,8 +1498,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -1597,8 +1597,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -1616,8 +1616,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -1705,8 +1705,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -1724,8 +1724,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -1795,8 +1795,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -1814,8 +1814,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -1903,8 +1903,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -1922,8 +1922,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -2036,8 +2036,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -2055,8 +2055,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -2190,8 +2190,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -2209,8 +2209,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -2307,8 +2307,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -2326,8 +2326,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -2397,8 +2397,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -2416,8 +2416,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -2505,8 +2505,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -2524,8 +2524,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -2613,8 +2613,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -2632,8 +2632,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -2703,8 +2703,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -2722,8 +2722,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -2792,8 +2792,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -2811,8 +2811,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -2910,8 +2910,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -2929,8 +2929,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -3105,8 +3105,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -3124,8 +3124,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -3190,8 +3190,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -3209,8 +3209,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -3323,8 +3323,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -3342,8 +3342,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -3408,8 +3408,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -3427,8 +3427,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -3498,8 +3498,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -3517,8 +3517,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -3616,8 +3616,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -3635,8 +3635,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -3749,8 +3749,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -3768,8 +3768,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -3867,8 +3867,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -3886,8 +3886,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -4062,8 +4062,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -4081,8 +4081,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -4168,8 +4168,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -4187,8 +4187,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -4285,8 +4285,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -4304,8 +4304,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -4375,8 +4375,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -4394,8 +4394,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -4492,8 +4492,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -4511,8 +4511,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -4563,8 +4563,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -4582,8 +4582,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -4653,8 +4653,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -4672,8 +4672,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -4743,8 +4743,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -4762,8 +4762,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -4846,8 +4846,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -4865,8 +4865,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -4918,8 +4918,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -4937,8 +4937,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -5008,8 +5008,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -5027,8 +5027,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -5121,8 +5121,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -5140,8 +5140,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -5239,8 +5239,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -5258,8 +5258,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -5311,8 +5311,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -5330,8 +5330,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -5401,8 +5401,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -5420,8 +5420,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -5508,8 +5508,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -5527,8 +5527,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -5640,8 +5640,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -5659,8 +5659,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -5758,8 +5758,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -5777,8 +5777,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -5876,8 +5876,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -5895,8 +5895,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -6009,8 +6009,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -6028,8 +6028,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -6098,8 +6098,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -6117,8 +6117,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -6183,8 +6183,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -6202,8 +6202,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -6316,8 +6316,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -6335,8 +6335,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -6406,8 +6406,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -6425,8 +6425,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -6477,8 +6477,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -6496,8 +6496,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -6561,8 +6561,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -6580,8 +6580,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -6669,8 +6669,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -6688,8 +6688,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -6759,8 +6759,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -6778,8 +6778,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -6849,8 +6849,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -6868,8 +6868,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -6958,8 +6958,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -6977,8 +6977,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -7022,8 +7022,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -7041,8 +7041,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -7130,8 +7130,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -7149,8 +7149,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -7248,8 +7248,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -7267,8 +7267,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -7356,8 +7356,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -7375,8 +7375,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -7464,8 +7464,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -7483,8 +7483,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -7581,8 +7581,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -7600,8 +7600,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -7688,8 +7688,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -7707,8 +7707,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -7805,8 +7805,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -7824,8 +7824,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -7876,8 +7876,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -7895,8 +7895,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -7982,8 +7982,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -8001,8 +8001,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -8072,8 +8072,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -8091,8 +8091,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -8157,8 +8157,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -8176,8 +8176,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -8221,8 +8221,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -8240,8 +8240,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -8306,8 +8306,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -8325,8 +8325,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -8415,8 +8415,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -8434,8 +8434,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -8532,8 +8532,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -8551,8 +8551,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -8621,8 +8621,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -8640,8 +8640,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -8705,8 +8705,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -8724,8 +8724,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -8794,8 +8794,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -8813,8 +8813,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -8866,8 +8866,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -8885,8 +8885,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -8955,8 +8955,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -8974,8 +8974,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -9039,8 +9039,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -9058,8 +9058,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -9129,8 +9129,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -9148,8 +9148,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -9261,8 +9261,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -9280,8 +9280,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -9350,8 +9350,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -9369,8 +9369,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -9439,8 +9439,8 @@ jobs:
     - CASS_DRIVER_NO_EXTENSIONS: true
     - CASS_DRIVER_NO_CYTHON: true
     - CASSANDRA_SKIP_SYNC: true
-    - DTEST_REPO: https://github.com/apache/cassandra-dtest.git
-    - DTEST_BRANCH: trunk
+    - DTEST_REPO: https://github.com/beobal/cassandra-dtest.git
+    - DTEST_BRANCH: samt/CASSANDRA-19217
     - CCM_MAX_HEAP_SIZE: 1024M
     - CCM_HEAP_NEWSIZE: 256M
     - REPEATED_TESTS_STOP_ON_FAILURE: false
@@ -9458,8 +9458,8 @@ jobs:
     - REPEATED_JVM_DTESTS_COUNT: 500
     - REPEATED_JVM_UPGRADE_DTESTS: null
     - REPEATED_JVM_UPGRADE_DTESTS_COUNT: 500
-    - REPEATED_DTESTS: null
-    - REPEATED_DTESTS_COUNT: 500
+    - REPEATED_DTESTS: auth_test.py::TestAuthUnavailable::test_authorization_handle_unavailable
+    - REPEATED_DTESTS_COUNT: 200
     - REPEATED_LARGE_DTESTS: null
     - REPEATED_LARGE_DTESTS_COUNT: 100
     - REPEATED_UPGRADE_DTESTS: null
@@ -9673,6 +9673,12 @@ workflows:
         requires:
         - start_j11_dtests_latest
         - j11_build
+    - start_j11_dtests_latest_repeat:
+        type: approval
+    - j11_dtests_latest_repeat:
+        requires:
+        - start_j11_dtests_latest_repeat
+        - j11_build
     - start_j17_dtests:
         type: approval
     - j17_dtests:
@@ -9690,6 +9696,12 @@ workflows:
     - j17_dtests_latest:
         requires:
         - start_j17_dtests_latest
+        - j11_build
+    - start_j17_dtests_latest_repeat:
+        type: approval
+    - j17_dtests_latest_repeat:
+        requires:
+        - start_j17_dtests_latest_repeat
         - j11_build
     - start_j11_dtests_large:
         type: approval
@@ -9776,6 +9788,30 @@ workflows:
     - j11_upgrade_dtests:
         requires:
         - start_j11_upgrade_dtests
+        - j11_build
+    - start_j11_dtests_repeat:
+        type: approval
+    - j11_dtests_repeat:
+        requires:
+        - start_j11_dtests_repeat
+        - j11_build
+    - start_j11_dtests_vnode_repeat:
+        type: approval
+    - j11_dtests_vnode_repeat:
+        requires:
+        - start_j11_dtests_vnode_repeat
+        - j11_build
+    - start_j17_dtests_repeat:
+        type: approval
+    - j17_dtests_repeat:
+        requires:
+        - start_j17_dtests_repeat
+        - j11_build
+    - start_j17_dtests_vnode_repeat:
+        type: approval
+    - j17_dtests_vnode_repeat:
+        requires:
+        - start_j17_dtests_vnode_repeat
         - j11_build
   java11_pre-commit_tests:
     jobs:
@@ -9900,19 +9936,37 @@ workflows:
     - j11_dtests:
         requires:
         - j11_build
+    - j11_dtests_repeat:
+        requires:
+        - j11_build
     - j11_dtests_vnode:
+        requires:
+        - j11_build
+    - j11_dtests_vnode_repeat:
         requires:
         - j11_build
     - j11_dtests_latest:
         requires:
         - j11_build
+    - j11_dtests_latest_repeat:
+        requires:
+        - j11_build
     - j17_dtests:
+        requires:
+        - j11_build
+    - j17_dtests_repeat:
         requires:
         - j11_build
     - j17_dtests_vnode:
         requires:
         - j11_build
+    - j17_dtests_vnode_repeat:
+        requires:
+        - j11_build
     - j17_dtests_latest:
+        requires:
+        - j11_build
+    - j17_dtests_latest_repeat:
         requires:
         - j11_build
     - start_j11_dtests_large:
@@ -10040,6 +10094,12 @@ workflows:
         requires:
         - start_j17_dtests_latest
         - j17_build
+    - start_j17_dtests_latest_repeat:
+        type: approval
+    - j17_dtests_latest_repeat:
+        requires:
+        - start_j17_dtests_latest_repeat
+        - j17_build
     - start_j17_dtests_large:
         type: approval
     - j17_dtests_large:
@@ -10128,6 +10188,18 @@ workflows:
         requires:
         - start_j17_utests_system_keyspace_directory
         - j17_build
+    - start_j17_dtests_repeat:
+        type: approval
+    - j17_dtests_repeat:
+        requires:
+        - start_j17_dtests_repeat
+        - j17_build
+    - start_j17_dtests_vnode_repeat:
+        type: approval
+    - j17_dtests_vnode_repeat:
+        requires:
+        - start_j17_dtests_vnode_repeat
+        - j17_build
   java17_pre-commit_tests:
     jobs:
     - start_pre-commit_tests:
@@ -10159,10 +10231,19 @@ workflows:
     - j17_dtests:
         requires:
         - j17_build
+    - j17_dtests_repeat:
+        requires:
+        - j17_build
     - j17_dtests_vnode:
         requires:
         - j17_build
+    - j17_dtests_vnode_repeat:
+        requires:
+        - j17_build
     - j17_dtests_latest:
+        requires:
+        - j17_build
+    - j17_dtests_latest_repeat:
         requires:
         - j17_build
     - start_j17_dtests_large:
