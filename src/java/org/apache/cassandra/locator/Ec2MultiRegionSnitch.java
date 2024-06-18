@@ -18,16 +18,10 @@
 package org.apache.cassandra.locator;
 
 import java.io.IOException;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 
 import com.google.common.annotations.VisibleForTesting;
 
-import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.exceptions.ConfigurationException;
-import org.apache.cassandra.gms.ApplicationState;
-import org.apache.cassandra.gms.Gossiper;
-import org.apache.cassandra.service.StorageService;
 
 /**
  * 1) Snitch will automatically set the public IP by querying the AWS API
@@ -42,11 +36,12 @@ import org.apache.cassandra.service.StorageService;
  */
 public class Ec2MultiRegionSnitch extends Ec2Snitch
 {
+
+    private final Ec2MultiRegionAddressConfig addressConfig;
     @VisibleForTesting
     static final String PUBLIC_IP_QUERY = "/latest/meta-data/public-ipv4";
     @VisibleForTesting
     static final String PRIVATE_IP_QUERY = "/latest/meta-data/local-ipv4";
-    private final String localPrivateAddress;
 
     public Ec2MultiRegionSnitch() throws IOException, ConfigurationException
     {
@@ -61,33 +56,11 @@ public class Ec2MultiRegionSnitch extends Ec2Snitch
     Ec2MultiRegionSnitch(AbstractCloudMetadataServiceConnector connector) throws IOException
     {
         super(connector);
-        InetAddress localPublicAddress = InetAddress.getByName(connector.apiCall(PUBLIC_IP_QUERY));
-        logger.info("EC2Snitch using publicIP as identifier: {}", localPublicAddress);
-        localPrivateAddress = connector.apiCall(PRIVATE_IP_QUERY);
-        // use the Public IP to broadcast Address to other nodes.
-        DatabaseDescriptor.setBroadcastAddress(localPublicAddress);
-        if (DatabaseDescriptor.getBroadcastRpcAddress() == null)
-        {
-            logger.info("broadcast_rpc_address unset, broadcasting public IP as rpc_address: {}", localPublicAddress);
-            DatabaseDescriptor.setBroadcastRpcAddress(localPublicAddress);
-        }
+        addressConfig = new Ec2MultiRegionAddressConfig(connector);
     }
 
-    @Override
-    public void gossiperStarting()
+    public void configureAddresses()
     {
-        super.gossiperStarting();
-        InetAddressAndPort address;
-        try
-        {
-            address = InetAddressAndPort.getByName(localPrivateAddress);
-        }
-        catch (UnknownHostException e)
-        {
-            throw new RuntimeException(e);
-        }
-        Gossiper.instance.addLocalApplicationState(ApplicationState.INTERNAL_ADDRESS_AND_PORT, StorageService.instance.valueFactory.internalAddressAndPort(address));
-        Gossiper.instance.addLocalApplicationState(ApplicationState.INTERNAL_IP, StorageService.instance.valueFactory.internalIP(address.getAddress()));
-        Gossiper.instance.register(new ReconnectableSnitchHelper(DatabaseDescriptor.getLocator(), getLocalDatacenter(), true));
+        addressConfig.configureAddresses();
     }
 }

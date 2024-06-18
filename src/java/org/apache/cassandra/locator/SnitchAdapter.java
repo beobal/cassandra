@@ -20,7 +20,7 @@ package org.apache.cassandra.locator;
 
 import org.apache.cassandra.tcm.membership.Location;
 
-public class SnitchAdapter implements InitialLocationProvider, NodeProximity
+public class SnitchAdapter implements InitialLocationProvider, NodeProximity, NodeAddressConfig
 {
     public final IEndpointSnitch snitch;
 
@@ -51,5 +51,23 @@ public class SnitchAdapter implements InitialLocationProvider, NodeProximity
     public boolean isWorthMergingForRangeQuery(ReplicaCollection<?> merged, ReplicaCollection<?> l1, ReplicaCollection<?> l2)
     {
         return snitch.isWorthMergingForRangeQuery(merged, l1, l2);
+    }
+
+    @Override
+    public void configureAddresses()
+    {
+        // only Ec2MultiRegionSnitch overrides broadcast and local address from config
+        if (snitch instanceof Ec2MultiRegionSnitch)
+            ((Ec2MultiRegionSnitch)snitch).configureAddresses();
+    }
+
+    @Override
+    public boolean preferLocalConnections()
+    {
+        if(snitch instanceof Ec2MultiRegionSnitch)
+            return true;
+        if (snitch instanceof GossipingPropertyFileSnitch)
+            return ((GossipingPropertyFileSnitch)snitch).preferLocal;
+        return false;
     }
 }

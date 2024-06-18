@@ -432,6 +432,9 @@ public class Config
 
     public String node_proximity;
     public String initial_location_provider;
+    public String addresses_config;
+    // TODO should this be true by default? may be a change in behaviour for anything other than EC2MRSnitch
+    public boolean prefer_local_connections = false;
 
     public String failure_detector = "FailureDetector";
 

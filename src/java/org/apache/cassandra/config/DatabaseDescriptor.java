@@ -89,6 +89,7 @@ import org.apache.cassandra.db.commitlog.CommitLogSegmentManagerStandard;
 import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.fql.FullQueryLoggerOptions;
+import org.apache.cassandra.gms.IEndpointStateChangeSubscriber;
 import org.apache.cassandra.gms.IFailureDetector;
 import org.apache.cassandra.gms.VersionedValue;
 import org.apache.cassandra.io.FSWriteError;
@@ -106,6 +107,8 @@ import org.apache.cassandra.locator.IEndpointSnitch;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.locator.Locator;
 import org.apache.cassandra.locator.InitialLocationProvider;
+import org.apache.cassandra.locator.NodeAddressConfig;
+import org.apache.cassandra.locator.ReconnectableSnitchHelper;
 import org.apache.cassandra.locator.SeedProvider;
 import org.apache.cassandra.locator.NodeProximity;
 import org.apache.cassandra.locator.LocatorAdapter;
@@ -191,6 +194,7 @@ public class DatabaseDescriptor
     private static Supplier<IFailureDetector> newFailureDetector;
     private static NodeProximity nodeProximity;
     private static LocatorAdapter initializationLocator;
+    private static IEndpointStateChangeSubscriber localAddressReconnector;
     private static InetAddress listenAddress; // leave null so we can fall through to getLocalHost
     private static InetAddress broadcastAddress;
     private static InetAddress rpcAddress;
@@ -1489,6 +1493,7 @@ public class DatabaseDescriptor
 
         InitialLocationProvider initialLocationProvider;
         NodeProximity proximity;
+        NodeAddressConfig addressConfig;
         if (hasLegacyConfig)
         {
             logger.info("Use of endpoint_snitch in configuration is deprecated and should be replaced by " +
@@ -1496,15 +1501,24 @@ public class DatabaseDescriptor
             SnitchAdapter adapter = new SnitchAdapter(createEndpointSnitch(conf.endpoint_snitch));
             proximity = adapter;
             initialLocationProvider = adapter;
+            addressConfig = adapter;
         }
         else
         {
             proximity = createProximityImpl(conf.node_proximity);
             initialLocationProvider = createInitialLocationProvider(conf.initial_location_provider);
+            addressConfig = conf.addresses_config != null
+                            ? createAddressConfig(conf.addresses_config)
+                            : NodeAddressConfig.DEFAULT;
         }
         initializationLocator = new LocatorAdapter(FBUtilities.getBroadcastAddressAndPort(),
                                                    initialLocationProvider);
         nodeProximity = conf.dynamic_snitch ? new DynamicEndpointSnitch(proximity) : proximity;
+        addressConfig.configureAddresses();
+        localAddressReconnector = addressConfig.preferLocalConnections()
+                                  ? new ReconnectableSnitchHelper(initializationLocator, true)
+                                  : new IEndpointStateChangeSubscriber() { /* NO-OP */ };
+
         EndpointSnitchInfo.create();
     }
 
@@ -1747,6 +1761,14 @@ public class DatabaseDescriptor
             className = "org.apache.cassandra.locator." + className;
         InitialLocationProvider provider = FBUtilities.construct(className, "initial location provider");
         return provider;
+    }
+
+    public static NodeAddressConfig createAddressConfig(String className) throws ConfigurationException
+    {
+        if (!className.contains("."))
+            className = "org.apache.cassandra.locator." + className;
+        NodeAddressConfig config = FBUtilities.construct(className, "node address config");
+        return config;
     }
 
     private static IFailureDetector createFailureDetector(String detectorClassName) throws ConfigurationException
@@ -2112,6 +2134,16 @@ public class DatabaseDescriptor
         if (initializationLocator == null && isClientInitialized())
             return LocatorAdapter.forClients();
         return initializationLocator;
+    }
+
+    public static IEndpointStateChangeSubscriber getLocalAddressReconnectionHelper()
+    {
+        return localAddressReconnector;
+    }
+
+    public static boolean preferLocalConnections()
+    {
+        return conf.prefer_local_connections;
     }
 
     public static Locator getLocator()
