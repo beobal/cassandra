@@ -1648,6 +1648,8 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean, 
         buildSeedsList();
         /* initialize the heartbeat state for this localEndpoint */
         maybeInitializeLocalState(generationNbr);
+        register(DatabaseDescriptor.getLocalAddressReconnectionHelper());
+
         ClusterMetadata metadata = ClusterMetadata.current();
         if (mergeLocalStates && metadata.myNodeId() != null)
             mergeNodeToGossip(metadata.myNodeId(), metadata);

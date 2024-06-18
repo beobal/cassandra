@@ -36,18 +36,17 @@ import static org.apache.cassandra.auth.IInternodeAuthenticator.InternodeConnect
  * Sidekick helper for snitches that want to reconnect from one IP addr for a node to another.
  * Typically, this is for situations like EC2 where a node will have a public address and a private address,
  * where we connect on the public, discover the private, and reconnect on the private.
+ * // TODO rename
  */
 public class ReconnectableSnitchHelper implements IEndpointStateChangeSubscriber
 {
     private static final Logger logger = LoggerFactory.getLogger(ReconnectableSnitchHelper.class);
-    private final Locator snitch;
-    private final String localDc;
+    private final Locator locator;
     private final boolean preferLocal;
 
-    public ReconnectableSnitchHelper(Locator snitch, String localDc, boolean preferLocal)
+    public ReconnectableSnitchHelper(Locator locator, boolean preferLocal)
     {
-        this.snitch = snitch;
-        this.localDc = localDc;
+        this.locator = locator;
         this.preferLocal = preferLocal;
     }
 
@@ -55,7 +54,7 @@ public class ReconnectableSnitchHelper implements IEndpointStateChangeSubscriber
     {
         try
         {
-            reconnect(publicAddress, InetAddressAndPort.getByName(localAddressValue.value), snitch, localDc);
+            reconnect(publicAddress, InetAddressAndPort.getByName(localAddressValue.value), locator);
         }
         catch (UnknownHostException e)
         {
@@ -64,7 +63,7 @@ public class ReconnectableSnitchHelper implements IEndpointStateChangeSubscriber
     }
 
     @VisibleForTesting
-    static void reconnect(InetAddressAndPort publicAddress, InetAddressAndPort localAddress, Locator snitch, String localDc)
+    static void reconnect(InetAddressAndPort publicAddress, InetAddressAndPort localAddress, Locator locator)
     {
         final OutboundConnectionSettings settings = new OutboundConnectionSettings(publicAddress, localAddress).withDefaults(ConnectionCategory.MESSAGING);
         if (!settings.authenticator().authenticate(settings.to.getAddress(), settings.to.getPort(), null, OUTBOUND_PRECONNECT))
@@ -73,7 +72,7 @@ public class ReconnectableSnitchHelper implements IEndpointStateChangeSubscriber
             return;
         }
 
-        if (snitch.location(publicAddress).datacenter.equals(localDc))
+        if (locator.local().sameDatacenter(locator.location(publicAddress)))
         {
             MessagingService.instance().maybeReconnectWithNewIp(publicAddress, localAddress);
             logger.debug("Initiated reconnect to an Internal IP {} for the {}", localAddress, publicAddress);
