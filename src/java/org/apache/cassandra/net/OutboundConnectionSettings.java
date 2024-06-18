@@ -28,11 +28,10 @@ import org.apache.cassandra.config.Config;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.config.EncryptionOptions.ServerEncryptionOptions;
 import org.apache.cassandra.db.SystemKeyspace;
-import org.apache.cassandra.locator.IEndpointSnitch;
 import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.locator.Locator;
 import org.apache.cassandra.utils.FBUtilities;
 
-import static org.apache.cassandra.config.DatabaseDescriptor.getEndpointSnitch;
 import static org.apache.cassandra.net.MessagingService.instance;
 import static org.apache.cassandra.utils.FBUtilities.getBroadcastAddressAndPort;
 
@@ -420,7 +419,7 @@ public class OutboundConnectionSettings
         if (tcpNoDelay != null)
             return tcpNoDelay;
 
-        if (DatabaseDescriptor.isClientOrToolInitialized() || isInLocalDC(getEndpointSnitch(), getBroadcastAddressAndPort(), to))
+        if (DatabaseDescriptor.isClientOrToolInitialized() || isInLocalDC(getBroadcastAddressAndPort(), to))
             return INTRADC_TCP_NODELAY;
 
         return DatabaseDescriptor.getInterDCTcpNoDelay();
@@ -459,7 +458,7 @@ public class OutboundConnectionSettings
         if (category.isStreaming())
             return Framing.UNPROTECTED;
 
-        return shouldCompressConnection(getEndpointSnitch(), getBroadcastAddressAndPort(), to)
+        return shouldCompressConnection(getBroadcastAddressAndPort(), to)
                ? Framing.LZ4 : Framing.CRC;
     }
 
@@ -479,10 +478,18 @@ public class OutboundConnectionSettings
                                               from(), socketFactory(), callbacks(), debug(), endpointToVersion());
     }
 
-    private static boolean isInLocalDC(IEndpointSnitch snitch, InetAddressAndPort localHost, InetAddressAndPort remoteHost)
+    private static boolean isInLocalDC(InetAddressAndPort localHost, InetAddressAndPort remoteHost)
     {
-        String remoteDC = snitch.getDatacenter(remoteHost);
-        String localDC = snitch.getDatacenter(localHost);
+        // TODO this is a bit inaccurate - reword it
+        // When a node comes up, the location information for any connections made prior to initialising cluster
+        // metadata is obtained from the snitch. This is a best effort as it's possible for local snitch config to
+        // be out of sync with the globally consistent cluster metadata. Any such connections, of which there should
+        // be relatively few, will be dropped and re-established as soon as cluster metadata is initialised.
+        // TODO expand on the pre-registered state vs connecting in response to an inbound connection while CM is
+        //      being initialised
+        Locator locator = DatabaseDescriptor.getLocator();
+        String remoteDC = locator.location(remoteHost).datacenter;
+        String localDC = locator.location(localHost).datacenter;
         return remoteDC != null && remoteDC.equals(localDC);
     }
 
@@ -494,10 +501,10 @@ public class OutboundConnectionSettings
     }
 
     @VisibleForTesting
-    static boolean shouldCompressConnection(IEndpointSnitch snitch, InetAddressAndPort localHost, InetAddressAndPort remoteHost)
+    static boolean shouldCompressConnection(InetAddressAndPort localHost, InetAddressAndPort remoteHost)
     {
         return (DatabaseDescriptor.internodeCompression() == Config.InternodeCompression.all)
-               || ((DatabaseDescriptor.internodeCompression() == Config.InternodeCompression.dc) && !isInLocalDC(snitch, localHost, remoteHost));
+               || ((DatabaseDescriptor.internodeCompression() == Config.InternodeCompression.dc) && !isInLocalDC(localHost, remoteHost));
     }
 
 }

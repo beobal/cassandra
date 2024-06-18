@@ -40,11 +40,11 @@ import static org.apache.cassandra.auth.IInternodeAuthenticator.InternodeConnect
 public class ReconnectableSnitchHelper implements IEndpointStateChangeSubscriber
 {
     private static final Logger logger = LoggerFactory.getLogger(ReconnectableSnitchHelper.class);
-    private final IEndpointSnitch snitch;
+    private final Locator snitch;
     private final String localDc;
     private final boolean preferLocal;
 
-    public ReconnectableSnitchHelper(IEndpointSnitch snitch, String localDc, boolean preferLocal)
+    public ReconnectableSnitchHelper(Locator snitch, String localDc, boolean preferLocal)
     {
         this.snitch = snitch;
         this.localDc = localDc;
@@ -64,7 +64,7 @@ public class ReconnectableSnitchHelper implements IEndpointStateChangeSubscriber
     }
 
     @VisibleForTesting
-    static void reconnect(InetAddressAndPort publicAddress, InetAddressAndPort localAddress, IEndpointSnitch snitch, String localDc)
+    static void reconnect(InetAddressAndPort publicAddress, InetAddressAndPort localAddress, Locator snitch, String localDc)
     {
         final OutboundConnectionSettings settings = new OutboundConnectionSettings(publicAddress, localAddress).withDefaults(ConnectionCategory.MESSAGING);
         if (!settings.authenticator().authenticate(settings.to.getAddress(), settings.to.getPort(), null, OUTBOUND_PRECONNECT))
@@ -73,7 +73,7 @@ public class ReconnectableSnitchHelper implements IEndpointStateChangeSubscriber
             return;
         }
 
-        if (snitch.getDatacenter(publicAddress).equals(localDc))
+        if (snitch.location(publicAddress).datacenter.equals(localDc))
         {
             MessagingService.instance().maybeReconnectWithNewIp(publicAddress, localAddress);
             logger.debug("Initiated reconnect to an Internal IP {} for the {}", localAddress, publicAddress);

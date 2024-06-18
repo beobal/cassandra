@@ -430,6 +430,9 @@ public class Config
     public DurationSpec.IntMillisecondsBound dynamic_snitch_reset_interval = new DurationSpec.IntMillisecondsBound("10m");
     public double dynamic_snitch_badness_threshold = 1.0;
 
+    public String node_proximity;
+    public String initial_location_provider;
+
     public String failure_detector = "FailureDetector";
 
     public EncryptionOptions.ServerEncryptionOptions server_encryption_options = new EncryptionOptions.ServerEncryptionOptions();

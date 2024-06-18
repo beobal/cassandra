@@ -22,6 +22,7 @@ import java.net.UnknownHostException;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.utils.MBeanWrapper;
 
+// TODO deprecate and replace with LocationInfo
 public class EndpointSnitchInfo implements EndpointSnitchInfoMBean
 {
     public static void create()
@@ -31,26 +32,26 @@ public class EndpointSnitchInfo implements EndpointSnitchInfoMBean
 
     public String getDatacenter(String host) throws UnknownHostException
     {
-        return DatabaseDescriptor.getEndpointSnitch().getDatacenter(InetAddressAndPort.getByName(host));
+        return DatabaseDescriptor.getLocator().location(InetAddressAndPort.getByName(host)).datacenter;
     }
 
     public String getRack(String host) throws UnknownHostException
     {
-        return DatabaseDescriptor.getEndpointSnitch().getRack(InetAddressAndPort.getByName(host));
+        return DatabaseDescriptor.getLocator().location(InetAddressAndPort.getByName(host)).rack;
     }
 
     public String getDatacenter()
     {
-        return DatabaseDescriptor.getEndpointSnitch().getLocalDatacenter();
+        return DatabaseDescriptor.getLocator().local().datacenter;
     }
 
     public String getRack()
     {
-        return DatabaseDescriptor.getEndpointSnitch().getLocalRack();
+        return DatabaseDescriptor.getLocator().local().rack;
     }
 
     public String getSnitchName()
     {
-        return DatabaseDescriptor.getEndpointSnitch().getClass().getName();
+        return DatabaseDescriptor.getNodeProximity().getClass().getName(); // TODO reference subclass if using SnitchAdapter?
     }
 }

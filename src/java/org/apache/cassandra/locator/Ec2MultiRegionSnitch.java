@@ -88,6 +88,6 @@ public class Ec2MultiRegionSnitch extends Ec2Snitch
         }
         Gossiper.instance.addLocalApplicationState(ApplicationState.INTERNAL_ADDRESS_AND_PORT, StorageService.instance.valueFactory.internalAddressAndPort(address));
         Gossiper.instance.addLocalApplicationState(ApplicationState.INTERNAL_IP, StorageService.instance.valueFactory.internalIP(address.getAddress()));
-        Gossiper.instance.register(new ReconnectableSnitchHelper(this, getLocalDatacenter(), true));
+        Gossiper.instance.register(new ReconnectableSnitchHelper(DatabaseDescriptor.getLocator(), getLocalDatacenter(), true));
     }
 }

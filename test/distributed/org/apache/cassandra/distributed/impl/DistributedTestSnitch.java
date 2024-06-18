@@ -18,22 +18,21 @@
 
 package org.apache.cassandra.distributed.impl;
 
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.apache.cassandra.config.Config;
-import org.apache.cassandra.db.SystemKeyspace;
 import org.apache.cassandra.distributed.shared.NetworkTopology;
 import org.apache.cassandra.gms.ApplicationState;
-import org.apache.cassandra.gms.EndpointState;
 import org.apache.cassandra.gms.Gossiper;
 import org.apache.cassandra.locator.AbstractNetworkTopologySnitch;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.utils.FBUtilities;
 
+// TODO convert to Locator & InitialLocationProvider - currently this is being handled like any other
+//  legacy snitch, by using SnitchAdapter to provide access via those new interfaces. This is valid and
+//  useful as it exercises the migration path, but we do also need to verify the new methods of configuration
 public class DistributedTestSnitch extends AbstractNetworkTopologySnitch
 {
     private static NetworkTopology mapping = null;
@@ -62,53 +61,16 @@ public class DistributedTestSnitch extends AbstractNetworkTopologySnitch
         return m;
     }
 
-    private Map<InetAddressAndPort, Map<String, String>> savedEndpoints;
-    private static final String DEFAULT_DC = "UNKNOWN_DC";
-    private static final String DEFAULT_RACK = "UNKNOWN_RCK"; // TODO must be =< 12 chars to preserve nodetool output required by tests
-
-    public String getRack(InetAddress endpoint)
+    @Override
+    public String getLocalRack()
     {
-        int storage_port = Config.getOverrideLoadConfig().get().storage_port;
-        return getRack(InetAddressAndPort.getByAddressOverrideDefaults(endpoint, storage_port));
+        return mapping.localRack(FBUtilities.getBroadcastAddressAndPort());
     }
 
-    public String getRack(InetAddressAndPort endpoint)
+    @Override
+    public String getLocalDatacenter()
     {
-        assert mapping != null : "network topology must be assigned before using snitch";
-        return maybeGetFromEndpointState(mapping.localRack(fromCassandraInetAddressAndPort(endpoint)), endpoint, ApplicationState.RACK, DEFAULT_RACK);
-    }
-
-    public String getDatacenter(InetAddress endpoint)
-    {
-        int storage_port = Config.getOverrideLoadConfig().get().storage_port;
-        return getDatacenter(InetAddressAndPort.getByAddressOverrideDefaults(endpoint, storage_port));
-    }
-
-    public String getDatacenter(InetAddressAndPort endpoint)
-    {
-        assert mapping != null : "network topology must be assigned before using snitch";
-        return maybeGetFromEndpointState(mapping.localDC(fromCassandraInetAddressAndPort(endpoint)), endpoint, ApplicationState.DC, DEFAULT_DC);
-    }
-
-    // Here, the logic is slightly different from what we have in GossipingPropertyFileSnitch since we have a different
-    // goal. Passed argument (topology that was set on the node) overrides anything that is passed elsewhere.
-    private String maybeGetFromEndpointState(String current, InetAddressAndPort endpoint, ApplicationState state, String defaultValue)
-    {
-        if (current != null)
-            return current;
-
-        EndpointState epState = Gossiper.instance.getEndpointStateForEndpoint(endpoint);
-        if (epState == null || epState.getApplicationState(state) == null)
-        {
-            if (savedEndpoints == null)
-                savedEndpoints = SystemKeyspace.loadDcRackInfo();
-            if (savedEndpoints.containsKey(endpoint))
-                return savedEndpoints.get(endpoint).get("data_center");
-
-            return defaultValue;
-        }
-
-        return epState.getApplicationState(state).value;
+        return mapping.localDC(FBUtilities.getBroadcastAddressAndPort());
     }
 
     static void assign(NetworkTopology newMapping)

@@ -23,6 +23,7 @@ import java.util.Locale;
 import com.carrotsearch.hppc.ObjectIntHashMap;
 import org.apache.cassandra.locator.Endpoints;
 import org.apache.cassandra.locator.InOurDc;
+import org.apache.cassandra.locator.Locator;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.exceptions.InvalidRequestException;
@@ -123,10 +124,10 @@ public enum ConsistencyLevel
         }
     }
 
-    public static ObjectIntHashMap<String> eachQuorumForWrite(AbstractReplicationStrategy replicationStrategy, Endpoints<?> pendingWithDown)
+    public static ObjectIntHashMap<String> eachQuorumForWrite(Locator locator, AbstractReplicationStrategy replicationStrategy, Endpoints<?> pendingWithDown)
     {
         ObjectIntHashMap<String> perDc = eachQuorumForRead(replicationStrategy);
-        addToCountPerDc(perDc, pendingWithDown, 1);
+        addToCountPerDc(locator, perDc, pendingWithDown, 1);
         return perDc;
     }
 

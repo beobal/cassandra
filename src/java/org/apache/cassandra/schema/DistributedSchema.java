@@ -67,7 +67,7 @@ public class DistributedSchema implements MetadataValue<DistributedSchema>
             if (DatabaseDescriptor.getLocalDataCenter() != null)
                 knownDatacenters = Collections.singleton(DatabaseDescriptor.getLocalDataCenter());
             else
-                knownDatacenters = Collections.singleton("DC1");
+                knownDatacenters = Collections.singleton("datacenter1");
         }
         return new DistributedSchema(Keyspaces.of(DistributedMetadataLogKeyspace.initialMetadata(knownDatacenters)), Epoch.FIRST);
     }

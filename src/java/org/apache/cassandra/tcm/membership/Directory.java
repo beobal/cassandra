@@ -38,11 +38,13 @@ import org.apache.cassandra.db.TypeSizes;
 import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.cassandra.io.util.DataOutputPlus;
 import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.locator.Locator;
 import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.MetadataValue;
 import org.apache.cassandra.tcm.serialization.MetadataSerializer;
 import org.apache.cassandra.tcm.serialization.Version;
 import org.apache.cassandra.net.MessagingService;
+import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.UUIDSerializer;
 import org.apache.cassandra.utils.btree.BTreeBiMap;
@@ -52,7 +54,7 @@ import org.apache.cassandra.utils.btree.BTreeMultimap;
 import static org.apache.cassandra.db.TypeSizes.sizeof;
 import static org.apache.cassandra.tcm.membership.NodeVersion.CURRENT;
 
-public class Directory implements MetadataValue<Directory>
+public class Directory implements MetadataValue<Directory>, Locator
 {
     public static final Serializer serializer = new Serializer();
 
@@ -346,6 +348,18 @@ public class Directory implements MetadataValue<Directory>
     public Location location(NodeId id)
     {
         return locations.get(id);
+    }
+
+    @Override
+    public Location location(InetAddressAndPort address)
+    {
+        return location(peerId(address));
+    }
+
+    @Override
+    public Location local()
+    {
+        return location(peerId(FBUtilities.getBroadcastAddressAndPort()));
     }
 
     public Set<InetAddressAndPort> datacenterEndpoints(String datacenter)

@@ -98,6 +98,13 @@ public class ClusterMetadataService
             throw new IllegalStateException(String.format("Cluster metadata is already initialized to %s.", instance),
                                             trace);
         instance = newInstance;
+        RegistrationStateCallbacks callbacks = DatabaseDescriptor.getRegistrationStateCallbacks();
+        if (callbacks != null)
+        {
+            callbacks.onInitialized();
+            if (newInstance.metadata().myNodeId() != null)
+                callbacks.onRegistration();
+        }
         trace = new RuntimeException("Previously initialized trace");
     }
 
@@ -105,6 +112,10 @@ public class ClusterMetadataService
     public static ClusterMetadataService unsetInstance()
     {
         ClusterMetadataService tmp = instance();
+        RegistrationStateCallbacks callbacks = DatabaseDescriptor.getRegistrationStateCallbacks();
+        // TODO maybe revisit this - is it just leaking the implementation detail?
+        if (callbacks != null)
+            callbacks.resetState();
         instance = null;
         return tmp;
     }
@@ -291,6 +302,7 @@ public class ClusterMetadataService
     {
         if (instance != null)
             return;
+
 
         ClusterMetadataService.setInstance(StubClusterMetadataService.forClientTools(initialSchema));
     }

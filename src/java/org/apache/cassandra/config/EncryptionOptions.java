@@ -32,10 +32,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.exceptions.ConfigurationException;
-import org.apache.cassandra.locator.IEndpointSnitch;
 import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.locator.Locator;
 import org.apache.cassandra.security.DisableSslContextFactory;
 import org.apache.cassandra.security.ISslContextFactory;
+import org.apache.cassandra.tcm.membership.Location;
 import org.apache.cassandra.utils.FBUtilities;
 
 /**
@@ -778,7 +779,14 @@ public class EncryptionOptions
 
         public boolean shouldEncrypt(InetAddressAndPort endpoint)
         {
-            IEndpointSnitch snitch = DatabaseDescriptor.getEndpointSnitch();
+            // TODO this is a bit inaccurate - reword it
+            // When a node comes up, the location information for any connections made prior to initialising cluster
+            // metadata is obtained from the snitch. This is a best effort as it's possible for local snitch config to
+            // be out of sync with the globally consistent cluster metadata. Any such connections, of which there should
+            // be relatively few, will be dropped and re-established as soon as cluster metadata is initialised.
+            // TODO expand on the pre-registered state vs connecting in response to an inbound connection while CM is
+            //      being initialised
+            Locator locator = DatabaseDescriptor.getLocator();
             switch (internode_encryption)
             {
                 case none:
@@ -786,13 +794,14 @@ public class EncryptionOptions
                 case all:
                     break;
                 case dc:
-                    if (snitch.getDatacenter(endpoint).equals(snitch.getLocalDatacenter()))
+                    if (locator.location(endpoint).datacenter.equals(locator.local().datacenter))
                         return false;
                     break;
                 case rack:
                     // for rack then check if the DC's are the same.
-                    if (snitch.getRack(endpoint).equals(snitch.getLocalRack())
-                        && snitch.getDatacenter(endpoint).equals(snitch.getLocalDatacenter()))
+                    Location remote = locator.location(endpoint);
+                    Location local = locator.local();
+                    if (remote.rack.equals(local.rack) && remote.datacenter.equals(local.datacenter))
                         return false;
                     break;
             }

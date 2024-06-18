@@ -1652,9 +1652,6 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean, 
         if (mergeLocalStates && metadata.myNodeId() != null)
             mergeNodeToGossip(metadata.myNodeId(), metadata);
 
-        //notify snitches that Gossiper is about to start
-        DatabaseDescriptor.getEndpointSnitch().gossiperStarting();
-
         shutdownAnnounced.set(false);
         scheduledGossipTask = executor.scheduleWithFixedDelay(new GossipTask(),
                                                               Gossiper.intervalInMillis,

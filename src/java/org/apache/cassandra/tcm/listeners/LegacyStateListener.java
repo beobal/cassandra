@@ -28,6 +28,7 @@ import com.google.common.collect.Sets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.SystemKeyspace;
 import org.apache.cassandra.db.virtual.PeersTable;
@@ -50,6 +51,7 @@ import static org.apache.cassandra.tcm.membership.NodeState.BOOTSTRAPPING;
 import static org.apache.cassandra.tcm.membership.NodeState.BOOT_REPLACING;
 import static org.apache.cassandra.tcm.membership.NodeState.LEFT;
 import static org.apache.cassandra.tcm.membership.NodeState.MOVING;
+import static org.apache.cassandra.tcm.membership.NodeState.REGISTERED;
 
 public class LegacyStateListener implements ChangeListener.Async
 {
@@ -115,8 +117,12 @@ public class LegacyStateListener implements ChangeListener.Async
                 Gossiper.instance.addLocalApplicationState(SCHEMA, StorageService.instance.valueFactory.schema(next.schema.getVersion()));
             }
 
-
-            if (next.directory.peerState(change) == LEFT)
+            if (next.directory.peerState(change) == REGISTERED)
+            {
+                // Inform LocatorAdapter so we can re-establish any connections made prior to this node registering
+                DatabaseDescriptor.getRegistrationStateCallbacks().onPeerRegistration(next.directory.endpoint(change));
+            }
+            else if (next.directory.peerState(change) == LEFT)
             {
                 Gossiper.instance.mergeNodeToGossip(change, next, prev.tokenMap.tokens(change));
                 InetAddressAndPort endpoint = prev.directory.endpoint(change);

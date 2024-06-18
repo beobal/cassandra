@@ -674,8 +674,8 @@ public abstract class DescribeStatement<T> extends CQLStatement.Raw implements C
                 List<Object> list = new ArrayList<Object>();
                 list.add(DatabaseDescriptor.getClusterName());
                 list.add(trimIfPresent(DatabaseDescriptor.getPartitionerName(), "org.apache.cassandra.dht."));
-                list.add(trimIfPresent(DatabaseDescriptor.getEndpointSnitch().getClass().getName(),
-                                            "org.apache.cassandra.locator."));
+                list.add(trimIfPresent(DatabaseDescriptor.getNodeProximity().getClass().getName(),
+                                            "org.apache.cassandra.locator.")); // TODO inspect subclass if using SnitchAdapter
 
                 String useKs = state.getRawKeyspace();
                 if (mustReturnsRangeOwnerships(useKs))

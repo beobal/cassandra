@@ -33,6 +33,7 @@ import com.google.common.collect.Multimap;
 import org.apache.cassandra.locator.EndpointsByRange;
 import org.apache.cassandra.locator.EndpointsForRange;
 import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.locator.Locator;
 import org.apache.cassandra.locator.Replica;
 
 import org.slf4j.Logger;
@@ -82,14 +83,17 @@ public class RangeFetchMapCalculator
     private final Vertex sourceVertex = OuterVertex.getSourceVertex();
     private final Vertex destinationVertex = OuterVertex.getDestinationVertex();
     private final Set<Range<Token>> trivialRanges;
+    private final Locator locator;
 
     public RangeFetchMapCalculator(EndpointsByRange rangesWithSources,
                                    Collection<RangeStreamer.SourceFilter> sourceFilters,
-                                   String keyspace)
+                                   String keyspace,
+                                   Locator locator)
     {
         this.rangesWithSources = rangesWithSources;
         this.sourceFilters = Predicates.and(sourceFilters);
         this.keyspace = keyspace;
+        this.locator = locator;
         this.trivialRanges = rangesWithSources.keySet()
                                               .stream()
                                               .filter(RangeFetchMapCalculator::isTrivial)
@@ -374,7 +378,7 @@ public class RangeFetchMapCalculator
 
     private boolean isInLocalDC(Replica replica)
     {
-        return DatabaseDescriptor.getLocalDataCenter().equals(DatabaseDescriptor.getEndpointSnitch().getDatacenter(replica));
+        return locator.local().sameDatacenter(locator.location(replica.endpoint()));
     }
 
     /**

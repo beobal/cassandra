@@ -741,13 +741,14 @@ public class StartupChecks
             String storedDc = SystemKeyspace.getDatacenter();
             if (storedDc != null)
             {
-                String currentDc = DatabaseDescriptor.getEndpointSnitch().getLocalDatacenter();
+                String currentDc = DatabaseDescriptor.getLocator().local().datacenter;
                 if (!storedDc.equals(currentDc))
                 {
-                    String formatMessage = "Cannot start node if snitch's data center (%s) differs from previous data center (%s). " +
-                                           "Please fix the snitch configuration, decommission and rebootstrap this node";
-
-                    throw new StartupException(StartupException.ERR_WRONG_CONFIG, String.format(formatMessage, currentDc, storedDc));
+                    String formatMessage = "Snitch config specifies a different datacenter (%s) for this node than the previous value (%s). " +
+                                           "Modifying config in this way has no effect, if the location of node is to be changed it " +
+                                           "must be done using the appropriate and safe methods. Please fix the snitch configuration " +
+                                           "or consult documentation for how to do this.";
+                    logger.info(String.format(formatMessage, currentDc, storedDc));
                 }
             }
         }
@@ -761,13 +762,14 @@ public class StartupChecks
             String storedRack = SystemKeyspace.getRack();
             if (storedRack != null)
             {
-                String currentRack = DatabaseDescriptor.getEndpointSnitch().getLocalRack();
+                String currentRack = DatabaseDescriptor.getLocator().local().rack;
                 if (!storedRack.equals(currentRack))
                 {
-                    String formatMessage = "Cannot start node if snitch's rack (%s) differs from previous rack (%s). " +
-                                           "Please fix the snitch configuration, decommission and rebootstrap this node";
-
-                    throw new StartupException(StartupException.ERR_WRONG_CONFIG, String.format(formatMessage, currentRack, storedRack));
+                    String formatMessage = "Snitch config specifies a different rack (%s) for this node than the previous value (%s). " +
+                                           "Modifying config in this way has no effect, if the location of node is to be changed it " +
+                                           "must be done using the appropriate and safe methods. Please fix the snitch configuration " +
+                                           "or consult documentation for how to do this.";
+                    logger.info(String.format(formatMessage, currentRack, storedRack));
                 }
             }
         }

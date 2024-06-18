@@ -282,6 +282,11 @@ public class ClusterMetadataTestHelper
         return register(addr(nodeIdx), dc, rack);
     }
 
+    public static NodeId register(InetAddressAndPort endpoint, Location location)
+    {
+        return register(endpoint, location.datacenter, location.rack);
+    }
+
     public static NodeId register(InetAddressAndPort endpoint, String dc, String rack)
     {
         try
@@ -787,6 +792,11 @@ public class ClusterMetadataTestHelper
     public static void addEndpoint(InetAddressAndPort endpoint, Collection<Token> tokens)
     {
         addEndpoint(endpoint, tokens, "dc1", "rack1");
+    }
+
+    public static void addEndpoint(InetAddressAndPort endpoint, Collection<Token> tokens, Location location)
+    {
+        addEndpoint(endpoint, tokens, location.datacenter, location.rack);
     }
 
     public static void addEndpoint(InetAddressAndPort endpoint, Token t, Location location)

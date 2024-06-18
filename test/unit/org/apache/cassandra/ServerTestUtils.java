@@ -44,9 +44,9 @@ import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.sstable.format.big.BigTableReader;
 import org.apache.cassandra.io.sstable.indexsummary.IndexSummarySupport;
 import org.apache.cassandra.io.util.File;
-import org.apache.cassandra.locator.AbstractEndpointSnitch;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.locator.Replica;
+import org.apache.cassandra.locator.BaseProximity;
 import org.apache.cassandra.security.ThreadAwareSecurityManager;
 import org.apache.cassandra.service.EmbeddedCassandraService;
 import org.apache.cassandra.tcm.AtomicLongBackedProcessor;
@@ -98,23 +98,9 @@ public final class ServerTestUtils
     public static void initSnitch()
     {
         // Register an EndpointSnitch which returns fixed values for test.
-        DatabaseDescriptor.setEndpointSnitch(new AbstractEndpointSnitch()
+        // TODO is this even still necessary?
+        DatabaseDescriptor.setNodeProximity(new BaseProximity()
         {
-            @Override
-            public String getRack(InetAddressAndPort endpoint)
-            {
-                return RACK1;
-            }
-
-            @Override
-            public String getDatacenter(InetAddressAndPort endpoint)
-            {
-                if (remoteAddrs.contains(endpoint))
-                    return DATA_CENTER_REMOTE;
-
-                return DATA_CENTER;
-            }
-
             @Override
             public int compareEndpoints(InetAddressAndPort target, Replica a1, Replica a2)
             {
@@ -135,6 +121,7 @@ public final class ServerTestUtils
                                                                 tokens,
                                                                 ClusterMetadataService.instance().placementProvider()));
         SystemKeyspace.setLocalHostId(nodeId.toUUID());
+        DatabaseDescriptor.getRegistrationStateCallbacks().onRegistration();
         return nodeId;
     }
 
