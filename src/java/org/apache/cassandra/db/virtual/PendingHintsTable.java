@@ -24,7 +24,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.marshal.InetAddressType;
 import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.db.marshal.LongType;
@@ -36,10 +35,12 @@ import org.apache.cassandra.gms.FailureDetector;
 import org.apache.cassandra.gms.FailureDetectorMBean;
 import org.apache.cassandra.hints.HintsService;
 import org.apache.cassandra.hints.PendingHintsInfo;
-import org.apache.cassandra.locator.IEndpointSnitch;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.StorageService;
+import org.apache.cassandra.tcm.ClusterMetadata;
+import org.apache.cassandra.tcm.membership.Directory;
+import org.apache.cassandra.tcm.membership.Location;
 
 public final class PendingHintsTable extends AbstractVirtualTable
 {
@@ -81,7 +82,7 @@ public final class PendingHintsTable extends AbstractVirtualTable
     public DataSet data()
     {
         List<PendingHintsInfo> pendingHints = HintsService.instance.getPendingHintsInfo();
-        IEndpointSnitch snitch = DatabaseDescriptor.getEndpointSnitch();
+        Directory directory = ClusterMetadata.current().directory;
 
         SimpleDataSet result = new SimpleDataSet(metadata());
 
@@ -91,6 +92,7 @@ public final class PendingHintsTable extends AbstractVirtualTable
         else
             simpleStates = Collections.emptyMap();
 
+        Location location = Location.UNKNOWN;
         for (PendingHintsInfo info : pendingHints)
         {
             InetAddressAndPort addressAndPort = StorageService.instance.getEndpointForHostId(info.hostId);
@@ -101,10 +103,11 @@ public final class PendingHintsTable extends AbstractVirtualTable
             String status = "Unknown";
             if (addressAndPort != null)
             {
+                location = directory.location(addressAndPort);
                 address = addressAndPort.getAddress();
                 port = addressAndPort.getPort();
-                rack = snitch.getRack(addressAndPort);
-                dc = snitch.getDatacenter(addressAndPort);
+                rack = location.rack;
+                dc = location.datacenter;
                 status = simpleStates.getOrDefault(addressAndPort.toString(), status);
             }
             result.row(info.hostId)

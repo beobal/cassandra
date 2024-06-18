@@ -18,11 +18,30 @@
 package org.apache.cassandra.locator;
 
 import com.google.common.collect.Iterables;
-import org.apache.cassandra.config.DatabaseDescriptor;
 
+import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.tcm.membership.Location;
+
+/**
+ * // TODO
+ * @deprecated
+ */
+@Deprecated(since = "5.1")
 public abstract class AbstractEndpointSnitch implements IEndpointSnitch
 {
     public abstract int compareEndpoints(InetAddressAndPort target, Replica r1, Replica r2);
+
+    @Override
+    public String getRack(InetAddressAndPort endpoint)
+    {
+        throw new UnsupportedOperationException("IEndpointSnitch has been deprecated and is no longer in use");
+    }
+
+    @Override
+    public String getDatacenter(InetAddressAndPort endpoint)
+    {
+        throw new UnsupportedOperationException("IEndpointSnitch has been deprecated and is no longer in use");
+    }
 
     /**
      * Sorts the <tt>Collection</tt> of node addresses by proximity to the given address
@@ -53,7 +72,8 @@ public abstract class AbstractEndpointSnitch implements IEndpointSnitch
 
     private boolean hasRemoteNode(ReplicaCollection<?> l)
     {
-        String localDc = DatabaseDescriptor.getLocalDataCenter();
-        return Iterables.any(l, replica -> !localDc.equals(getDatacenter(replica)));
+        Locator locator = DatabaseDescriptor.getLocator();
+        Location local = locator.local();
+        return Iterables.any(l, replica -> !local.sameDatacenter(locator.location(replica.endpoint())));
     }
 }

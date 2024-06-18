@@ -22,20 +22,15 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
-import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import org.apache.cassandra.ServerTestUtils;
 import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.dht.Token;
-import org.apache.cassandra.distributed.test.log.ClusterMetadataTestHelper;
-import org.apache.cassandra.service.StorageService;
-import org.apache.cassandra.tcm.ClusterMetadata;
+import org.apache.cassandra.tcm.ClusterMetadataService;
+import org.apache.cassandra.tcm.StubClusterMetadataService;
 import org.mockito.stubbing.Answer;
 
-import static org.apache.cassandra.config.CassandraRelevantProperties.GOSSIP_DISABLE_THREAD_VALIDATION;
 import static org.apache.cassandra.locator.Ec2MultiRegionSnitch.PRIVATE_IP_QUERY;
 import static org.apache.cassandra.locator.Ec2MultiRegionSnitch.PUBLIC_IP_QUERY;
 import static org.apache.cassandra.locator.Ec2Snitch.EC2_NAMING_LEGACY;
@@ -62,22 +57,14 @@ public class Ec2SnitchTest
     @BeforeClass
     public static void setup() throws Exception
     {
-        GOSSIP_DISABLE_THREAD_VALIDATION.setBoolean(true);
         DatabaseDescriptor.daemonInitialization();
-        ClusterMetadataTestHelper.setInstanceForTest();
-    }
-
-
-    @AfterClass
-    public static void tearDown()
-    {
-        StorageService.instance.stopClient();
     }
 
     @Before
     public void resetCMS()
     {
-        ServerTestUtils.resetCMS();
+        ClusterMetadataService.unsetInstance();
+        ClusterMetadataService.setInstance(StubClusterMetadataService.forTesting());
     }
 
     @Test
@@ -86,6 +73,10 @@ public class Ec2SnitchTest
         Ec2MetadataServiceConnector connectorMock = mock(Ec2MetadataServiceConnector.class);
         doReturn("us-east-1d").when(connectorMock).apiCall(anyString());
         doReturn(legacySnitchProps).when(connectorMock).getProperties();
+
+        Ec2LocationProvider locationProvider = new Ec2LocationProvider(connectorMock);
+        testLegacyRacInternal(locationProvider);
+
         Ec2Snitch snitch = new Ec2Snitch(connectorMock);
         testLegacyRacInternal(snitch);
     }
@@ -100,6 +91,9 @@ public class Ec2SnitchTest
             return (PUBLIC_IP_QUERY.equals(query) || PRIVATE_IP_QUERY.equals(query)) ? "127.0.0.1" : "us-east-1d";
         }).when(spy).apiCall(anyString());
 
+        Ec2LocationProvider locationProvider = new Ec2LocationProvider(spy);
+        testLegacyRacInternal(locationProvider);
+
         Ec2Snitch snitch = new Ec2MultiRegionSnitch(spy);
         testLegacyRacInternal(snitch);
     }
@@ -110,6 +104,7 @@ public class Ec2SnitchTest
         Ec2MetadataServiceConnector spy = spy(Ec2MetadataServiceConnector.create(legacySnitchProps));
         doReturn(legacySnitchProps).when(spy).getProperties();
         doReturn("us-east-2d").when(spy).apiCall(anyString());
+        testLegacyNewRegionsInternal(new Ec2LocationProvider(spy));
         testLegacyNewRegionsInternal(new Ec2Snitch(spy));
     }
 
@@ -123,6 +118,7 @@ public class Ec2SnitchTest
             return (PUBLIC_IP_QUERY.equals(query) || PRIVATE_IP_QUERY.equals(query)) ? "127.0.0.1" : "us-east-2d";
         }).when(spy).apiCall(anyString());
 
+        testLegacyNewRegionsInternal(new Ec2LocationProvider(spy));
         testLegacyNewRegionsInternal(new Ec2MultiRegionSnitch(spy));
     }
 
@@ -132,22 +128,31 @@ public class Ec2SnitchTest
         Ec2MetadataServiceConnector connectorMock = mock(Ec2MetadataServiceConnector.class);
         when(connectorMock.apiCall(anyString())).thenReturn("us-east-2d");
         when(connectorMock.getProperties()).thenReturn(new SnitchProperties());
+
+        Ec2LocationProvider locationProvider = new Ec2LocationProvider(connectorMock);
+        assertEquals("us-east-2", locationProvider.location.datacenter);
+        assertEquals("us-east-2d", locationProvider.location.rack);
+
         Ec2Snitch snitch = new Ec2Snitch(connectorMock);
-
-        InetAddressAndPort local = InetAddressAndPort.getByName("127.0.0.1");
-
-        assertEquals("us-east-2", snitch.getDatacenter(local));
-        assertEquals("us-east-2d", snitch.getRack(local));
+        // for registering a new node, location is obtained from the cloud metadata service
+        assertEquals("us-east-2", snitch.getLocalDatacenter());
+        assertEquals("us-east-2d", snitch.getLocalRack());
 
         Ec2MetadataServiceConnector multiRegionConnectorMock = mock(Ec2MetadataServiceConnector.class);
-        when(connectorMock.getProperties()).thenReturn(new SnitchProperties());
+        when(multiRegionConnectorMock.getProperties()).thenReturn(new SnitchProperties());
         when(multiRegionConnectorMock.apiCall(anyString())).then((Answer<String>) invocation -> {
             String query = invocation.getArgument(0);
             return (PUBLIC_IP_QUERY.equals(query) || PRIVATE_IP_QUERY.equals(query)) ? "127.0.0.1" : "us-east-2d";
         });
 
-        assertEquals("us-east-2", snitch.getDatacenter(local));
-        assertEquals("us-east-2d", snitch.getRack(local));
+        Ec2LocationProvider mrLocationProvider = new Ec2LocationProvider(connectorMock);
+        assertEquals("us-east-2", mrLocationProvider.location.datacenter);
+        assertEquals("us-east-2d", mrLocationProvider.location.rack);
+
+        Ec2MultiRegionSnitch mrSnitch = new Ec2MultiRegionSnitch(multiRegionConnectorMock);
+        // for registering a new node, location is obtained from the cloud metadata service
+        assertEquals("us-east-2", mrSnitch.getLocalDatacenter());
+        assertEquals("us-east-2d", mrSnitch.getLocalRack());
     }
 
     @Test
@@ -155,7 +160,7 @@ public class Ec2SnitchTest
     {
         Set<String> datacenters = new HashSet<>();
         datacenters.add("us-east-1");
-        assertTrue(Ec2Snitch.validate(datacenters, Collections.emptySet(), true));
+        assertTrue(Ec2LocationProvider.validate(datacenters, Collections.emptySet(), true));
     }
 
     @Test
@@ -163,7 +168,7 @@ public class Ec2SnitchTest
     {
         Set<String> datacenters = new HashSet<>();
         datacenters.add("us-east");
-        assertTrue(Ec2Snitch.validate(datacenters, Collections.emptySet(), true));
+        assertTrue(Ec2LocationProvider.validate(datacenters, Collections.emptySet(), true));
     }
 
     @Test
@@ -173,7 +178,7 @@ public class Ec2SnitchTest
         datacenters.add("us-east");
         Set<String> racks = new HashSet<>();
         racks.add("1a");
-        assertTrue(Ec2Snitch.validate(datacenters, racks, true));
+        assertTrue(Ec2LocationProvider.validate(datacenters, racks, true));
     }
 
     @Test
@@ -183,7 +188,7 @@ public class Ec2SnitchTest
         datacenters.add("us-east_CUSTOM_SUFFIX");
         Set<String> racks = new HashSet<>();
         racks.add("1a");
-        assertTrue(Ec2Snitch.validate(datacenters, racks, true));
+        assertTrue(Ec2LocationProvider.validate(datacenters, racks, true));
     }
 
     @Test
@@ -191,7 +196,7 @@ public class Ec2SnitchTest
     {
         Set<String> racks = new HashSet<>();
         racks.add("us-east-1a");
-        assertTrue(Ec2Snitch.validate(Collections.emptySet(), racks, false));
+        assertTrue(Ec2LocationProvider.validate(Collections.emptySet(), racks, false));
     }
 
     @Test
@@ -199,7 +204,7 @@ public class Ec2SnitchTest
     {
         Set<String> racks = new HashSet<>();
         racks.add("1a");
-        assertFalse(Ec2Snitch.validate(Collections.emptySet(), racks, false));
+        assertFalse(Ec2LocationProvider.validate(Collections.emptySet(), racks, false));
     }
 
     @Test
@@ -209,7 +214,7 @@ public class Ec2SnitchTest
         datacenters.add("us-east-1");
         Set<String> racks = new HashSet<>();
         racks.add("us-east-1a");
-        assertTrue(Ec2Snitch.validate(datacenters, racks, false));
+        assertTrue(Ec2LocationProvider.validate(datacenters, racks, false));
     }
 
     @Test
@@ -219,7 +224,7 @@ public class Ec2SnitchTest
         datacenters.add("us-east-1_CUSTOM_SUFFIX");
         Set<String> racks = new HashSet<>();
         racks.add("us-east-1a");
-        assertTrue(Ec2Snitch.validate(datacenters, racks, false));
+        assertTrue(Ec2LocationProvider.validate(datacenters, racks, false));
     }
 
     /**
@@ -233,7 +238,7 @@ public class Ec2SnitchTest
         Set<String> racks = new HashSet<>();
         racks.add("2a");
         racks.add("2b");
-        assertTrue(Ec2Snitch.validate(datacenters, racks, true));
+        assertTrue(Ec2LocationProvider.validate(datacenters, racks, true));
     }
 
     /**
@@ -246,28 +251,34 @@ public class Ec2SnitchTest
         datacenters.add("us-west-2");
         Set<String> racks = new HashSet<>();
         racks.add("us-west-2a");
-        assertFalse(Ec2Snitch.validate(datacenters, racks, true));
+        assertFalse(Ec2LocationProvider.validate(datacenters, racks, true));
+    }
+
+    private void testLegacyRacInternal(Ec2LocationProvider provider) throws Exception
+    {
+        // for registering a new node, location is obtained from the cloud metadata service
+        assertEquals("us-east", provider.location.datacenter);
+        assertEquals("1d", provider.location.rack);
     }
 
     private void testLegacyRacInternal(Ec2Snitch snitch) throws Exception
     {
-        InetAddressAndPort local = InetAddressAndPort.getByName("127.0.0.1");
-        InetAddressAndPort nonlocal = InetAddressAndPort.getByName("127.0.0.7");
+        // for registering a new node, location is obtained from the cloud metadata service
+        assertEquals("us-east", snitch.getLocalDatacenter());
+        assertEquals("1d", snitch.getLocalRack());
+    }
 
-        Token t1 = ClusterMetadata.current().partitioner.getRandomToken();
-        ClusterMetadataTestHelper.addEndpoint(nonlocal, t1, "us-west", "1a");
-
-        assertEquals("us-west", snitch.getDatacenter(nonlocal));
-        assertEquals("1a", snitch.getRack(nonlocal));
-
-        assertEquals("us-east", snitch.getDatacenter(local));
-        assertEquals("1d", snitch.getRack(local));
+    private void testLegacyNewRegionsInternal(Ec2LocationProvider provider) throws Exception
+    {
+        // for registering a new node, location is obtained from the cloud metadata service
+        assertEquals("us-east-2", provider.location.datacenter);
+        assertEquals("2d", provider.location.rack);
     }
 
     private void testLegacyNewRegionsInternal(Ec2Snitch snitch) throws Exception
     {
-        InetAddressAndPort local = InetAddressAndPort.getByName("127.0.0.1");
-        assertEquals("us-east-2", snitch.getDatacenter(local));
-        assertEquals("2d", snitch.getRack(local));
+        // for registering a new node, location is obtained from the cloud metadata service
+        assertEquals("us-east-2", snitch.getLocalDatacenter());
+        assertEquals("2d", snitch.getLocalRack());
     }
 }

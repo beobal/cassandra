@@ -23,70 +23,41 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.cassandra.tcm.ClusterMetadata;
-import org.apache.cassandra.tcm.membership.NodeId;
-import org.apache.cassandra.utils.FBUtilities;
+import org.apache.cassandra.tcm.membership.Location;
 import org.apache.cassandra.utils.Pair;
-
-import static java.lang.String.format;
 
 abstract class AbstractCloudMetadataServiceSnitch extends AbstractNetworkTopologySnitch
 {
     static final Logger logger = LoggerFactory.getLogger(AbstractCloudMetadataServiceSnitch.class);
 
-    static final String DEFAULT_DC = "UNKNOWN-DC";
-    static final String DEFAULT_RACK = "UNKNOWN-RACK";
-
-    protected final AbstractCloudMetadataServiceConnector connector;
-
-    private final String localRack;
-    private final String localDc;
+    protected final CloudMetadataLocationProvider locationProvider;
 
     private Map<InetAddressAndPort, Map<String, String>> savedEndpoints;
 
+    /**
+     * Retained for compatibility with existing subclass implementations.
+     * @deprecated
+     */
+    @Deprecated(since="5.1")
     public AbstractCloudMetadataServiceSnitch(AbstractCloudMetadataServiceConnector connector, Pair<String, String> dcAndRack)
     {
-        this.connector = connector;
-        this.localDc = dcAndRack.left;
-        this.localRack = dcAndRack.right;
+        this(new CloudMetadataLocationProvider(connector, new Location(dcAndRack.left, dcAndRack.right)));
+    }
 
-        logger.info(format("%s using datacenter: %s, rack: %s, connector: %s, properties: %s",
-                           getClass().getName(), getLocalDatacenter(), getLocalRack(), connector, connector.getProperties()));
+    public AbstractCloudMetadataServiceSnitch(CloudMetadataLocationProvider locationProvider)
+    {
+        this.locationProvider = locationProvider;
     }
 
     @Override
-    public final String getLocalRack()
+    public String getLocalRack()
     {
-        return localRack;
+        return locationProvider.initialLocation().rack;
     }
 
     @Override
-    public final String getLocalDatacenter()
+    public String getLocalDatacenter()
     {
-        return localDc;
-    }
-
-    @Override
-    public final String getRack(InetAddressAndPort endpoint)
-    {
-        if (endpoint.equals(FBUtilities.getBroadcastAddressAndPort()))
-            return getLocalRack();
-        ClusterMetadata metadata = ClusterMetadata.current();
-        NodeId nodeId = metadata.directory.peerId(endpoint);
-        if (nodeId == null)
-            return DEFAULT_RACK;
-        return metadata.directory.location(nodeId).rack;
-    }
-
-    @Override
-    public final String getDatacenter(InetAddressAndPort endpoint)
-    {
-        if (endpoint.equals(FBUtilities.getBroadcastAddressAndPort()))
-            return getLocalDatacenter();
-        ClusterMetadata metadata = ClusterMetadata.current();
-        NodeId nodeId = metadata.directory.peerId(endpoint);
-        if (nodeId == null)
-            return DEFAULT_DC;
-        return metadata.directory.location(nodeId).datacenter;
+        return locationProvider.initialLocation().datacenter;
     }
 }

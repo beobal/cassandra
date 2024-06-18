@@ -64,6 +64,9 @@ import org.apache.cassandra.exceptions.StartupException;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.tcm.CMSOperations;
+import org.apache.cassandra.tcm.ClusterMetadataService;
+import org.apache.cassandra.tcm.Startup;
 import org.apache.cassandra.metrics.CassandraMetricsRegistry;
 import org.apache.cassandra.metrics.DefaultNameFactory;
 import org.apache.cassandra.net.StartupClusterConnectivityChecker;
@@ -72,11 +75,9 @@ import org.apache.cassandra.schema.SchemaConstants;
 import org.apache.cassandra.security.ThreadAwareSecurityManager;
 import org.apache.cassandra.service.paxos.PaxosState;
 import org.apache.cassandra.streaming.StreamManager;
-import org.apache.cassandra.tcm.CMSOperations;
 import org.apache.cassandra.tcm.ClusterMetadata;
-import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.MultiStepOperation;
-import org.apache.cassandra.tcm.Startup;
+import org.apache.cassandra.tcm.membership.Directory;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.JMXServerUtils;
 import org.apache.cassandra.utils.JVMStabilityInspector;
@@ -275,6 +276,8 @@ public class CassandraDaemon
             Startup.initialize(DatabaseDescriptor.getSeeds());
             disableAutoCompaction(Schema.instance.distributedKeyspaces().names());
             CMSOperations.initJmx();
+            if (ClusterMetadata.current().myNodeId() != null)
+                DatabaseDescriptor.getRegistrationStateCallbacks().onRegistration();
         }
         catch (InterruptedException | ExecutionException | IOException e)
         {
@@ -379,6 +382,11 @@ public class CassandraDaemon
             exitOrFail(1, "Fatal configuration error", e);
         }
 
+        // The local rack may have been changed at some point, which will now be reflected in cluster metadata. Update
+        // the system.local table just in case the actual value doesn't match what the configured location provided
+        // reported when the earlier call to SystemKeyspace::persistLocalMetadata was made prior to initialising cluster
+        // metadata.
+        SystemKeyspace.updateRack(ClusterMetadata.current().directory.local().rack);
         ScheduledExecutors.optionalTasks.execute(() -> ClusterMetadataService.instance().processor().fetchLogAndWait());
 
         // TODO: (TM/alexp), this can be made time-dependent
@@ -647,8 +655,9 @@ public class CassandraDaemon
     {
         StartupClusterConnectivityChecker connectivityChecker = StartupClusterConnectivityChecker.create(DatabaseDescriptor.getBlockForPeersTimeoutInSeconds(),
                                                                                                          DatabaseDescriptor.getBlockForPeersInRemoteDatacenters());
-        Set<InetAddressAndPort> peers = new HashSet<>(ClusterMetadata.current().directory.allJoinedEndpoints());
-        connectivityChecker.execute(peers, DatabaseDescriptor.getEndpointSnitch()::getDatacenter);
+        Directory directory = ClusterMetadata.current().directory;
+        Set<InetAddressAndPort> peers = new HashSet<>(directory.allJoinedEndpoints());
+        connectivityChecker.execute(peers, ep -> directory.location(ep).datacenter);
 
         // check to see if transports may start else return without starting.  This is needed when in survey mode or
         // when bootstrap has not completed.

@@ -23,16 +23,13 @@ import java.util.Map;
 import java.util.Properties;
 
 import com.google.common.annotations.VisibleForTesting;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.exceptions.ConfigurationException;
-import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.membership.Location;
-import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.utils.FBUtilities;
-
-import org.apache.commons.lang3.StringUtils;
 
 /**
  * <p>
@@ -63,42 +60,24 @@ public class PropertyFileSnitch extends AbstractNetworkTopologySnitch
     @VisibleForTesting
     public static final String DEFAULT_RACK = "default";
 
+    // Used only during initialization of a new node. This provides the location it will register in cluster metadata
     private final Location local;
-
 
     public PropertyFileSnitch() throws ConfigurationException
     {
         local = loadConfiguration();
     }
 
-    public String getDatacenter(InetAddressAndPort endpoint)
+    @Override
+    public String getLocalRack()
     {
-        if (endpoint.equals(FBUtilities.getBroadcastAddressAndPort()))
-            return local.datacenter;
-
-        ClusterMetadata metadata = ClusterMetadata.current();
-        NodeId nodeId = metadata.directory.peerId(endpoint);
-        if (nodeId == null)
-            return DEFAULT_DC;
-        return metadata.directory.location(nodeId).datacenter;
+        return local.rack;
     }
 
-    /**
-     * Return the rack for which an endpoint resides in
-     *
-     * @param endpoint the endpoint to process
-     * @return string of rack
-     */
-    public String getRack(InetAddressAndPort endpoint)
+    @Override
+    public String getLocalDatacenter()
     {
-        if (endpoint.equals(FBUtilities.getBroadcastAddressAndPort()))
-            return local.rack;
-
-        ClusterMetadata metadata = ClusterMetadata.current();
-        NodeId nodeId = metadata.directory.peerId(endpoint);
-        if (nodeId == null)
-            return DEFAULT_RACK;
-        return metadata.directory.location(nodeId).rack;
+        return local.datacenter;
     }
 
     private Location makeLocation(String value)
@@ -129,8 +108,6 @@ public class PropertyFileSnitch extends AbstractNetworkTopologySnitch
             throw new ConfigurationException("Unable to read " + SNITCH_PROPERTIES_FILENAME, e);
         }
 
-        // may be null, which is ok unless config doesn't contain the location of the local node
-        Location defaultLocation = makeLocation(properties.getProperty(DEFAULT_PROPERTY));
         Location local = null;
         InetAddressAndPort broadcastAddress = FBUtilities.getBroadcastAddressAndPort();
         for (Map.Entry<Object, Object> entry : properties.entrySet())
@@ -157,6 +134,9 @@ public class PropertyFileSnitch extends AbstractNetworkTopologySnitch
 
         }
 
+        // This may be null, which is ok unless config doesn't contain the location of the local node
+        Location defaultLocation = makeLocation(properties.getProperty(DEFAULT_PROPERTY));
+
         if (local == null)
         {
             if (defaultLocation == null)
@@ -170,13 +150,14 @@ public class PropertyFileSnitch extends AbstractNetworkTopologySnitch
                 logger.debug("Broadcast address {} was not present in snitch config, using default location {}. " +
                             "This only matters on first boot, before registering with the cluster metadata service",
                             broadcastAddress, defaultLocation);
-                return defaultLocation;
+                local = defaultLocation;
             }
         }
 
         logger.debug("Loaded location {} for broadcast address {} from property file. " +
                      "This only matters on first boot, before registering with the cluster metadata service",
                       local, broadcastAddress);
+
         return local;
     }
 }
