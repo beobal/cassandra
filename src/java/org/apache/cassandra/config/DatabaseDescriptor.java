@@ -119,7 +119,6 @@ import org.apache.cassandra.security.SSLFactory;
 import org.apache.cassandra.service.CacheService.CacheType;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.service.paxos.Paxos;
-import org.apache.cassandra.tcm.RegistrationStateCallbacks;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.MBeanWrapper;
 import org.apache.cassandra.utils.StorageCompatibilityMode;
@@ -2114,13 +2113,6 @@ public class DatabaseDescriptor
         partitioner = newPartitioner;
         partitionerName = partitioner.getClass().getCanonicalName();
         return old;
-    }
-
-    public static RegistrationStateCallbacks getRegistrationStateCallbacks()
-    {
-        if (initializationLocator == null && isClientInitialized())
-            return Locator.forClients();
-        return initializationLocator;
     }
 
     public static IEndpointStateChangeSubscriber getLocalAddressReconnectionHelper()

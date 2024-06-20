@@ -46,6 +46,7 @@ import org.apache.cassandra.gms.FailureDetector;
 import org.apache.cassandra.io.util.FileInputStreamPlus;
 import org.apache.cassandra.io.util.FileOutputStreamPlus;
 import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.locator.Locator;
 import org.apache.cassandra.metrics.TCMMetrics;
 import org.apache.cassandra.net.IVerbHandler;
 import org.apache.cassandra.schema.DistributedSchema;
@@ -98,12 +99,12 @@ public class ClusterMetadataService
             throw new IllegalStateException(String.format("Cluster metadata is already initialized to %s.", instance),
                                             trace);
         instance = newInstance;
-        RegistrationStateCallbacks callbacks = DatabaseDescriptor.getRegistrationStateCallbacks();
-        if (callbacks != null)
+        Locator locator = DatabaseDescriptor.getLocator();
+        if (locator != null)
         {
-            callbacks.onInitialized();
+            locator.onInitialized();
             if (newInstance.metadata().myNodeId() != null)
-                callbacks.onRegistration();
+                locator.onRegistration();
         }
         trace = new RuntimeException("Previously initialized trace");
     }
@@ -112,10 +113,10 @@ public class ClusterMetadataService
     public static ClusterMetadataService unsetInstance()
     {
         ClusterMetadataService tmp = instance();
-        RegistrationStateCallbacks callbacks = DatabaseDescriptor.getRegistrationStateCallbacks();
+        Locator locator = DatabaseDescriptor.getLocator();
         // TODO maybe revisit this - is it just leaking the implementation detail?
-        if (callbacks != null)
-            callbacks.resetState();
+        if (locator != null)
+            locator.resetState();
         instance = null;
         return tmp;
     }

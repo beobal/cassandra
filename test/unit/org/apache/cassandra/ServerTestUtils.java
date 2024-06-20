@@ -121,7 +121,7 @@ public final class ServerTestUtils
                                                                 tokens,
                                                                 ClusterMetadataService.instance().placementProvider()));
         SystemKeyspace.setLocalHostId(nodeId.toUUID());
-        DatabaseDescriptor.getRegistrationStateCallbacks().onRegistration();
+        DatabaseDescriptor.getLocator().onRegistration();
         return nodeId;
     }
 

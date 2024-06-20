@@ -27,7 +27,6 @@ import org.slf4j.LoggerFactory;
 import org.apache.cassandra.net.MessagingService;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.Epoch;
-import org.apache.cassandra.tcm.RegistrationStateCallbacks;
 import org.apache.cassandra.tcm.membership.Location;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.utils.FBUtilities;
@@ -36,7 +35,7 @@ import org.apache.cassandra.utils.FBUtilities;
  *
  */
 // TODO rename
-public class Locator implements RegistrationStateCallbacks
+public class Locator
 {
     private static final Logger logger = LoggerFactory.getLogger(Locator.class);
 
@@ -76,7 +75,6 @@ public class Locator implements RegistrationStateCallbacks
         state.set(State.INITIAL);
     }
 
-    @Override
     public void onInitialized()
     {
         logger.info("Node is initialized, moving snitch adapter PREREGISTED state");
@@ -84,7 +82,6 @@ public class Locator implements RegistrationStateCallbacks
             throw new IllegalStateException(String.format("Cannot move snitch adapter to UNREGISTERED state (%s)", state.get()));
     }
 
-    @Override
     public void onRegistration()
     {
         // This may have been done already if the metadata log replay at start up included our registration
@@ -97,7 +94,6 @@ public class Locator implements RegistrationStateCallbacks
         MessagingService.instance().channelManagers.keySet().forEach(MessagingService.instance()::interruptOutbound);
     }
 
-    @Override
     public void onPeerRegistration(InetAddressAndPort endpoint)
     {
         logger.info("Peer has registered, interrupting any previously established connections");

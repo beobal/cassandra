@@ -805,7 +805,7 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
             Schema.instance.saveSystemKeyspace();
             ClusterMetadataService.instance().processor().fetchLogAndWait();
             NodeId self = Register.maybeRegister();
-            DatabaseDescriptor.getRegistrationStateCallbacks().onRegistration();
+            DatabaseDescriptor.getLocator().onRegistration();
             boolean joinRing = config.get(Constants.KEY_DTEST_JOIN_RING) == null || (boolean) config.get(Constants.KEY_DTEST_JOIN_RING);
             if (ClusterMetadata.current().directory.peerState(self) != NodeState.JOINED && joinRing)
             {
