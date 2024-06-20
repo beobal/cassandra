@@ -111,7 +111,6 @@ import org.apache.cassandra.locator.NodeAddressConfig;
 import org.apache.cassandra.locator.ReconnectableSnitchHelper;
 import org.apache.cassandra.locator.SeedProvider;
 import org.apache.cassandra.locator.NodeProximity;
-import org.apache.cassandra.locator.LocatorAdapter;
 import org.apache.cassandra.locator.SnitchAdapter;
 import org.apache.cassandra.security.AbstractCryptoProvider;
 import org.apache.cassandra.security.EncryptionContext;
@@ -191,7 +190,7 @@ public class DatabaseDescriptor
 
     private static Supplier<IFailureDetector> newFailureDetector;
     private static NodeProximity nodeProximity;
-    private static LocatorAdapter initializationLocator;
+    private static Locator initializationLocator;
     private static IEndpointStateChangeSubscriber localAddressReconnector;
     private static InetAddress listenAddress; // leave null so we can fall through to getLocalHost
     private static InetAddress broadcastAddress;
@@ -1499,8 +1498,8 @@ public class DatabaseDescriptor
                             ? createAddressConfig(conf.addresses_config)
                             : NodeAddressConfig.DEFAULT;
         }
-        initializationLocator = new LocatorAdapter(FBUtilities.getBroadcastAddressAndPort(),
-                                                   initialLocationProvider);
+        initializationLocator = new Locator(FBUtilities.getBroadcastAddressAndPort(),
+                                            initialLocationProvider);
         nodeProximity = conf.dynamic_snitch ? new DynamicEndpointSnitch(proximity) : proximity;
         addressConfig.configureAddresses();
         localAddressReconnector = addressConfig.preferLocalConnections()
@@ -2120,7 +2119,7 @@ public class DatabaseDescriptor
     public static RegistrationStateCallbacks getRegistrationStateCallbacks()
     {
         if (initializationLocator == null && isClientInitialized())
-            return LocatorAdapter.forClients();
+            return Locator.forClients();
         return initializationLocator;
     }
 
@@ -2137,7 +2136,7 @@ public class DatabaseDescriptor
     public static Locator getLocator()
     {
         if (initializationLocator == null && isClientInitialized())
-            return LocatorAdapter.forClients();
+            return Locator.forClients();
         return initializationLocator;
     }
 

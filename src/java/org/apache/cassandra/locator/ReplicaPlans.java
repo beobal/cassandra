@@ -100,7 +100,7 @@ public class ReplicaPlans
             logger.warn("System property {} was set to {} but must be 1 or 2. Running with {}", CassandraRelevantProperties.REQUIRED_BATCHLOG_REPLICA_COUNT.getKey(), batchlogReplicaCount, REQUIRED_BATCHLOG_REPLICA_COUNT);
     }
 
-    public static boolean isSufficientLiveReplicasForRead(Locator locator, AbstractReplicationStrategy replicationStrategy, ConsistencyLevel consistencyLevel, Endpoints<?> liveReplicas)
+    public static boolean isSufficientLiveReplicasForRead(Directory directory, AbstractReplicationStrategy replicationStrategy, ConsistencyLevel consistencyLevel, Endpoints<?> liveReplicas)
     {
         switch (consistencyLevel)
         {
@@ -116,7 +116,7 @@ public class ReplicaPlans
                 {
                     int fullCount = 0;
                     Collection<String> dcs = ((NetworkTopologyStrategy) replicationStrategy).getDatacenters();
-                    for (ObjectObjectCursor<String, Replicas.ReplicaCount> entry : countPerDc(locator, dcs, liveReplicas))
+                    for (ObjectObjectCursor<String, Replicas.ReplicaCount> entry : countPerDc(directory, dcs, liveReplicas))
                     {
                         Replicas.ReplicaCount count = entry.value;
                         if (!count.hasAtleast(localQuorumFor(replicationStrategy, entry.key), 0))
@@ -132,17 +132,17 @@ public class ReplicaPlans
         }
     }
 
-    static void assureSufficientLiveReplicasForRead(Locator locator, AbstractReplicationStrategy replicationStrategy, ConsistencyLevel consistencyLevel, Endpoints<?> liveReplicas) throws UnavailableException
+    static void assureSufficientLiveReplicasForRead(Directory directory, AbstractReplicationStrategy replicationStrategy, ConsistencyLevel consistencyLevel, Endpoints<?> liveReplicas) throws UnavailableException
     {
-        assureSufficientLiveReplicas(locator, replicationStrategy, consistencyLevel, liveReplicas, consistencyLevel.blockFor(replicationStrategy), 1);
+        assureSufficientLiveReplicas(directory, replicationStrategy, consistencyLevel, liveReplicas, consistencyLevel.blockFor(replicationStrategy), 1);
     }
 
-    static void assureSufficientLiveReplicasForWrite(Locator locator, AbstractReplicationStrategy replicationStrategy, ConsistencyLevel consistencyLevel, Endpoints<?> allLive, Endpoints<?> pendingWithDown) throws UnavailableException
+    static void assureSufficientLiveReplicasForWrite(Directory directory, AbstractReplicationStrategy replicationStrategy, ConsistencyLevel consistencyLevel, Endpoints<?> allLive, Endpoints<?> pendingWithDown) throws UnavailableException
     {
-        assureSufficientLiveReplicas(locator, replicationStrategy, consistencyLevel, allLive, consistencyLevel.blockForWrite(replicationStrategy, pendingWithDown), 0);
+        assureSufficientLiveReplicas(directory, replicationStrategy, consistencyLevel, allLive, consistencyLevel.blockForWrite(replicationStrategy, pendingWithDown), 0);
     }
 
-    static void assureSufficientLiveReplicas(Locator locator, AbstractReplicationStrategy replicationStrategy, ConsistencyLevel consistencyLevel, Endpoints<?> allLive, int blockFor, int blockForFullReplicas) throws UnavailableException
+    static void assureSufficientLiveReplicas(Directory directory, AbstractReplicationStrategy replicationStrategy, ConsistencyLevel consistencyLevel, Endpoints<?> allLive, int blockFor, int blockForFullReplicas) throws UnavailableException
     {
         switch (consistencyLevel)
         {
@@ -174,7 +174,7 @@ public class ReplicaPlans
                     int total = 0;
                     int totalFull = 0;
                     Collection<String> dcs = ((NetworkTopologyStrategy) replicationStrategy).getDatacenters();
-                    for (ObjectObjectCursor<String, Replicas.ReplicaCount> entry : countPerDc(locator, dcs, allLive))
+                    for (ObjectObjectCursor<String, Replicas.ReplicaCount> entry : countPerDc(directory, dcs, allLive))
                     {
                         int dcBlockFor = localQuorumFor(replicationStrategy, entry.key);
                         Replicas.ReplicaCount dcCount = entry.value;
@@ -717,7 +717,7 @@ public class ReplicaPlans
                 }
                 else
                 {
-                    Locator directory = ClusterMetadata.current().directory;
+                    Directory directory = ClusterMetadata.current().directory;
                     ObjectIntHashMap<String> requiredPerDc = eachQuorumForWrite(directory, liveAndDown.replicationStrategy(), liveAndDown.pending());
                     addToCountPerDc(directory, requiredPerDc, contacts.snapshot(), -1);
                     for (Replica replica : filter(live.all(), r -> !contacts.contains(r)))

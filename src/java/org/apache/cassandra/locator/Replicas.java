@@ -25,6 +25,8 @@ import java.util.function.Predicate;
 
 import com.carrotsearch.hppc.ObjectIntHashMap;
 import com.carrotsearch.hppc.ObjectObjectHashMap;
+import org.apache.cassandra.tcm.membership.Directory;
+
 import com.google.common.collect.Iterables;
 
 import static com.google.common.collect.Iterables.all;
@@ -87,7 +89,7 @@ public class Replicas
     /**
      * count the number of full and transient replicas, separately, for each DC
      */
-    public static ObjectObjectHashMap<String, ReplicaCount> countPerDc(Locator locator, Collection<String> dataCenters, Iterable<Replica> replicas)
+    public static ObjectObjectHashMap<String, ReplicaCount> countPerDc(Directory directory, Collection<String> dataCenters, Iterable<Replica> replicas)
     {
         ObjectObjectHashMap<String, ReplicaCount> perDc = new ObjectObjectHashMap<>(dataCenters.size());
         for (String dc: dataCenters)
@@ -95,7 +97,7 @@ public class Replicas
 
         for (Replica replica : replicas)
         {
-            String dc = locator.location(replica.endpoint()).datacenter;
+            String dc = directory.location(replica.endpoint()).datacenter;
             perDc.get(dc).increment(replica);
         }
         return perDc;
@@ -104,11 +106,11 @@ public class Replicas
     /**
      * increment each of the map's DC entries for each matching replica provided
      */
-    public static void addToCountPerDc(Locator locator, ObjectIntHashMap<String> perDc, Iterable<Replica> replicas, int add)
+    public static void addToCountPerDc(Directory directory, ObjectIntHashMap<String> perDc, Iterable<Replica> replicas, int add)
     {
         for (Replica replica : replicas)
         {
-            String dc = locator.location(replica.endpoint()).datacenter;
+            String dc = directory.location(replica.endpoint()).datacenter;
             perDc.addTo(dc, add);
         }
     }

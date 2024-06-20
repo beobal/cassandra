@@ -46,6 +46,7 @@ import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.service.ClientWarn;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.compatibility.TokenRingUtils;
+import org.apache.cassandra.tcm.membership.Directory;
 import org.apache.cassandra.tcm.membership.Location;
 import org.apache.cassandra.tcm.ownership.VersionedEndpoints;
 import org.apache.cassandra.utils.FBUtilities;
@@ -213,7 +214,7 @@ public class NetworkTopologyStrategyTest
             {
                 ServerTestUtils.resetCMS();
                 Random rand = new Random(run);
-                Locator locator = generateLocator(datacenters, nodes, rand);
+                Directory directory = generateDirectory(datacenters, nodes, rand);
 
                 for (int i = 0; i < NODES; ++i)  // Nodes
                 {
@@ -222,14 +223,14 @@ public class NetworkTopologyStrategyTest
                     {
                         tokens.add(Murmur3Partitioner.instance.getRandomToken(rand));
                     }
-                    ClusterMetadataTestHelper.addEndpoint(nodes.get(i), tokens, locator.location(nodes.get(i)));
+                    ClusterMetadataTestHelper.addEndpoint(nodes.get(i), tokens, directory.location(nodes.get(i)));
                 }
-                testEquivalence(ClusterMetadata.current(), locator, datacenters, rand);
+                testEquivalence(ClusterMetadata.current(), directory, datacenters, rand);
             }
         }
     }
 
-    void testEquivalence(ClusterMetadata metadata, Locator locator, Map<String, Integer> datacenters, Random rand)
+    void testEquivalence(ClusterMetadata metadata, Directory directory, Map<String, Integer> datacenters, Random rand)
     {
         NetworkTopologyStrategy nts = new NetworkTopologyStrategy("ks",
                                                                   datacenters.entrySet()
@@ -238,7 +239,7 @@ public class NetworkTopologyStrategyTest
         for (int i=0; i<1000; ++i)
         {
             Token token = Murmur3Partitioner.instance.getRandomToken(rand);
-            List<InetAddressAndPort> expected = calculateNaturalEndpoints(token, metadata, datacenters, locator);
+            List<InetAddressAndPort> expected = calculateNaturalEndpoints(token, metadata, datacenters, directory);
             List<InetAddressAndPort> actual = new ArrayList<>(nts.calculateNaturalReplicas(token, metadata).endpoints());
             if (endpointsDiffer(expected, actual))
             {
@@ -264,7 +265,7 @@ public class NetworkTopologyStrategyTest
         return !s1.equals(s2);
     }
 
-    Locator generateLocator(Map<String, Integer> datacenters, Collection<InetAddressAndPort> nodes, Random rand)
+    Directory generateDirectory(Map<String, Integer> datacenters, Collection<InetAddressAndPort> nodes, Random rand)
     {
         final Map<InetAddressAndPort, String> nodeToRack = new HashMap<>();
         final Map<InetAddressAndPort, String> nodeToDC = new HashMap<>();
@@ -288,7 +289,7 @@ public class NetworkTopologyStrategyTest
             nodeToDC.put(node, dc);
         }
 
-        return new Locator()
+        return new Directory()
         {
             @Override
             public Location local()
@@ -314,7 +315,7 @@ public class NetworkTopologyStrategyTest
     }
 
     // Copy of older endpoints calculation algorithm for comparison
-    public static List<InetAddressAndPort> calculateNaturalEndpoints(Token searchToken, ClusterMetadata metadata, Map<String, Integer> datacenters, Locator snitch)
+    public static List<InetAddressAndPort> calculateNaturalEndpoints(Token searchToken, ClusterMetadata metadata, Map<String, Integer> datacenters, Directory directory)
     {
         // we want to preserve insertion order so that the first added endpoint becomes primary
         Set<InetAddressAndPort> replicas = new LinkedHashSet<>();
@@ -345,7 +346,7 @@ public class NetworkTopologyStrategyTest
         {
             Token next = tokenIter.next();
             InetAddressAndPort ep = metadata.directory.endpoint(metadata.tokenMap.owner(next));
-            Location location = snitch.location(ep);
+            Location location = directory.location(ep);
             String dc = location.datacenter;
             // have we already found all replicas for this dc?
             if (!datacenters.containsKey(dc) || hasSufficientReplicas(dc, dcReplicas, allEndpoints, datacenters))
