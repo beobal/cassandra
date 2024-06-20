@@ -835,7 +835,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             self = Register.maybeRegister();
         }
 
-        DatabaseDescriptor.getRegistrationStateCallbacks().onRegistration();
+        DatabaseDescriptor.getLocator().onRegistration();
         Startup.maybeExecuteStartupTransformation(self);
 
         try

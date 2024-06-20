@@ -120,7 +120,7 @@ public class LegacyStateListener implements ChangeListener.Async
             if (next.directory.peerState(change) == REGISTERED)
             {
                 // Inform LocatorAdapter so we can re-establish any connections made prior to this node registering
-                DatabaseDescriptor.getRegistrationStateCallbacks().onPeerRegistration(next.directory.endpoint(change));
+                DatabaseDescriptor.getLocator().onPeerRegistration(next.directory.endpoint(change));
             }
             else if (next.directory.peerState(change) == LEFT)
             {
