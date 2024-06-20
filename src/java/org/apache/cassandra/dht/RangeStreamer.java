@@ -50,7 +50,6 @@ import org.apache.cassandra.locator.EndpointsByReplica;
 import org.apache.cassandra.locator.EndpointsForRange;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.locator.LocalStrategy;
-import org.apache.cassandra.locator.Locator;
 import org.apache.cassandra.locator.NetworkTopologyStrategy;
 import org.apache.cassandra.locator.RangesAtEndpoint;
 import org.apache.cassandra.locator.Replica;
@@ -64,6 +63,7 @@ import org.apache.cassandra.streaming.StreamOperation;
 import org.apache.cassandra.streaming.StreamPlan;
 import org.apache.cassandra.streaming.StreamResultFuture;
 import org.apache.cassandra.tcm.ClusterMetadata;
+import org.apache.cassandra.tcm.membership.Directory;
 import org.apache.cassandra.tcm.ownership.MovementMap;
 import org.apache.cassandra.utils.FBUtilities;
 
@@ -179,18 +179,18 @@ public class RangeStreamer
     public static class SingleDatacenterFilter implements SourceFilter
     {
         private final String sourceDc;
-        private final Locator locator;
+        private final Directory directory;
 
-        public SingleDatacenterFilter(Locator locator, String sourceDc)
+        public SingleDatacenterFilter(Directory directory, String sourceDc)
         {
             this.sourceDc = sourceDc;
-            this.locator = locator;
+            this.directory = directory;
         }
 
         @Override
         public boolean apply(Replica replica)
         {
-            return locator.location(replica.endpoint()).datacenter.equals(sourceDc);
+            return directory.location(replica.endpoint()).datacenter.equals(sourceDc);
         }
 
         @Override
@@ -205,19 +205,19 @@ public class RangeStreamer
     */
     public static class ExcludeLocalDatacenterFilter implements SourceFilter
     {
-        private final Locator locator;
+        private final Directory directory;
         private final String localDc;
 
-        public ExcludeLocalDatacenterFilter(Locator locator)
+        public ExcludeLocalDatacenterFilter(Directory directory)
         {
-            this.locator = locator;
-            this.localDc = locator.local().datacenter;
+            this.directory = directory;
+            this.localDc = directory.local().datacenter;
         }
 
         @Override
         public boolean apply(Replica replica)
         {
-            return !locator.location(replica.endpoint()).datacenter.equals(localDc);
+            return !directory.location(replica.endpoint()).datacenter.equals(localDc);
         }
 
         @Override
@@ -601,7 +601,7 @@ public class RangeStreamer
     private static Multimap<InetAddressAndPort, FetchReplica> getOptimizedWorkMap(EndpointsByReplica rangesWithSources,
                                                                                   Collection<SourceFilter> sourceFilters,
                                                                                   String keyspace,
-                                                                                  Locator locator)
+                                                                                  Directory directory)
     {
         //For now we just aren't going to use the optimized range fetch map with transient replication to shrink
         //the surface area to test and introduce bugs.
@@ -615,7 +615,7 @@ public class RangeStreamer
         }
 
         EndpointsByRange unwrappedView = unwrapped.build();
-        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(unwrappedView, sourceFilters, keyspace, locator);
+        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(unwrappedView, sourceFilters, keyspace, directory);
         Multimap<InetAddressAndPort, Range<Token>> rangeFetchMapMap = calculator.getRangeFetchMap();
         logger.info("Output from RangeFetchMapCalculator for keyspace {}", keyspace);
         validateRangeFetchMap(unwrappedView, rangeFetchMapMap, keyspace);

@@ -40,10 +40,10 @@ import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.locator.AbstractReplicationStrategy;
 import org.apache.cassandra.locator.InetAddressAndPort;
-import org.apache.cassandra.locator.Locator;
 import org.apache.cassandra.locator.NetworkTopologyStrategy;
 import org.apache.cassandra.locator.SimpleStrategy;
 import org.apache.cassandra.tcm.ClusterMetadata;
+import org.apache.cassandra.tcm.membership.Directory;
 import org.apache.cassandra.tcm.membership.Location;
 import org.apache.cassandra.tcm.membership.NodeAddresses;
 import org.apache.cassandra.tcm.membership.NodeId;
@@ -159,7 +159,7 @@ public class TokenAllocation
         // return true iff the provided endpoint occurs in the same virtual token-ring we are allocating for
         // i.e. the set of the nodes that share ownership with the node we are allocating
         // alternatively: return false if the endpoint's ownership is independent of the node we are allocating tokens for
-        abstract boolean inAllocationRing(Locator locator, InetAddressAndPort other);
+        abstract boolean inAllocationRing(Directory directory, InetAddressAndPort other);
 
         final TokenAllocator<InetAddressAndPort> createAllocator()
         {
@@ -302,7 +302,7 @@ public class TokenAllocation
 
     // a null dc will always return true for inAllocationRing(..)
     // a null rack will return true for inAllocationRing(..) for all nodes in the same dc
-    private StrategyAdapter createStrategy(Supplier<Locator> locator, String dc, String rack, int replicas, boolean groupByRack)
+    private StrategyAdapter createStrategy(Supplier<Directory> directory, String dc, String rack, int replicas, boolean groupByRack)
     {
         return new StrategyAdapter()
         {
@@ -315,13 +315,13 @@ public class TokenAllocation
             @Override
             public Object getGroup(InetAddressAndPort unit)
             {
-                return groupByRack ? locator.get().location(unit).rack : unit;
+                return groupByRack ? directory.get().location(unit).rack : unit;
             }
 
             @Override
-            public boolean inAllocationRing(Locator locator, InetAddressAndPort other)
+            public boolean inAllocationRing(Directory directory, InetAddressAndPort other)
             {
-                Location location = locator.location(other);
+                Location location = directory.location(other);
                 return (dc == null || dc.equals(location.datacenter)) && (rack == null || rack.equals(location.rack));
             }
         };

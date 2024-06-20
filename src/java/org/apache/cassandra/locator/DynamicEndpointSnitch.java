@@ -89,22 +89,10 @@ public class DynamicEndpointSnitch implements NodeProximity, LatencySubscribers.
         if (instance != null)
             mbeanName += ",instance=" + instance;
         this.delegate = delegate;
-        update = new Runnable()
-        {
-            public void run()
-            {
-                updateScores();
-            }
-        };
-        reset = new Runnable()
-        {
-            public void run()
-            {
-                // we do this so that a host considered bad has a chance to recover, otherwise would we never try
-                // to read from it, which would cause its score to never change
-                reset();
-            }
-        };
+        update = this::updateScores;
+        // we do this so that a host considered bad has a chance to recover, otherwise would we never try
+        // to read from it, which would cause its score to never change
+        reset = this::reset;
 
         if (DatabaseDescriptor.isDaemonInitialized())
         {

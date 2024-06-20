@@ -20,6 +20,8 @@ package org.apache.cassandra.tcm;
 
 import org.apache.cassandra.locator.InetAddressAndPort;
 
+
+// why does this exist? only a single impl
 public interface RegistrationStateCallbacks
 {
     void resetState();

@@ -33,8 +33,8 @@ import org.junit.Test;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.locator.InetAddressAndPort;
-import org.apache.cassandra.locator.Locator;
 import org.apache.cassandra.locator.Replica;
+import org.apache.cassandra.tcm.membership.Directory;
 import org.apache.cassandra.tcm.membership.Location;
 
 import static org.junit.Assert.assertFalse;
@@ -42,13 +42,13 @@ import static org.junit.Assert.assertTrue;
 
 public class RangeFetchMapCalculatorTest
 {
-    private static Locator locator;
+    private static Directory directory;
     @BeforeClass
     public static void setup()
     {
         DatabaseDescriptor.daemonInitialization();
         DatabaseDescriptor.setPartitionerUnsafe(RandomPartitioner.instance);
-        locator = new Locator()
+        directory = new Directory()
         {
             Location local = new Location("DC1", "RAC1");
             Location remote = new Location("DC2", "RAC1");
@@ -89,7 +89,7 @@ public class RangeFetchMapCalculatorTest
         addNonTrivialRangeAndSources(rangesWithSources, 31, 40, "127.0.0.4");
         addNonTrivialRangeAndSources(rangesWithSources, 41, 50, "127.0.0.5");
 
-        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(rangesWithSources.build(), Collections.emptyList(), "Test", locator);
+        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(rangesWithSources.build(), Collections.emptyList(), "Test", directory);
         Multimap<InetAddressAndPort, Range<Token>> map = calculator.getRangeFetchMap();
         validateRange(rangesWithSources, map);
 
@@ -106,7 +106,7 @@ public class RangeFetchMapCalculatorTest
         addNonTrivialRangeAndSources(rangesWithSources, 31, 40, "127.0.0.7", "127.0.0.8");
         addNonTrivialRangeAndSources(rangesWithSources, 41, 50, "127.0.0.9", "127.0.0.10");
 
-        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(rangesWithSources.build(), Collections.emptyList(), "Test", locator);
+        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(rangesWithSources.build(), Collections.emptyList(), "Test", directory);
         Multimap<InetAddressAndPort, Range<Token>> map = calculator.getRangeFetchMap();
         validateRange(rangesWithSources, map);
 
@@ -121,7 +121,7 @@ public class RangeFetchMapCalculatorTest
         addNonTrivialRangeAndSources(rangesWithSources, 11, 20, "127.0.0.2", "127.0.0.3");
         addNonTrivialRangeAndSources(rangesWithSources, 21, 30, "127.0.0.3", "127.0.0.4");
 
-        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(rangesWithSources.build(), Collections.emptyList(), "Test", locator);
+        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(rangesWithSources.build(), Collections.emptyList(), "Test", directory);
         Multimap<InetAddressAndPort, Range<Token>> map = calculator.getRangeFetchMap();
         validateRange(rangesWithSources, map);
 
@@ -139,7 +139,7 @@ public class RangeFetchMapCalculatorTest
         addNonTrivialRangeAndSources(rangesWithSources, 31, 40, "127.0.0.3");
         addNonTrivialRangeAndSources(rangesWithSources, 41, 50, "127.0.0.3", "127.0.0.2");
 
-        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(rangesWithSources.build(), Collections.emptyList(), "Test", locator);
+        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(rangesWithSources.build(), Collections.emptyList(), "Test", directory);
         Multimap<InetAddressAndPort, Range<Token>> map = calculator.getRangeFetchMap();
         validateRange(rangesWithSources, map);
 
@@ -161,7 +161,7 @@ public class RangeFetchMapCalculatorTest
         addNonTrivialRangeAndSources(rangesWithSources, 31, 40, "127.0.0.1");
         addNonTrivialRangeAndSources(rangesWithSources, 41, 50, "127.0.0.1", "127.0.0.2");
 
-        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(rangesWithSources.build(), Collections.emptyList(), "Test", locator);
+        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(rangesWithSources.build(), Collections.emptyList(), "Test", directory);
         Multimap<InetAddressAndPort, Range<Token>> map = calculator.getRangeFetchMap();
         validateRange(rangesWithSources, map);
 
@@ -181,7 +181,7 @@ public class RangeFetchMapCalculatorTest
         addNonTrivialRangeAndSources(rangesWithSources, 31, 40, "127.0.0.1");
         addNonTrivialRangeAndSources(rangesWithSources, 41, 50, "127.0.0.1");
 
-        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(rangesWithSources.build(), Collections.emptyList(), "Test", locator);
+        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(rangesWithSources.build(), Collections.emptyList(), "Test", directory);
         Multimap<InetAddressAndPort, Range<Token>> map = calculator.getRangeFetchMap();
         //All ranges map to local host so we will not stream anything.
         assertTrue(map.isEmpty());
@@ -219,7 +219,7 @@ public class RangeFetchMapCalculatorTest
             }
         };
 
-        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(rangesWithSources.build(), Arrays.asList(filter), "Test", locator);
+        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(rangesWithSources.build(), Arrays.asList(filter), "Test", directory);
         Multimap<InetAddressAndPort, Range<Token>> map = calculator.getRangeFetchMap();
 
         validateRange(rangesWithSources, map);
@@ -252,7 +252,7 @@ public class RangeFetchMapCalculatorTest
             }
         };
 
-        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(rangesWithSources.build(), Arrays.asList(allDeadFilter), "Test", locator);
+        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(rangesWithSources.build(), Arrays.asList(allDeadFilter), "Test", directory);
         calculator.getRangeFetchMap();
     }
 
@@ -264,7 +264,7 @@ public class RangeFetchMapCalculatorTest
         addNonTrivialRangeAndSources(rangesWithSources, 11, 20, "127.0.0.1", "127.0.0.3", "127.0.0.57");
         addNonTrivialRangeAndSources(rangesWithSources, 21, 30, "127.0.0.2", "127.0.0.59", "127.0.0.61");
 
-        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(rangesWithSources.build(), new ArrayList<>(), "Test", locator);
+        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(rangesWithSources.build(), new ArrayList<>(), "Test", directory);
         Multimap<InetAddressAndPort, Range<Token>> map = calculator.getRangeFetchMap();
         validateRange(rangesWithSources, map);
         Assert.assertEquals(2, map.asMap().size());
@@ -306,7 +306,7 @@ public class RangeFetchMapCalculatorTest
             }
         };
 
-        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(rangesWithSources.build(), Arrays.asList(localHostFilter), "Test", locator);
+        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(rangesWithSources.build(), Arrays.asList(localHostFilter), "Test", directory);
         Multimap<InetAddressAndPort, Range<Token>> map = calculator.getRangeFetchMap();
         validateRange(rangesWithSources, map);
         Assert.assertEquals(3, map.asMap().size());
@@ -327,7 +327,7 @@ public class RangeFetchMapCalculatorTest
         addNonTrivialRangeAndSources(rangesWithSources, 21, 30, "127.0.0.2", "127.0.0.59");
         // and a trivial one:
         addTrivialRangeAndSources(rangesWithSources, 1, 10, "127.0.0.3", "127.0.0.51");
-        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(rangesWithSources.build(), Collections.emptyList(), "Test", locator);
+        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(rangesWithSources.build(), Collections.emptyList(), "Test", directory);
         Multimap<InetAddressAndPort, Range<Token>> optMap = calculator.getRangeFetchMapForNonTrivialRanges();
         Multimap<InetAddressAndPort, Range<Token>> trivialMap = calculator.getRangeFetchMapForTrivialRanges(optMap);
         assertTrue(trivialMap.get(InetAddressAndPort.getByName("127.0.0.3")).contains(generateTrivialRange(1,10)) ^
@@ -367,7 +367,7 @@ public class RangeFetchMapCalculatorTest
                 return "Not 127.0.0.3";
             }
         };
-        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(rangesWithSources.build(), Collections.singleton(filter), "Test", locator);
+        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(rangesWithSources.build(), Collections.singleton(filter), "Test", directory);
         Multimap<InetAddressAndPort, Range<Token>> optMap = calculator.getRangeFetchMapForNonTrivialRanges();
         Multimap<InetAddressAndPort, Range<Token>> trivialMap = calculator.getRangeFetchMapForTrivialRanges(optMap);
 
@@ -381,7 +381,7 @@ public class RangeFetchMapCalculatorTest
         addTrivialRangeAndSources(rangesWithSources, 21, 30, "127.0.0.2", "127.0.0.1");
         addTrivialRangeAndSources(rangesWithSources, 31, 40, "127.0.0.1", "127.0.0.2");
         EndpointsByRange ebr = rangesWithSources.build();
-        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(ebr, Collections.emptyList(), "Test", locator);
+        RangeFetchMapCalculator calculator = new RangeFetchMapCalculator(ebr, Collections.emptyList(), "Test", directory);
         RangeStreamer.validateRangeFetchMap(ebr, calculator.getRangeFetchMap(), "Test");
     }
 
