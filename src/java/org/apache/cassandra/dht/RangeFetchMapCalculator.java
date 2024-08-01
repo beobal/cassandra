@@ -38,7 +38,6 @@ import org.apache.cassandra.locator.Replica;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.locator.Replicas;
 import org.apache.cassandra.tcm.membership.Directory;
 import org.psjava.algo.graph.flownetwork.FordFulkersonAlgorithm;
