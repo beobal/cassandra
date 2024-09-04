@@ -32,9 +32,12 @@ import org.apache.cassandra.schema.Keyspaces;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.consensus.TransactionalMode;
 import org.apache.cassandra.tcm.ClusterMetadata;
-import org.apache.cassandra.tcm.MultiStepOperation;
+import org.apache.cassandra.tcm.ClusterMetadataService;
+import org.apache.cassandra.tcm.StubClusterMetadataService;
 import org.apache.cassandra.tcm.Transformation;
+import org.apache.cassandra.tcm.sequences.InProgressSequences;
 import org.apache.cassandra.tcm.transformations.DropAccordTableOperation.PrepareDropAccordTable;
+import org.apache.cassandra.tcm.transformations.DropAccordTableOperation.TableReference;
 import org.apache.cassandra.utils.CassandraGenerators.TableMetadataBuilder;
 import org.apache.cassandra.utils.Generators;
 import org.assertj.core.api.Assertions;
@@ -50,8 +53,8 @@ public class DropAccordTableOperationTest
     }
 
     private static final TransactionalMode[] ACCORD_ENABLED_MODES = Stream.of(TransactionalMode.values())
-                                                                    .filter(t -> t.accordIsEnabled)
-                                                                    .toArray(TransactionalMode[]::new);
+                                                                          .filter(t -> t.accordIsEnabled)
+                                                                          .toArray(TransactionalMode[]::new);
 
     private static final Gen<TableMetadata> TABLE_GEN = Generators.toGen(new TableMetadataBuilder()
                                                                          .withUseCounter(false)
@@ -61,47 +64,47 @@ public class DropAccordTableOperationTest
     @Test
     public void e2e()
     {
-        qt().check(rs -> {
-            ClusterMetadata current = new ClusterMetadata(Murmur3Partitioner.instance);
+        qt().withSeed(3448622136424705308L).check(rs -> {
+            MockClusterMetadataService cms = new MockClusterMetadataService();
             TableMetadata metadata = TABLE_GEN.next(rs);
-            current = addTable(current, metadata);
+            addTable(cms, metadata);
 
-            PrepareDropAccordTable prepare = new PrepareDropAccordTable(DropAccordTableOperation.TableReference.from(metadata));
+            TableReference table = TableReference.from(metadata);
 
-            current = process(current, prepare).metadata;
-            Assertions.assertThat(current.inProgressSequences.isEmpty()).isFalse();
-
-            while (current.inProgressSequences.contains(prepare.table))
-                current = process(current, current.inProgressSequences.get(prepare.table)).metadata;
+            process(cms, new PrepareDropAccordTable(table));
+            Assertions.assertThat(cms.metadata().inProgressSequences.isEmpty()).isFalse();
+            InProgressSequences.finishInProgressSequences(table);
 
             // table is dropped
-            Assertions.assertThat(current.schema.getTableMetadata(metadata.id)).isNull();
+            Assertions.assertThat(cms.metadata().schema.getTableMetadata(metadata.id)).isNull();
         });
     }
 
-    private static ClusterMetadata addTable(ClusterMetadata prev, TableMetadata table)
+    private static void addTable(MockClusterMetadataService cms, TableMetadata table)
     {
         // first mock out a keyspace
+        ClusterMetadata prev = cms.metadata();
         KeyspaceMetadata schema = KeyspaceMetadata.create(table.keyspace, KeyspaceParams.simple(3));
         schema = schema.withSwapped(schema.tables.with(table));
         Keyspaces keyspaces = prev.schema.getKeyspaces().withAddedOrUpdated(schema);
-        return prev.transformer().with(new DistributedSchema(keyspaces)).build().metadata;
+        ClusterMetadata metadata = prev.transformer().with(new DistributedSchema(keyspaces)).build().metadata;
+        cms.setMetadata(metadata);
     }
 
 
-    private static Transformation.Success process(ClusterMetadata current, Transformation transformation)
+    private static void process(ClusterMetadataService cms, Transformation transformation)
     {
-        Transformation.Result result = transformation.execute(current);
-        if (result.isRejected())
-            throw new IllegalStateException("Unable to make TCM transition: " + result.rejected());
-        return result.success();
+        cms.commit(transformation);
     }
 
-    private static Transformation.Success process(ClusterMetadata current, MultiStepOperation<?> transformation)
+    private static class MockClusterMetadataService extends StubClusterMetadataService
     {
-        Transformation.Result result = transformation.applyTo(current);
-        if (result.isRejected())
-            throw new IllegalStateException("Unable to make TCM transition");
-        return result.success();
+        public MockClusterMetadataService()
+        {
+            super(new ClusterMetadata(Murmur3Partitioner.instance));
+
+            ClusterMetadataService.unsetInstance();
+            ClusterMetadataService.setInstance(this);
+        }
     }
 }

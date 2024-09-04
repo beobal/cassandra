@@ -37,6 +37,9 @@ import org.apache.cassandra.tcm.sequences.SequenceState;
 import org.apache.cassandra.tcm.serialization.MetadataSerializer;
 import org.apache.cassandra.utils.JVMStabilityInspector;
 
+import static org.apache.cassandra.tcm.Transformation.Kind.AWAIT_ACCORD_TABLE_COMPLETE;
+import static org.apache.cassandra.tcm.Transformation.Kind.DROP_ACCORD_TABLE;
+import static org.apache.cassandra.tcm.Transformation.Kind.MARK_ACCORD_TABLE_DROPPING;
 import static org.apache.cassandra.tcm.sequences.SequenceState.continuable;
 import static org.apache.cassandra.tcm.sequences.SequenceState.error;
 
@@ -55,9 +58,9 @@ public class DropAccordTableOperation extends MultiStepOperation<Epoch>
         super(nextToIndex(MARK_ACCORD_TABLE_DROPPING), latestModification);
         this.next = MARK_ACCORD_TABLE_DROPPING;
         this.table = table;
-        markAccordTableDropping = new MarkAccordTableDropping();
-        awaitAccordTableComplete = new AwaitAccordTableComplete();
-        dropAccordTable = new DropAccordTable();
+        markAccordTableDropping = new MarkAccordTableDropping(table);
+        awaitAccordTableComplete = new AwaitAccordTableComplete(table);
+        dropAccordTable = new DropAccordTable(table);
     }
 
     public DropAccordTableOperation(DropAccordTableOperation current, Epoch latestModification)
@@ -109,7 +112,7 @@ public class DropAccordTableOperation extends MultiStepOperation<Epoch>
     @Override
     protected SequenceKey sequenceKey()
     {
-        throw new UnsupportedOperationException("TODO");
+        return table;
     }
 
     @Override
@@ -140,7 +143,6 @@ public class DropAccordTableOperation extends MultiStepOperation<Epoch>
                     logger.warn("Exception committing mark_accord_table_dropping", t);
                     return continuable();
                 }
-                break;
             case AWAIT_ACCORD_TABLE_COMPLETE:
                 try
                 {
@@ -152,7 +154,6 @@ public class DropAccordTableOperation extends MultiStepOperation<Epoch>
                     logger.warn("Exception committing await_accord_table_complete", t);
                     return continuable();
                 }
-                break;
             case DROP_ACCORD_TABLE:
                 try
                 {
@@ -164,11 +165,9 @@ public class DropAccordTableOperation extends MultiStepOperation<Epoch>
                     logger.warn("Exception committing drop_accord_table", t);
                     return continuable();
                 }
-                break;
             default:
                 return error(new IllegalStateException("Can't proceed with drop accord table from " + next));
         }
-        return continuable();
     }
 
     @Override
@@ -186,7 +185,7 @@ public class DropAccordTableOperation extends MultiStepOperation<Epoch>
     @Override
     public ProgressBarrier barrier()
     {
-        throw new UnsupportedOperationException("TODO");
+        return ProgressBarrier.immediate();
     }
 
     public static class TableReference implements SequenceKey
@@ -267,33 +266,68 @@ public class DropAccordTableOperation extends MultiStepOperation<Epoch>
         SequenceState execute(ClusterMetadataService cms) throws Exception;
     }
 
-    public static class MarkAccordTableDropping implements Step
+    public static class BaseStep implements Step, Transformation
     {
+        public final TableReference table;
+
+        public BaseStep(TableReference table)
+        {
+            this.table = table;
+        }
 
         @Override
         public SequenceState execute(ClusterMetadataService cms) throws Exception
         {
-            return null;
+            cms.commit(this);
+            return continuable();
+        }
+
+        @Override
+        public Kind kind()
+        {
+            throw new UnsupportedOperationException("TODO");
+        }
+
+        @Override
+        public Result execute(ClusterMetadata prev)
+        {
+            ClusterMetadata.Transformer proposed = prev.transformer()
+                                                       .with(prev.inProgressSequences.with(table, plan -> plan.advance(prev.nextEpoch())));
+            return Transformation.success(proposed, LockedRanges.AffectedRanges.EMPTY);
         }
     }
 
-    public static class AwaitAccordTableComplete implements Step
+    public static class MarkAccordTableDropping extends BaseStep
     {
-
-        @Override
-        public SequenceState execute(ClusterMetadataService cms) throws Exception
+        public MarkAccordTableDropping(TableReference table)
         {
-            return null;
+            super(table);
         }
     }
 
-    public static class DropAccordTable implements Step
+    public static class AwaitAccordTableComplete extends BaseStep
     {
 
-        @Override
-        public SequenceState execute(ClusterMetadataService cms) throws Exception
+        public AwaitAccordTableComplete(TableReference table)
         {
-            return null;
+            super(table);
+        }
+    }
+
+    public static class DropAccordTable extends BaseStep
+    {
+
+        public DropAccordTable(TableReference table)
+        {
+            super(table);
+        }
+
+        @Override
+        public Result execute(ClusterMetadata prev)
+        {
+            ClusterMetadata.Transformer proposed = prev.transformer()
+                                                       .with(prev.inProgressSequences.without(table));
+            return Transformation.success(proposed, LockedRanges.AffectedRanges.EMPTY);
         }
     }
 }

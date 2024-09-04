@@ -67,7 +67,8 @@ public abstract class MultiStepOperation<CONTEXT>
         LEAVE(UnbootstrapAndLeave.serializer),
         REMOVE(UnbootstrapAndLeave.serializer),
 
-        RECONFIGURE_CMS(ReconfigureCMS.serializer)
+        RECONFIGURE_CMS(ReconfigureCMS.serializer),
+        DROP_ACCORD_TABLE(null),
         ;
 
         public final AsymmetricMetadataSerializer<MultiStepOperation<?>, ? extends MultiStepOperation<?>> serializer;
