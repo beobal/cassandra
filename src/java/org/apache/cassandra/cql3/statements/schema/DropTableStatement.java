@@ -48,6 +48,19 @@ public final class DropTableStatement extends AlterSchemaStatement
         this.ifExists = ifExists;
     }
 
+    @Override
+    protected ClusterMetadata commit(ClusterMetadata metadata)
+    {
+        TableMetadata table = metadata.schema.getKeyspaces().getNullable(keyspaceName).getTableNullable(tableName);
+        if (!table.isAccordEnabled())
+            return super.commit(metadata);
+        // Multi-Step Operation
+        // 1) mark the table as pending delete
+        // 2) await for Accord to finish transactions
+        // 3) drop table
+        return null;
+    }
+
     public Keyspaces apply(ClusterMetadata metadata)
     {
         Guardrails.dropTruncateTableEnabled.ensureEnabled(state);

@@ -27,6 +27,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -53,6 +54,7 @@ import org.apache.cassandra.db.Slices;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.marshal.ByteBufferAccessor;
 import org.apache.cassandra.db.marshal.CompositeType;
+import org.apache.cassandra.db.marshal.CounterColumnType;
 import org.apache.cassandra.db.marshal.EmptyType;
 import org.apache.cassandra.db.rows.Cell;
 import org.apache.cassandra.db.marshal.UserType;
@@ -81,6 +83,7 @@ import org.apache.cassandra.schema.MemtableParams;
 import org.apache.cassandra.schema.TableId;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.schema.TableParams;
+import org.apache.cassandra.service.consensus.TransactionalMode;
 import org.apache.cassandra.utils.AbstractTypeGenerators.ValueDomain;
 import org.quicktheories.core.Gen;
 import org.quicktheories.core.RandomnessSource;
@@ -201,6 +204,31 @@ public final class CassandraGenerators
         private Gen<Integer> numRegularColumnsGen = SourceDSL.integers().between(1, 5);
         private Gen<Integer> numStaticColumnsGen = SourceDSL.integers().between(0, 2);
         private Gen<String> memtableKeyGen = null;
+        private Gen<Boolean> useCounter = ignore -> false;
+        @Nullable
+        private Gen<TransactionalMode> transactionalMode = null;
+
+        public TableMetadataBuilder withUseCounter(boolean useCounter)
+        {
+            return withUseCounter(ignore -> useCounter);
+        }
+
+        public TableMetadataBuilder withUseCounter(Gen<Boolean> useCounter)
+        {
+            this.useCounter = Objects.requireNonNull(useCounter);
+            return this;
+        }
+
+        public TableMetadataBuilder withTransactionalMode(Gen<TransactionalMode> transactionalMode)
+        {
+            this.transactionalMode = transactionalMode;
+            return this;
+        }
+
+        public TableMetadataBuilder withTransactionalMode(TransactionalMode transactionalMode)
+        {
+            return withTransactionalMode(SourceDSL.arbitrary().constant(transactionalMode));
+        }
 
         public TableMetadataBuilder withKnownMemtables()
         {
@@ -353,26 +381,37 @@ public final class CassandraGenerators
             TableParams.Builder params = TableParams.builder();
             if (memtableKeyGen != null)
                 params.memtable(MemtableParams.get(memtableKeyGen.generate(rnd)));
+            if (transactionalMode != null)
+                params.transactionalMode(transactionalMode.generate(rnd));
+            boolean isCounter = useCounter.generate(rnd);
             TableMetadata.Builder builder = TableMetadata.builder(ks, tableName, tableIdGen.generate(rnd))
                                                          .partitioner(partitioners().generate(rnd))
                                                          .kind(tableKindGen.generate(rnd))
-                                                         .isCounter(BOOLEAN_GEN.generate(rnd))
+                                                         .isCounter(isCounter)
                                                          .params(params.build());
 
             int numPartitionColumns = numPartitionColumnsGen.generate(rnd);
             int numClusteringColumns = numClusteringColumnsGen.generate(rnd);
-            int numRegularColumns = numRegularColumnsGen.generate(rnd);
-            int numStaticColumns = numStaticColumnsGen.generate(rnd);
 
             Set<String> createdColumnNames = new HashSet<>();
             for (int i = 0; i < numPartitionColumns; i++)
                 builder.addColumn(createColumnDefinition(ks, tableName, ColumnMetadata.Kind.PARTITION_KEY, createdColumnNames, partitionColTypeGen == null ? defaultTypeGen : partitionColTypeGen, rnd));
             for (int i = 0; i < numClusteringColumns; i++)
                 builder.addColumn(createColumnDefinition(ks, tableName, ColumnMetadata.Kind.CLUSTERING, createdColumnNames, clusteringColTypeGen == null ? defaultTypeGen : clusteringColTypeGen, rnd));
-            for (int i = 0; i < numStaticColumns; i++)
-                builder.addColumn(createColumnDefinition(ks, tableName, ColumnMetadata.Kind.STATIC, createdColumnNames, staticColTypeGen == null ? defaultTypeGen : staticColTypeGen, rnd));
-            for (int i = 0; i < numRegularColumns; i++)
-                builder.addColumn(createColumnDefinition(ks, tableName, ColumnMetadata.Kind.REGULAR, createdColumnNames, regularColTypeGen == null ? defaultTypeGen : regularColTypeGen, rnd));
+
+            if (isCounter)
+            {
+                builder.addColumn(createColumnDefinition(ks, tableName, ColumnMetadata.Kind.REGULAR, createdColumnNames, ignore -> CounterColumnType.instance, rnd));
+            }
+            else
+            {
+                int numRegularColumns = numRegularColumnsGen.generate(rnd);
+                int numStaticColumns = numStaticColumnsGen.generate(rnd);
+                for (int i = 0; i < numStaticColumns; i++)
+                    builder.addColumn(createColumnDefinition(ks, tableName, ColumnMetadata.Kind.STATIC, createdColumnNames, staticColTypeGen == null ? defaultTypeGen : staticColTypeGen, rnd));
+                for (int i = 0; i < numRegularColumns; i++)
+                    builder.addColumn(createColumnDefinition(ks, tableName, ColumnMetadata.Kind.REGULAR, createdColumnNames, regularColTypeGen == null ? defaultTypeGen : regularColTypeGen, rnd));
+            }
 
             return builder.build();
         }
