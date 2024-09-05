@@ -21,8 +21,10 @@ import java.lang.reflect.Modifier;
 import java.math.BigInteger;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Deque;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -30,6 +32,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -84,6 +87,7 @@ import org.apache.cassandra.schema.TableId;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.schema.TableParams;
 import org.apache.cassandra.service.consensus.TransactionalMode;
+import org.apache.cassandra.utils.AbstractTypeGenerators.TypeGenBuilder;
 import org.apache.cassandra.utils.AbstractTypeGenerators.ValueDomain;
 import org.quicktheories.core.Gen;
 import org.quicktheories.core.RandomnessSource;
@@ -93,6 +97,7 @@ import org.quicktheories.impl.Constraint;
 
 import static org.apache.cassandra.utils.AbstractTypeGenerators.allowReversed;
 import static org.apache.cassandra.utils.AbstractTypeGenerators.getTypeSupport;
+import static org.apache.cassandra.utils.AbstractTypeGenerators.withoutUnsafeEquality;
 import static org.apache.cassandra.utils.Generators.IDENTIFIER_GEN;
 import static org.apache.cassandra.utils.Generators.SMALL_TIME_SPAN_NANOS;
 import static org.apache.cassandra.utils.Generators.TIMESTAMP_NANOS;
@@ -178,6 +183,31 @@ public final class CassandraGenerators
         return matches;
     }
 
+    public static void visitUDTs(TableMetadata metadata, Consumer<UserType> fn)
+    {
+        Set<UserType> udts = CassandraGenerators.extractUDTs(metadata);
+        if (!udts.isEmpty())
+        {
+            Deque<UserType> pending = new ArrayDeque<>(udts);
+            Set<ByteBuffer> created = new HashSet<>();
+            while (!pending.isEmpty())
+            {
+                UserType next = pending.poll();
+                Set<UserType> subTypes = AbstractTypeGenerators.extractUDTs(next);
+                subTypes.remove(next); // it includes self
+                if (subTypes.isEmpty() || subTypes.stream().allMatch(t -> created.contains(t.name)))
+                {
+                    created.add(next.name);
+                    fn.accept(next);
+                }
+                else
+                {
+                    pending.add(next);
+                }
+            }
+        }
+    }
+
     public static TableMetadata createTableMetadata(String ks, RandomnessSource rnd)
     {
         return new TableMetadataBuilder().withKeyspaceName(ks).build(rnd);
@@ -192,11 +222,8 @@ public final class CassandraGenerators
     {
         private Gen<String> ksNameGen = CassandraGenerators.KEYSPACE_NAME_GEN;
         private Gen<String> tableNameGen = IDENTIFIER_GEN;
-        private Gen<AbstractType<?>> defaultTypeGen = AbstractTypeGenerators.builder()
-                                                                            .withDefaultSetKey(AbstractTypeGenerators.withoutUnsafeEquality())
-                                                                            .withMaxDepth(1)
-                                                                            .build();
-        private Gen<AbstractType<?>> partitionColTypeGen, clusteringColTypeGen, staticColTypeGen, regularColTypeGen;
+        private TypeGenBuilder defaultTypeGen = defaultTypeGen();
+        private TypeGenBuilder partitionColTypeGen, clusteringColTypeGen, staticColTypeGen, regularColTypeGen;
         private Gen<TableId> tableIdGen = TABLE_ID_GEN;
         private Gen<TableMetadata.Kind> tableKindGen = SourceDSL.arbitrary().constant(TableMetadata.Kind.REGULAR);
         private Gen<Integer> numPartitionColumnsGen = SourceDSL.integers().between(1, 2);
@@ -208,6 +235,15 @@ public final class CassandraGenerators
         @Nullable
         private Gen<TransactionalMode> transactionalMode = null;
         Gen<IPartitioner> partitionerGen = partitioners();
+
+        public static TypeGenBuilder defaultTypeGen()
+        {
+            return AbstractTypeGenerators.builder()
+                                         .withoutEmpty()
+                                         .withDefaultSetKey(withoutUnsafeEquality())
+                                         .withMaxDepth(1)
+                                         .withoutTypeKinds(AbstractTypeGenerators.TypeKind.COUNTER);
+        }
 
         public TableMetadataBuilder withPartitioner(Gen<IPartitioner> partitionerGen)
         {
@@ -335,38 +371,38 @@ public final class CassandraGenerators
             return this;
         }
 
-        public TableMetadataBuilder withDefaultTypeGen(Gen<AbstractType<?>> typeGen)
+        public TableMetadataBuilder withDefaultTypeGen(TypeGenBuilder typeGen)
         {
             this.defaultTypeGen = typeGen;
             return this;
         }
 
-        public TableMetadataBuilder withPrimaryColumnTypeGen(Gen<AbstractType<?>> typeGen)
+        public TableMetadataBuilder withPrimaryColumnTypeGen(TypeGenBuilder typeGen)
         {
             withPartitionColumnTypeGen(typeGen);
             withClusteringColumnTypeGen(typeGen);
             return this;
         }
 
-        public TableMetadataBuilder withPartitionColumnTypeGen(Gen<AbstractType<?>> typeGen)
+        public TableMetadataBuilder withPartitionColumnTypeGen(TypeGenBuilder typeGen)
         {
             this.partitionColTypeGen = typeGen;
             return this;
         }
 
-        public TableMetadataBuilder withClusteringColumnTypeGen(Gen<AbstractType<?>> typeGen)
+        public TableMetadataBuilder withClusteringColumnTypeGen(TypeGenBuilder typeGen)
         {
             this.clusteringColTypeGen = typeGen;
             return this;
         }
 
-        public TableMetadataBuilder withStaticColumnTypeGen(Gen<AbstractType<?>> typeGen)
+        public TableMetadataBuilder withStaticColumnTypeGen(TypeGenBuilder typeGen)
         {
             this.staticColTypeGen = typeGen;
             return this;
         }
 
-        public TableMetadataBuilder withRegularColumnTypeGen(Gen<AbstractType<?>> typeGen)
+        public TableMetadataBuilder withRegularColumnTypeGen(TypeGenBuilder typeGen)
         {
             this.regularColTypeGen = typeGen;
             return this;
@@ -385,9 +421,6 @@ public final class CassandraGenerators
 
         public TableMetadata build(RandomnessSource rnd)
         {
-            if (partitionColTypeGen == null && clusteringColTypeGen == null)
-                withPrimaryColumnTypeGen(Generators.filter(defaultTypeGen, t -> !AbstractTypeGenerators.UNSAFE_EQUALITY.contains(t.getClass())));
-
             String ks = ksNameGen.generate(rnd);
             String tableName = tableNameGen.generate(rnd);
             TableParams.Builder params = TableParams.builder();
@@ -406,23 +439,36 @@ public final class CassandraGenerators
             int numClusteringColumns = numClusteringColumnsGen.generate(rnd);
 
             Set<String> createdColumnNames = new HashSet<>();
-            for (int i = 0; i < numPartitionColumns; i++)
-                builder.addColumn(createColumnDefinition(ks, tableName, ColumnMetadata.Kind.PARTITION_KEY, createdColumnNames, partitionColTypeGen == null ? defaultTypeGen : partitionColTypeGen, rnd));
-            for (int i = 0; i < numClusteringColumns; i++)
-                builder.addColumn(createColumnDefinition(ks, tableName, ColumnMetadata.Kind.CLUSTERING, createdColumnNames, clusteringColTypeGen == null ? defaultTypeGen : clusteringColTypeGen, rnd));
+            AbstractTypeGenerators.overrideUDTKeyspace(ks);
+            try
+            {
+                Gen<AbstractType<?>> partitionColTypeGen = withoutUnsafeEquality(new TypeGenBuilder(this.partitionColTypeGen != null ? this.partitionColTypeGen : defaultTypeGen)).build();
+                Gen<AbstractType<?>> clusteringColTypeGen = withoutUnsafeEquality(new TypeGenBuilder(this.clusteringColTypeGen != null ? this.clusteringColTypeGen : defaultTypeGen)).build();
+                Gen<AbstractType<?>> staticColTypeGen = (this.staticColTypeGen != null ? this.staticColTypeGen : defaultTypeGen).build();
+                Gen<AbstractType<?>> regularColTypeGen = (this.regularColTypeGen != null ? this.regularColTypeGen : defaultTypeGen).build();
 
-            if (isCounter)
-            {
-                builder.addColumn(createColumnDefinition(ks, tableName, ColumnMetadata.Kind.REGULAR, createdColumnNames, ignore -> CounterColumnType.instance, rnd));
+                for (int i = 0; i < numPartitionColumns; i++)
+                    builder.addColumn(createColumnDefinition(ks, tableName, ColumnMetadata.Kind.PARTITION_KEY, createdColumnNames, partitionColTypeGen, rnd));
+                for (int i = 0; i < numClusteringColumns; i++)
+                    builder.addColumn(createColumnDefinition(ks, tableName, ColumnMetadata.Kind.CLUSTERING, createdColumnNames, clusteringColTypeGen, rnd));
+
+                if (isCounter)
+                {
+                    builder.addColumn(createColumnDefinition(ks, tableName, ColumnMetadata.Kind.REGULAR, createdColumnNames, ignore -> CounterColumnType.instance, rnd));
+                }
+                else
+                {
+                    int numRegularColumns = numRegularColumnsGen.generate(rnd);
+                    int numStaticColumns = numStaticColumnsGen.generate(rnd);
+                    for (int i = 0; i < numStaticColumns; i++)
+                        builder.addColumn(createColumnDefinition(ks, tableName, ColumnMetadata.Kind.STATIC, createdColumnNames, staticColTypeGen, rnd));
+                    for (int i = 0; i < numRegularColumns; i++)
+                        builder.addColumn(createColumnDefinition(ks, tableName, ColumnMetadata.Kind.REGULAR, createdColumnNames, regularColTypeGen, rnd));
+                }
             }
-            else
+            finally
             {
-                int numRegularColumns = numRegularColumnsGen.generate(rnd);
-                int numStaticColumns = numStaticColumnsGen.generate(rnd);
-                for (int i = 0; i < numStaticColumns; i++)
-                    builder.addColumn(createColumnDefinition(ks, tableName, ColumnMetadata.Kind.STATIC, createdColumnNames, staticColTypeGen == null ? defaultTypeGen : staticColTypeGen, rnd));
-                for (int i = 0; i < numRegularColumns; i++)
-                    builder.addColumn(createColumnDefinition(ks, tableName, ColumnMetadata.Kind.REGULAR, createdColumnNames, regularColTypeGen == null ? defaultTypeGen : regularColTypeGen, rnd));
+                AbstractTypeGenerators.clearUDTKeyspace();
             }
 
             return builder.build();

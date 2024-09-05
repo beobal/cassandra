@@ -244,17 +244,22 @@ public final class AbstractTypeGenerators
         return () -> PRIMITIVE_TYPE_DATA_GENS.put(type, original);
     }
 
-    public static TypeGenBuilder withoutUnsafeEquality()
+    public static TypeGenBuilder withoutUnsafeEquality(TypeGenBuilder builder)
     {
         // make sure to keep UNSAFE_EQUALITY in-sync
-        return AbstractTypeGenerators.builder()
-                                     .withoutEmpty()
-                                     .withoutPrimitive(DurationType.instance)
-                                     // decimal "normalizes" the data to compare, so primary columns "may" mutate the data, causing missmatches
-                                     // see CASSANDRA-18530
-                                     .withoutPrimitive(DecimalType.instance)
-                                     // counters are only for top level
-                                     .withoutTypeKinds(TypeKind.COUNTER);
+        return builder
+               .withoutEmpty()
+               .withoutPrimitive(DurationType.instance)
+               // decimal "normalizes" the data to compare, so primary columns "may" mutate the data, causing missmatches
+               // see CASSANDRA-18530
+               .withoutPrimitive(DecimalType.instance)
+               // counters are only for top level
+               .withoutTypeKinds(TypeKind.COUNTER);
+    }
+
+    public static TypeGenBuilder withoutUnsafeEquality()
+    {
+        return withoutUnsafeEquality(AbstractTypeGenerators.builder());
     }
 
     public interface Releaser extends AutoCloseable
@@ -720,6 +725,18 @@ public final class AbstractTypeGenerators
         };
     }
 
+    private static ThreadLocal<String> OVERRIDE_KEYSPACE = new ThreadLocal<>();
+
+    public static void overrideUDTKeyspace(String ks)
+    {
+        OVERRIDE_KEYSPACE.set(ks);
+    }
+
+    public static void clearUDTKeyspace()
+    {
+        OVERRIDE_KEYSPACE.remove();
+    }
+
     public static Gen<UserType> userTypeGen()
     {
         return userTypeGen(typeGen(2)); // lower the default depth since this is already a nested type
@@ -753,7 +770,9 @@ public final class AbstractTypeGenerators
             int numElements = sizeGen.generate(rnd);
             List<AbstractType<?>> fieldTypes = new ArrayList<>(numElements);
             LinkedHashSet<FieldIdentifier> fieldNames = new LinkedHashSet<>(numElements);
-            String ks = ksGen.generate(rnd);
+            String ks = OVERRIDE_KEYSPACE.get();
+            if (ks == null)
+                ks = ksGen.generate(rnd);
             String name = nameGen.generate(rnd);
             ByteBuffer nameBB = AsciiType.instance.decompose(name);
 

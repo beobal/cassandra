@@ -32,6 +32,7 @@ import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.KeyspaceParams;
 import org.apache.cassandra.schema.Keyspaces;
 import org.apache.cassandra.schema.TableMetadata;
+import org.apache.cassandra.schema.Types;
 import org.apache.cassandra.service.consensus.TransactionalMode;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
@@ -42,6 +43,7 @@ import org.apache.cassandra.tcm.sequences.InProgressSequences;
 import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializers;
 import org.apache.cassandra.tcm.transformations.DropAccordTableOperation.PrepareDropAccordTable;
 import org.apache.cassandra.tcm.transformations.DropAccordTableOperation.TableReference;
+import org.apache.cassandra.utils.CassandraGenerators;
 import org.apache.cassandra.utils.CassandraGenerators.TableMetadataBuilder;
 import org.apache.cassandra.utils.Generators;
 import org.assertj.core.api.Assertions;
@@ -69,7 +71,7 @@ public class DropAccordTableOperationTest
     @Test
     public void e2e()
     {
-        qt().withSeed(3448622136424705308L).check(rs -> {
+        qt().withSeed(-4932546330997850508L).check(rs -> {
             MockClusterMetadataService cms = new MockClusterMetadataService();
             TableMetadata metadata = TABLE_GEN.next(rs);
             addTable(cms, metadata);
@@ -87,9 +89,14 @@ public class DropAccordTableOperationTest
 
     private static void addTable(MockClusterMetadataService cms, TableMetadata table)
     {
+        class Ref { Types types;}
         // first mock out a keyspace
         ClusterMetadata prev = cms.metadata();
         KeyspaceMetadata schema = KeyspaceMetadata.create(table.keyspace, KeyspaceParams.simple(3));
+        Ref ref = new Ref();
+        ref.types = schema.types;
+        CassandraGenerators.visitUDTs(table, udt -> ref.types = ref.types.with(udt.unfreeze()));
+        schema = schema.withSwapped(ref.types);
         schema = schema.withSwapped(schema.tables.with(table));
         Keyspaces keyspaces = prev.schema.getKeyspaces().withAddedOrUpdated(schema);
         ClusterMetadata metadata = prev.transformer().with(new DistributedSchema(keyspaces)).build().metadata;
