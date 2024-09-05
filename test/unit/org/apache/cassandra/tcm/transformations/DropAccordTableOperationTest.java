@@ -71,19 +71,24 @@ public class DropAccordTableOperationTest
     @Test
     public void e2e()
     {
-        qt().withSeed(-4932546330997850508L).check(rs -> {
+        qt().check(rs -> {
             MockClusterMetadataService cms = new MockClusterMetadataService();
             TableMetadata metadata = TABLE_GEN.next(rs);
-            addTable(cms, metadata);
+            addTable(cms, metadata); // hack this table into the schema...
 
             TableReference table = TableReference.from(metadata);
 
             process(cms, new PrepareDropAccordTable(table));
+
+            // This is only here because "applyTo" is not touched without it...
+            for (KeyspaceMetadata ks : cms.metadata().schema.getKeyspaces())
+                cms.metadata().writePlacementAllSettled(ks);
+
             Assertions.assertThat(cms.metadata().inProgressSequences.isEmpty()).isFalse();
             InProgressSequences.finishInProgressSequences(table);
 
             // table is dropped
-//            Assertions.assertThat(cms.metadata().schema.getTableMetadata(metadata.id)).isNull();
+            Assertions.assertThat(cms.metadata().schema.getTableMetadata(metadata.id)).isNull();
         });
     }
 

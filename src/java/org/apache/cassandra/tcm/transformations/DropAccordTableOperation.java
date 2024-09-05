@@ -25,10 +25,12 @@ import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.cassandra.cql3.statements.schema.DropTableStatement;
 import org.apache.cassandra.db.TypeSizes;
 import org.apache.cassandra.exceptions.ExceptionCode;
 import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.cassandra.io.util.DataOutputPlus;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.TableId;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.tcm.ClusterMetadata;
@@ -54,8 +56,6 @@ import static org.apache.cassandra.tcm.sequences.SequenceState.error;
 public class DropAccordTableOperation extends MultiStepOperation<Epoch>
 {
     private static final Logger logger = LoggerFactory.getLogger(DropAccordTableOperation.class);
-
-    public static final Serializer SERIALIZER = new Serializer();
 
     public final Transformation.Kind next;
     public final TableReference table;
@@ -205,7 +205,7 @@ public class DropAccordTableOperation extends MultiStepOperation<Epoch>
     @Override
     public Transformation.Result applyTo(ClusterMetadata metadata)
     {
-        throw new UnsupportedOperationException("TODO");
+        return dropAccordTable.execute(metadata);
     }
 
     @Override
@@ -373,6 +373,11 @@ public class DropAccordTableOperation extends MultiStepOperation<Epoch>
         @Override
         public Result execute(ClusterMetadata prev)
         {
+            AlterSchema alter = new AlterSchema(new DropTableStatement(table.keyspace, table.name, false), Schema.instance);
+            Result result = alter.execute(prev);
+            if (result.isRejected())
+                return result;
+            prev = result.success().metadata;
             ClusterMetadata.Transformer proposed = prev.transformer()
                                                        .with(prev.inProgressSequences.without(table));
             return Transformation.success(proposed, LockedRanges.AffectedRanges.EMPTY);
