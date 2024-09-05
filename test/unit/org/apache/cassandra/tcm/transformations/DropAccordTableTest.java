@@ -41,8 +41,8 @@ import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.membership.NodeVersion;
 import org.apache.cassandra.tcm.sequences.InProgressSequences;
 import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializers;
-import org.apache.cassandra.tcm.transformations.DropAccordTableOperation.PrepareDropAccordTable;
-import org.apache.cassandra.tcm.transformations.DropAccordTableOperation.TableReference;
+import org.apache.cassandra.tcm.transformations.DropAccordTable.PrepareDropAccordTable;
+import org.apache.cassandra.tcm.transformations.DropAccordTable.TableReference;
 import org.apache.cassandra.utils.CassandraGenerators;
 import org.apache.cassandra.utils.CassandraGenerators.TableMetadataBuilder;
 import org.apache.cassandra.utils.Generators;
@@ -51,7 +51,7 @@ import org.quicktheories.generators.SourceDSL;
 
 import static accord.utils.Property.qt;
 
-public class DropAccordTableOperationTest
+public class DropAccordTableTest
 {
     static
     {

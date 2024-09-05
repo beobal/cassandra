@@ -54,36 +54,36 @@ import static org.apache.cassandra.tcm.Transformation.Kind.DROP_ACCORD_TABLE;
 import static org.apache.cassandra.tcm.sequences.SequenceState.continuable;
 import static org.apache.cassandra.tcm.sequences.SequenceState.error;
 
-public class DropAccordTableOperation extends MultiStepOperation<Epoch>
+public class DropAccordTable extends MultiStepOperation<Epoch>
 {
-    private static final Logger logger = LoggerFactory.getLogger(DropAccordTableOperation.class);
+    private static final Logger logger = LoggerFactory.getLogger(DropAccordTable.class);
 
     public final Transformation.Kind next;
     public final TableReference table;
     public final AwaitAccordTableComplete awaitAccordTableComplete;
-    public final DropAccordTable dropAccordTable;
+    public final DropTable dropTable;
 
-    protected DropAccordTableOperation(TableReference table, Epoch latestModification)
+    protected DropAccordTable(TableReference table, Epoch latestModification)
     {
         this(table, AWAIT_ACCORD_TABLE_COMPLETE, latestModification);
     }
 
-    public DropAccordTableOperation(DropAccordTableOperation current, Epoch latestModification)
+    public DropAccordTable(DropAccordTable current, Epoch latestModification)
     {
         super(current.idx + 1, latestModification);
         this.next = indexToNext(current.idx + 1);
         table = current.table;
         awaitAccordTableComplete = current.awaitAccordTableComplete;
-        dropAccordTable = current.dropAccordTable;
+        dropTable = current.dropTable;
     }
 
-    private DropAccordTableOperation(TableReference table, Transformation.Kind next, Epoch lastModified)
+    private DropAccordTable(TableReference table, Transformation.Kind next, Epoch lastModified)
     {
         super(nextToIndex(next), lastModified);
         this.next = next;
         this.table = table;
         awaitAccordTableComplete = new AwaitAccordTableComplete(table);
-        dropAccordTable = new DropAccordTable(table);
+        dropTable = new DropTable(table);
     }
 
     private static int nextToIndex(Transformation.Kind next)
@@ -117,7 +117,7 @@ public class DropAccordTableOperation extends MultiStepOperation<Epoch>
     {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        DropAccordTableOperation that = (DropAccordTableOperation) o;
+        DropAccordTable that = (DropAccordTable) o;
         return latestModification.equals(that.latestModification)
                && next == that.next
                && table.equals(that.table);
@@ -172,7 +172,7 @@ public class DropAccordTableOperation extends MultiStepOperation<Epoch>
             case DROP_ACCORD_TABLE:
                 try
                 {
-                    return dropAccordTable.execute(ClusterMetadataService.instance());
+                    return dropTable.execute(ClusterMetadataService.instance());
                 }
                 catch (Throwable t)
                 {
@@ -188,13 +188,13 @@ public class DropAccordTableOperation extends MultiStepOperation<Epoch>
     @Override
     public Transformation.Result applyTo(ClusterMetadata metadata)
     {
-        return dropAccordTable.execute(metadata);
+        return dropTable.execute(metadata);
     }
 
     @Override
-    public DropAccordTableOperation advance(Epoch epoch)
+    public DropAccordTable advance(Epoch epoch)
     {
-        return new DropAccordTableOperation(this, epoch);
+        return new DropAccordTable(this, epoch);
     }
 
     @Override
@@ -296,7 +296,7 @@ public class DropAccordTableOperation extends MultiStepOperation<Epoch>
 
             ClusterMetadata.Transformer proposed = prev.transformer()
                                                    .with(new DistributedSchema(prev.schema.getKeyspaces().withAddedOrUpdated(ks)))
-                                                   .with(prev.inProgressSequences.with(table, new DropAccordTableOperation(table, prev.nextEpoch())));
+                                                   .with(prev.inProgressSequences.with(table, new DropAccordTable(table, prev.nextEpoch())));
             return Transformation.success(proposed, LockedRanges.AffectedRanges.EMPTY);
         }
     }
@@ -346,10 +346,10 @@ public class DropAccordTableOperation extends MultiStepOperation<Epoch>
         }
     }
 
-    public static class DropAccordTable extends BaseStep
+    public static class DropTable extends BaseStep
     {
 
-        public DropAccordTable(TableReference table)
+        public DropTable(TableReference table)
         {
             super(table);
         }
@@ -357,7 +357,7 @@ public class DropAccordTableOperation extends MultiStepOperation<Epoch>
         @Override
         public Result execute(ClusterMetadata prev)
         {
-            AlterSchema alter = new AlterSchema(new DropTableStatement(table.keyspace, table.name, false), Schema.instance);
+            AlterSchema alter = new AlterSchema(new DropTableStatement(table.keyspace, table.name, false, true), Schema.instance);
             Result result = alter.execute(prev);
             if (result.isRejected())
                 return result;
@@ -368,14 +368,14 @@ public class DropAccordTableOperation extends MultiStepOperation<Epoch>
         }
     }
 
-    public static class Serializer implements AsymmetricMetadataSerializer<MultiStepOperation<?>, DropAccordTableOperation>
+    public static class Serializer implements AsymmetricMetadataSerializer<MultiStepOperation<?>, DropAccordTable>
     {
         public static final Serializer instance = new Serializer();
 
         @Override
         public void serialize(MultiStepOperation<?> t, DataOutputPlus out, Version version) throws IOException
         {
-            DropAccordTableOperation plan = (DropAccordTableOperation) t;
+            DropAccordTable plan = (DropAccordTable) t;
 
             Epoch.serializer.serialize(plan.latestModification, out, version);
             VIntCoding.writeUnsignedVInt32(plan.next.ordinal(), out);
@@ -383,18 +383,18 @@ public class DropAccordTableOperation extends MultiStepOperation<Epoch>
         }
 
         @Override
-        public DropAccordTableOperation deserialize(DataInputPlus in, Version version) throws IOException
+        public DropAccordTable deserialize(DataInputPlus in, Version version) throws IOException
         {
             Epoch lastModified = Epoch.serializer.deserialize(in, version);
             Transformation.Kind next = Transformation.Kind.values()[VIntCoding.readUnsignedVInt32(in)];
             TableReference table = TableReferenceSerializer.instance.deserialize(in, version);
-            return new DropAccordTableOperation(table, next, lastModified);
+            return new DropAccordTable(table, next, lastModified);
         }
 
         @Override
         public long serializedSize(MultiStepOperation<?> t, Version version)
         {
-            DropAccordTableOperation plan = (DropAccordTableOperation) t;
+            DropAccordTable plan = (DropAccordTable) t;
             long size = 0;
             size += Epoch.serializer.serializedSize(plan.latestModification, version);
             size += VIntCoding.computeVIntSize(plan.kind().ordinal());

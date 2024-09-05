@@ -321,7 +321,7 @@ public class ClusterMetadata
         while (iter.hasNext())
         {
             Transformation.Result result = iter.next().applyTo(metadata);
-            assert result.isSuccess();
+            assert result.isSuccess() : result.toString();
             metadata = result.success().metadata;
         }
         return metadata.placements.get(ksm.params.replication);
