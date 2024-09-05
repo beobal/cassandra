@@ -363,6 +363,7 @@ public class DropAccordTable extends MultiStepOperation<Epoch>
                 return result;
             prev = result.success().metadata;
             ClusterMetadata.Transformer proposed = prev.transformer()
+                                                       .add(result.success().affectedMetadata)
                                                        .with(prev.inProgressSequences.without(table));
             return Transformation.success(proposed, LockedRanges.AffectedRanges.EMPTY);
         }

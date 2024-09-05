@@ -436,6 +436,12 @@ public class ClusterMetadata
             return epoch;
         }
 
+        public Transformer add(Set<MetadataKey> affectedMetadata)
+        {
+            modifiedKeys.addAll(affectedMetadata);
+            return this;
+        }
+
         public Transformer with(DistributedSchema schema)
         {
             this.schema = schema;
@@ -664,12 +670,14 @@ public class ClusterMetadata
 
             if (schema != base.schema)
             {
+                assert !schema.equals(base.schema);
                 modifiedKeys.add(MetadataKeys.SCHEMA);
                 schema = schema.withLastModified(epoch);
             }
 
             if (directory != base.directory)
             {
+                assert !directory.equals(base.directory);
                 modifiedKeys.add(MetadataKeys.NODE_DIRECTORY);
                 directory = directory.withLastModified(epoch);
 
@@ -679,12 +687,14 @@ public class ClusterMetadata
 
             if (tokenMap != base.tokenMap)
             {
+                assert !tokenMap.equals(base.tokenMap);
                 modifiedKeys.add(MetadataKeys.TOKEN_MAP);
                 tokenMap = tokenMap.withLastModified(epoch);
             }
 
             if (placements != base.placements)
             {
+                assert !placements.equals(base.placements);
                 modifiedKeys.add(MetadataKeys.DATA_PLACEMENTS);
                 // sort all endpoint lists to preserve primary replica
                 if (CassandraRelevantProperties.TCM_SORT_REPLICA_GROUPS.getBoolean())
@@ -697,30 +707,35 @@ public class ClusterMetadata
 
             if (accordFastPath != base.accordFastPath)
             {
+                assert !accordFastPath.equals(base.accordFastPath);
                 modifiedKeys.add(MetadataKeys.ACCORD_FAST_PATH);
                 accordFastPath = accordFastPath.withLastModified(epoch);
             }
             
             if (accordStaleReplicas != base.accordStaleReplicas)
             {
+                assert !accordStaleReplicas.equals(base.accordStaleReplicas);
                 modifiedKeys.add(MetadataKeys.ACCORD_STALE_REPLICAS);
                 accordStaleReplicas = accordStaleReplicas.withLastModified(epoch);
             }
 
             if (lockedRanges != base.lockedRanges)
             {
+                assert !lockedRanges.equals(base.lockedRanges);
                 modifiedKeys.add(MetadataKeys.LOCKED_RANGES);
                 lockedRanges = lockedRanges.withLastModified(epoch);
             }
 
             if (inProgressSequences != base.inProgressSequences)
             {
+                assert !inProgressSequences.equals(base.inProgressSequences);
                 modifiedKeys.add(MetadataKeys.IN_PROGRESS_SEQUENCES);
                 inProgressSequences = inProgressSequences.withLastModified(epoch);
             }
 
             if (consensusMigrationState != base.consensusMigrationState)
             {
+                assert !consensusMigrationState.equals(base.consensusMigrationState);
                 modifiedKeys.add(MetadataKeys.CONSENSUS_MIGRATION_STATE);
                 consensusMigrationState = consensusMigrationState.withLastModified(epoch);
             }
@@ -742,7 +757,7 @@ public class ClusterMetadata
                                                        inProgressSequences,
                                                        consensusMigrationState,
                                                        extensions,
-                    accordStaleReplicas),
+                                                       accordStaleReplicas),
                                    ImmutableSet.copyOf(modifiedKeys));
         }
 

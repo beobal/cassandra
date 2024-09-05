@@ -38,6 +38,7 @@ public enum Version
      *  - Serialize MemtableParams when serializing TableParams
      *  - Added AccordFastPath
      *  - Added AccordStaleReplicas
+     *  - TableParam now has pendingDrop (accord table drop is multistep)
      */
     V2(2),
 
