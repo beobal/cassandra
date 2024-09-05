@@ -145,6 +145,8 @@ public class DropAccordTableTest
         @Override
         public void setMetadata(ClusterMetadata metadata)
         {
+            if (!metadata.epoch.equals(metadata().epoch.nextEpoch()))
+                throw new AssertionError("Epochs were not sequential: expected " + metadata().epoch.nextEpoch() + " but given " + metadata.epoch);
             try
             {
                 AsymmetricMetadataSerializers.testSerde(output, ClusterMetadata.serializer, metadata, NodeVersion.CURRENT_METADATA_VERSION);

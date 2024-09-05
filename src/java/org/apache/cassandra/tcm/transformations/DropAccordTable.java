@@ -380,7 +380,7 @@ public class DropAccordTable extends MultiStepOperation<Epoch>
             Result result = alter.execute(prev);
             if (result.isRejected())
                 return result;
-            prev = result.success().metadata;
+            prev = result.success().metadata.forceEpoch(prev.epoch);
             ClusterMetadata.Transformer proposed = prev.transformer()
                                                        .add(result.success().affectedMetadata)
                                                        .with(prev.inProgressSequences.without(table));
