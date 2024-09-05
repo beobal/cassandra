@@ -59,20 +59,20 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>, 
         this.state = state;
     }
 
-    public static void finishInProgressSequences(MultiStepOperation.SequenceKey sequenceKey)
+    public static ClusterMetadata finishInProgressSequences(MultiStepOperation.SequenceKey sequenceKey)
     {
         ClusterMetadata metadata = ClusterMetadata.current();
         while (true)
         {
             MultiStepOperation<?> sequence = metadata.inProgressSequences.get(sequenceKey);
             if (sequence == null)
-                break;
+                return metadata;
             if (isLeave(sequence))
                 StorageService.instance.maybeInitializeServices();
             if (resume(sequence))
                 metadata = ClusterMetadata.current();
             else
-                return;
+                return metadata;
         }
     }
 

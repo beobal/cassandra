@@ -27,6 +27,10 @@ import org.apache.cassandra.schema.*;
 import org.apache.cassandra.schema.Keyspaces.KeyspacesDiff;
 import org.apache.cassandra.service.ClientState;
 import org.apache.cassandra.tcm.ClusterMetadata;
+import org.apache.cassandra.tcm.ClusterMetadataService;
+import org.apache.cassandra.tcm.sequences.InProgressSequences;
+import org.apache.cassandra.tcm.transformations.DropAccordTableOperation.PrepareDropAccordTable;
+import org.apache.cassandra.tcm.transformations.DropAccordTableOperation.TableReference;
 import org.apache.cassandra.transport.Event.SchemaChange;
 import org.apache.cassandra.transport.Event.SchemaChange.Change;
 import org.apache.cassandra.transport.Event.SchemaChange.Target;
@@ -51,14 +55,22 @@ public final class DropTableStatement extends AlterSchemaStatement
     @Override
     protected ClusterMetadata commit(ClusterMetadata metadata)
     {
-        TableMetadata table = metadata.schema.getKeyspaces().getNullable(keyspaceName).getTableNullable(tableName);
-        if (!table.isAccordEnabled())
+        KeyspaceMetadata keyspace = metadata.schema.getKeyspaces().getNullable(keyspaceName);
+        TableMetadata table = null == keyspace
+                              ? null
+                              : keyspace.getTableOrViewNullable(tableName);
+        if (table == null // this can happen when ifExists=true... since its already been validated can skip
+            || !table.isAccordEnabled())
             return super.commit(metadata);
+
         // Multi-Step Operation
         // 1) mark the table as pending delete
         // 2) await for Accord to finish transactions
         // 3) drop table
-        return null;
+        TableReference ref = TableReference.from(table);
+        PrepareDropAccordTable prepare = new PrepareDropAccordTable(ref);
+        ClusterMetadataService.instance().commit(prepare);
+        return InProgressSequences.finishInProgressSequences(ref);
     }
 
     public Keyspaces apply(ClusterMetadata metadata)

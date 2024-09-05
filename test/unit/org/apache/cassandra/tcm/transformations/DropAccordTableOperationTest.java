@@ -86,6 +86,7 @@ public class DropAccordTableOperationTest
 
             Assertions.assertThat(cms.metadata().inProgressSequences.isEmpty()).isFalse();
             InProgressSequences.finishInProgressSequences(table);
+            Assertions.assertThat(cms.metadata().inProgressSequences.isEmpty()).isTrue();
 
             // table is dropped
             Assertions.assertThat(cms.metadata().schema.getTableMetadata(metadata.id)).isNull();
