@@ -23,8 +23,13 @@ import java.io.IOException;
 import org.junit.Test;
 
 import org.apache.cassandra.distributed.Cluster;
+import org.apache.cassandra.distributed.api.ConsistencyLevel;
 import org.apache.cassandra.distributed.api.Feature;
+import org.apache.cassandra.distributed.api.ICoordinator;
 import org.apache.cassandra.distributed.test.TestBaseImpl;
+import org.apache.cassandra.net.Verb;
+
+import static org.apache.cassandra.service.accord.AccordTestUtils.wrapInTxn;
 
 public class AccordDropTableTest extends TestBaseImpl
 {
@@ -36,15 +41,70 @@ public class AccordDropTableTest extends TestBaseImpl
                                       .withConfig(c -> c.with(Feature.values()))
                                       .start())
         {
-            init(cluster);
             fixDistributedSchemas(cluster);
+            init(cluster);
 
-            for (int i = 0; i < 100; i++)
+            int examples = 10;
+            int steps = 100;
+            for (int i = 0; i < examples; i++)
             {
-                createTable(cluster);
-//                for (int j = 0; j < 100; j++)
-//                    doTxn(cluster, j);
-                dropTable(cluster);
+                try
+                {
+                    addChaos(cluster, i);
+                    createTable(cluster);
+                    for (int j = 0; j < steps; j++)
+                        doTxn(cluster, j);
+                    dropTable(cluster);
+                }
+                catch (Throwable t)
+                {
+                    throw new AssertionError("Error at example " + i, t);
+                }
+            }
+        }
+    }
+
+    private static void addChaos(Cluster cluster, int example)
+    {
+        cluster.filters().reset();
+        cluster.filters().verbs(Verb.ACCORD_APPLY_REQ.id).from(1).to(3).drop();
+//        cluster.filters().verbs(Verb.ACCORD_APPLY_REQ.id).from(2).to(1).drop();
+//        cluster.filters().verbs(Verb.ACCORD_APPLY_REQ.id).from(3).to(2).drop();
+    }
+
+    private static void doTxn(Cluster cluster, int step)
+    {
+        int stepId = step % 3;
+        int partitionId = step % 10;
+        ICoordinator coordinator = cluster.coordinator(stepId + 1);
+        switch (stepId)
+        {
+            case 0: // insert
+                retry(3, () -> coordinator.executeWithResult(wrapInTxn(withKeyspace("INSERT INTO %s.tbl(pk, v) VALUES (?, ?);")), ConsistencyLevel.ANY, partitionId, step));
+                break;
+            case 1: // insert + read
+                retry(3, () -> coordinator.executeWithResult(wrapInTxn(withKeyspace("UPDATE %s.tbl SET v+=1 WHERE pk=?;")), ConsistencyLevel.ANY, partitionId));
+                break;
+            case 2: // read
+                retry(3, () -> coordinator.executeWithResult(wrapInTxn(withKeyspace("SELECT * FROM %s.tbl WHERE pk=?")), ConsistencyLevel.ANY, partitionId));
+                break;
+            default:
+                throw new UnsupportedOperationException();
+        }
+    }
+
+    private static void retry(int maxAttempts, Runnable fn)
+    {
+        for (int i = 0; i < maxAttempts; i++)
+        {
+            try
+            {
+                fn.run();
+            }
+            catch (Throwable t)
+            {
+                if (i == (maxAttempts - 1))
+                    throw t;
             }
         }
     }
