@@ -21,6 +21,7 @@ package org.apache.cassandra.tcm.transformations;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
+import java.util.function.Function;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -262,19 +263,62 @@ public class DropAccordTable extends MultiStepOperation<Epoch>
         }
     }
 
-    public static class PrepareDropAccordTable implements Transformation
+    public interface Step
+    {
+        SequenceState execute(ClusterMetadataService cms) throws Exception;
+    }
+
+    public static abstract class BaseStep implements Step, Transformation
     {
         public final TableReference table;
 
-        public PrepareDropAccordTable(TableReference table)
+        public BaseStep(TableReference table)
         {
             this.table = table;
         }
 
         @Override
+        public SequenceState execute(ClusterMetadataService cms) throws Exception
+        {
+            cms.commit(this);
+            return continuable();
+        }
+
+        @Override
+        public Result execute(ClusterMetadata prev)
+        {
+            ClusterMetadata.Transformer proposed = prev.transformer()
+                                                       .with(prev.inProgressSequences.with(table, plan -> plan.advance(prev.nextEpoch())));
+            return Transformation.success(proposed, LockedRanges.AffectedRanges.EMPTY);
+        }
+
+        @Override
+        public boolean equals(Object o)
+        {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            BaseStep that = (BaseStep) o;
+            return table.equals(that.table);
+        }
+
+        @Override
+        public int hashCode()
+        {
+            return Objects.hash(table);
+        }
+    }
+
+    public static class PrepareDropAccordTable extends BaseStep
+    {
+        public PrepareDropAccordTable(TableReference table)
+        {
+            super(table);
+        }
+
+        @Override
         public Kind kind()
         {
-            return null;
+            return Kind.PREPARE_DROP_ACCORD_TABLE;
         }
 
         @Override
@@ -295,54 +339,23 @@ public class DropAccordTable extends MultiStepOperation<Epoch>
             ks = ks.withSwapped(ks.tables.withSwapped(metadata));
 
             ClusterMetadata.Transformer proposed = prev.transformer()
-                                                   .with(new DistributedSchema(prev.schema.getKeyspaces().withAddedOrUpdated(ks)))
-                                                   .with(prev.inProgressSequences.with(table, new DropAccordTable(table, prev.nextEpoch())));
-            return Transformation.success(proposed, LockedRanges.AffectedRanges.EMPTY);
-        }
-    }
-
-    public interface Step
-    {
-        SequenceState execute(ClusterMetadataService cms) throws Exception;
-    }
-
-    public static class BaseStep implements Step, Transformation
-    {
-        public final TableReference table;
-
-        public BaseStep(TableReference table)
-        {
-            this.table = table;
-        }
-
-        @Override
-        public SequenceState execute(ClusterMetadataService cms) throws Exception
-        {
-            cms.commit(this);
-            return continuable();
-        }
-
-        @Override
-        public Kind kind()
-        {
-            throw new UnsupportedOperationException("TODO");
-        }
-
-        @Override
-        public Result execute(ClusterMetadata prev)
-        {
-            ClusterMetadata.Transformer proposed = prev.transformer()
-                                                       .with(prev.inProgressSequences.with(table, plan -> plan.advance(prev.nextEpoch())));
+                                                       .with(new DistributedSchema(prev.schema.getKeyspaces().withAddedOrUpdated(ks)))
+                                                       .with(prev.inProgressSequences.with(table, new DropAccordTable(table, prev.nextEpoch())));
             return Transformation.success(proposed, LockedRanges.AffectedRanges.EMPTY);
         }
     }
 
     public static class AwaitAccordTableComplete extends BaseStep
     {
-
         public AwaitAccordTableComplete(TableReference table)
         {
             super(table);
+        }
+
+        @Override
+        public Kind kind()
+        {
+            return AWAIT_ACCORD_TABLE_COMPLETE;
         }
     }
 
@@ -352,6 +365,12 @@ public class DropAccordTable extends MultiStepOperation<Epoch>
         public DropTable(TableReference table)
         {
             super(table);
+        }
+
+        @Override
+        public Kind kind()
+        {
+            return DROP_ACCORD_TABLE;
         }
 
         @Override
@@ -368,6 +387,36 @@ public class DropAccordTable extends MultiStepOperation<Epoch>
             return Transformation.success(proposed, LockedRanges.AffectedRanges.EMPTY);
         }
     }
+
+    private static <T extends BaseStep> AsymmetricMetadataSerializer<Transformation, T> createSerializer(Function<TableReference, T> fn)
+    {
+        return new AsymmetricMetadataSerializer<>()
+        {
+            @Override
+            public void serialize(Transformation t, DataOutputPlus out, Version version) throws IOException
+            {
+                BaseStep step = (BaseStep) t;
+                TableReferenceSerializer.instance.serialize(step.table, out, version);
+            }
+
+            @Override
+            public T deserialize(DataInputPlus in, Version version) throws IOException
+            {
+                return fn.apply(TableReferenceSerializer.instance.deserialize(in, version));
+            }
+
+            @Override
+            public long serializedSize(Transformation t, Version version)
+            {
+                BaseStep step = (BaseStep) t;
+                return TableReferenceSerializer.instance.serializedSize(step.table, version);
+            }
+        };
+    }
+
+    public static final AsymmetricMetadataSerializer<Transformation, PrepareDropAccordTable> PREPARE_DROP_ACCORD_TABLES_SERIALIZER = createSerializer(PrepareDropAccordTable::new);
+    public static final AsymmetricMetadataSerializer<Transformation, AwaitAccordTableComplete> AWAIT_ACCORD_TABLE_COMPLETE_SERIALIZER = createSerializer(AwaitAccordTableComplete::new);
+    public static final AsymmetricMetadataSerializer<Transformation, DropTable> DROP_TABLE_SERIALIZER = createSerializer(DropTable::new);
 
     public static class Serializer implements AsymmetricMetadataSerializer<MultiStepOperation<?>, DropAccordTable>
     {

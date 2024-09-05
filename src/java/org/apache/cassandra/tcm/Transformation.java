@@ -238,8 +238,9 @@ public interface Transformation
         MAYBE_FINISH_CONSENSUS_MIGRATION_FOR_TABLE_AND_RANGE(37, () -> MaybeFinishConsensusMigrationForTableAndRange.serializer),
         ACCORD_MARK_STALE(38, () -> AccordMarkStale.serializer),
         ACCORD_MARK_REJOINING(39, () -> AccordMarkRejoining.serializer),
-        AWAIT_ACCORD_TABLE_COMPLETE(40, () -> null),
-        DROP_ACCORD_TABLE(41, () -> null),
+        PREPARE_DROP_ACCORD_TABLE(40, () -> DropAccordTable.PREPARE_DROP_ACCORD_TABLES_SERIALIZER),
+        AWAIT_ACCORD_TABLE_COMPLETE(41, () -> DropAccordTable.AWAIT_ACCORD_TABLE_COMPLETE_SERIALIZER),
+        DROP_ACCORD_TABLE(42, () -> DropAccordTable.DROP_TABLE_SERIALIZER),
         ;
 
         private final Supplier<AsymmetricMetadataSerializer<Transformation, ? extends Transformation>> serializer;

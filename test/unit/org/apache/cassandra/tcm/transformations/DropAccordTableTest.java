@@ -128,6 +128,21 @@ public class DropAccordTableTest
         }
 
         @Override
+        public <T1> T1 commit(Transformation transform, CommitSuccessHandler<T1> onSuccess, CommitFailureHandler<T1> onFailure)
+        {
+            try
+            {
+                AsymmetricMetadataSerializers.testSerde(output, transform.kind().serializer(), transform, NodeVersion.CURRENT_METADATA_VERSION);
+            }
+            catch (IOException e)
+            {
+                throw new AssertionError(transform.toString(), e);
+            }
+
+            return super.commit(transform, onSuccess, onFailure);
+        }
+
+        @Override
         public void setMetadata(ClusterMetadata metadata)
         {
             try
