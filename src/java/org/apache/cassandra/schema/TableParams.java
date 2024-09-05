@@ -74,7 +74,8 @@ public final class TableParams
         READ_REPAIR,
         FAST_PATH,
         TRANSACTIONAL_MODE,
-        TRANSACTIONAL_MIGRATION_FROM;
+        TRANSACTIONAL_MIGRATION_FROM,
+        PENDING_DROP;
 
         @Override
         public String toString()
@@ -105,6 +106,7 @@ public final class TableParams
     public final FastPathStrategy fastPath;
     public final TransactionalMode transactionalMode;
     public final TransactionalMigrationFromMode transactionalMigrationFrom;
+    public final boolean pendingDrop;
 
     private TableParams(Builder builder)
     {
@@ -132,6 +134,7 @@ public final class TableParams
         fastPath = builder.fastPath;
         transactionalMode = builder.transactionalMode != null ? builder.transactionalMode : TransactionalMode.off;
         transactionalMigrationFrom = builder.transactionalMigrationFrom;
+        pendingDrop = builder.pendingDrop;
     }
 
     public static Builder builder()
@@ -162,7 +165,8 @@ public final class TableParams
                             .readRepair(params.readRepair)
                             .fastPath(params.fastPath)
                             .transactionalMode(params.transactionalMode)
-                            .transactionalMigrationFrom(params.transactionalMigrationFrom);
+                            .transactionalMigrationFrom(params.transactionalMigrationFrom)
+                            .pendingDrop(params.pendingDrop);
     }
 
     public Builder unbuild()
@@ -256,7 +260,8 @@ public final class TableParams
             && readRepair == p.readRepair
             && fastPath.equals(fastPath)
             && transactionalMode == p.transactionalMode
-            && transactionalMigrationFrom == p.transactionalMigrationFrom;
+            && transactionalMigrationFrom == p.transactionalMigrationFrom
+            && pendingDrop == p.pendingDrop;
     }
 
     @Override
@@ -283,7 +288,8 @@ public final class TableParams
                                 readRepair,
                                 fastPath,
                                 transactionalMode,
-                                transactionalMigrationFrom);
+                                transactionalMigrationFrom,
+                                pendingDrop);
     }
 
     @Override
@@ -313,6 +319,7 @@ public final class TableParams
                           .add(Option.FAST_PATH.toString(), fastPath)
                           .add(Option.TRANSACTIONAL_MODE.toString(), transactionalMode)
                           .add(Option.TRANSACTIONAL_MIGRATION_FROM.toString(), transactionalMigrationFrom)
+                          .add(PENDING_DROP.name(), pendingDrop)
                           .toString();
     }
 
@@ -400,6 +407,7 @@ public final class TableParams
         private FastPathStrategy fastPath = FastPathStrategy.inheritKeyspace();
         private TransactionalMode transactionalMode = TransactionalMode.off;
         public TransactionalMigrationFromMode transactionalMigrationFrom = TransactionalMigrationFromMode.none;
+        public boolean pendingDrop = false;
 
         public Builder()
         {
@@ -541,6 +549,12 @@ public final class TableParams
             extensions = ImmutableMap.copyOf(val);
             return this;
         }
+
+        public Builder pendingDrop(boolean pendingDrop)
+        {
+            this.pendingDrop = pendingDrop;
+            return this;
+        }
     }
 
     public static class Serializer implements MetadataSerializer<TableParams>
@@ -568,8 +582,12 @@ public final class TableParams
             serializeMapBB(t.extensions, out);
             out.writeBoolean(t.cdc);
             out.writeUTF(t.readRepair.name());
-            out.writeInt(t.transactionalMode.ordinal());
-            out.writeInt(t.transactionalMigrationFrom.ordinal());
+            if (version.isAtLeast(Version.V2))
+            {
+                out.writeInt(t.transactionalMode.ordinal());
+                out.writeInt(t.transactionalMigrationFrom.ordinal());
+                out.writeBoolean(t.pendingDrop);
+            }
         }
 
         public TableParams deserialize(DataInputPlus in, Version version) throws IOException
@@ -592,15 +610,19 @@ public final class TableParams
                    .compression(CompressionParams.fromMap(deserializeMap(in)))
                    .extensions(deserializeMapBB(in))
                    .cdc(in.readBoolean())
-                   .readRepair(ReadRepairStrategy.fromString(in.readUTF()))
-                   .transactionalMode(TransactionalMode.fromOrdinal(in.readInt()))
-                   .transactionalMigrationFrom(TransactionalMigrationFromMode.fromOrdinal(in.readInt()));
+                   .readRepair(ReadRepairStrategy.fromString(in.readUTF()));
+            if (version.isAtLeast(Version.V2))
+            {
+                builder.transactionalMode(TransactionalMode.fromOrdinal(in.readInt()))
+                       .transactionalMigrationFrom(TransactionalMigrationFromMode.fromOrdinal(in.readInt()))
+                       .pendingDrop(in.readBoolean());
+            }
             return builder.build();
         }
 
         public long serializedSize(TableParams t, Version version)
         {
-            return sizeof(t.comment) +
+            long size = sizeof(t.comment) +
                    sizeof(t.bloomFilterFpChance) +
                    sizeof(t.crcCheckChance) +
                    sizeof(t.gcGraceSeconds) +
@@ -617,9 +639,14 @@ public final class TableParams
                    serializedSizeMap(t.compression.asMap()) +
                    serializedSizeMapBB(t.extensions) +
                    sizeof(t.cdc) +
-                   sizeof(t.readRepair.name()) +
-                   sizeof(t.transactionalMode.ordinal()) +
-                   sizeof(t.transactionalMigrationFrom.ordinal());
+                   sizeof(t.readRepair.name());
+            if (version.isAtLeast(Version.V2))
+            {
+                size += sizeof(t.transactionalMode.ordinal()) +
+                        sizeof(t.transactionalMigrationFrom.ordinal()) +
+                        sizeof(t.pendingDrop);
+            }
+            return size;
         }
 
         private void serializeMap(Map<String, String> map, DataOutputPlus out) throws IOException
