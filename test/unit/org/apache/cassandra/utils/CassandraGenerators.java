@@ -207,6 +207,18 @@ public final class CassandraGenerators
         private Gen<Boolean> useCounter = ignore -> false;
         @Nullable
         private Gen<TransactionalMode> transactionalMode = null;
+        Gen<IPartitioner> partitionerGen = partitioners();
+
+        public TableMetadataBuilder withPartitioner(Gen<IPartitioner> partitionerGen)
+        {
+            this.partitionerGen = Objects.requireNonNull(partitionerGen);
+            return this;
+        }
+
+        public TableMetadataBuilder withPartitioner(IPartitioner partitioner)
+        {
+            return withPartitioner(i -> partitioner);
+        }
 
         public TableMetadataBuilder withUseCounter(boolean useCounter)
         {
@@ -385,7 +397,7 @@ public final class CassandraGenerators
                 params.transactionalMode(transactionalMode.generate(rnd));
             boolean isCounter = useCounter.generate(rnd);
             TableMetadata.Builder builder = TableMetadata.builder(ks, tableName, tableIdGen.generate(rnd))
-                                                         .partitioner(partitioners().generate(rnd))
+                                                         .partitioner(partitionerGen.generate(rnd))
                                                          .kind(tableKindGen.generate(rnd))
                                                          .isCounter(isCounter)
                                                          .params(params.build());

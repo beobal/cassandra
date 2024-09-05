@@ -18,12 +18,17 @@
 
 package org.apache.cassandra.tcm.transformations;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.cassandra.db.TypeSizes;
 import org.apache.cassandra.exceptions.ExceptionCode;
+import org.apache.cassandra.io.util.DataInputPlus;
+import org.apache.cassandra.io.util.DataOutputPlus;
 import org.apache.cassandra.schema.TableId;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.tcm.ClusterMetadata;
@@ -34,8 +39,11 @@ import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.sequences.LockedRanges;
 import org.apache.cassandra.tcm.sequences.ProgressBarrier;
 import org.apache.cassandra.tcm.sequences.SequenceState;
+import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializer;
 import org.apache.cassandra.tcm.serialization.MetadataSerializer;
+import org.apache.cassandra.tcm.serialization.Version;
 import org.apache.cassandra.utils.JVMStabilityInspector;
+import org.apache.cassandra.utils.vint.VIntCoding;
 
 import static org.apache.cassandra.tcm.Transformation.Kind.AWAIT_ACCORD_TABLE_COMPLETE;
 import static org.apache.cassandra.tcm.Transformation.Kind.DROP_ACCORD_TABLE;
@@ -47,6 +55,8 @@ public class DropAccordTableOperation extends MultiStepOperation<Epoch>
 {
     private static final Logger logger = LoggerFactory.getLogger(DropAccordTableOperation.class);
 
+    public static final Serializer SERIALIZER = new Serializer();
+
     public final Transformation.Kind next;
     public final TableReference table;
     public final MarkAccordTableDropping markAccordTableDropping;
@@ -55,12 +65,7 @@ public class DropAccordTableOperation extends MultiStepOperation<Epoch>
 
     protected DropAccordTableOperation(TableReference table, Epoch latestModification)
     {
-        super(nextToIndex(MARK_ACCORD_TABLE_DROPPING), latestModification);
-        this.next = MARK_ACCORD_TABLE_DROPPING;
-        this.table = table;
-        markAccordTableDropping = new MarkAccordTableDropping(table);
-        awaitAccordTableComplete = new AwaitAccordTableComplete(table);
-        dropAccordTable = new DropAccordTable(table);
+        this(table, MARK_ACCORD_TABLE_DROPPING, latestModification);
     }
 
     public DropAccordTableOperation(DropAccordTableOperation current, Epoch latestModification)
@@ -71,6 +76,16 @@ public class DropAccordTableOperation extends MultiStepOperation<Epoch>
         markAccordTableDropping = current.markAccordTableDropping;
         awaitAccordTableComplete = current.awaitAccordTableComplete;
         dropAccordTable = current.dropAccordTable;
+    }
+
+    private DropAccordTableOperation(TableReference table, Transformation.Kind next, Epoch lastModified)
+    {
+        super(nextToIndex(next), lastModified);
+        this.next = next;
+        this.table = table;
+        markAccordTableDropping = new MarkAccordTableDropping(table);
+        awaitAccordTableComplete = new AwaitAccordTableComplete(table);
+        dropAccordTable = new DropAccordTable(table);
     }
 
     private static int nextToIndex(Transformation.Kind next)
@@ -104,6 +119,23 @@ public class DropAccordTableOperation extends MultiStepOperation<Epoch>
     }
 
     @Override
+    public boolean equals(Object o)
+    {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        DropAccordTableOperation that = (DropAccordTableOperation) o;
+        return latestModification.equals(that.latestModification)
+               && next == that.next
+               && table.equals(that.table);
+    }
+
+    @Override
+    public int hashCode()
+    {
+        return Objects.hash(latestModification, next, table);
+    }
+
+    @Override
     public Kind kind()
     {
         return Kind.DROP_ACCORD_TABLE;
@@ -118,7 +150,7 @@ public class DropAccordTableOperation extends MultiStepOperation<Epoch>
     @Override
     public MetadataSerializer<? extends SequenceKey> keySerializer()
     {
-        throw new UnsupportedOperationException("TODO");
+        return TableReferenceSerializer.instance;
     }
 
     @Override
@@ -195,9 +227,25 @@ public class DropAccordTableOperation extends MultiStepOperation<Epoch>
 
         public TableReference(String keyspace, String name, TableId id)
         {
-            this.keyspace = keyspace;
-            this.name = name;
+            this.keyspace = normalize(keyspace);
+            this.name = normalize(name);
             this.id = id;
+        }
+
+        private static boolean isASCII(String input)
+        {
+            for (char c : input.toCharArray())
+            {
+                if (c > 127)
+                    return false;
+            }
+            return true;
+        }
+
+        private static String normalize(String input)
+        {
+            if (isASCII(input)) return input;
+            return new String(input.getBytes(StandardCharsets.US_ASCII), StandardCharsets.US_ASCII);
         }
 
         public static TableReference from(TableMetadata metadata)
@@ -328,6 +376,73 @@ public class DropAccordTableOperation extends MultiStepOperation<Epoch>
             ClusterMetadata.Transformer proposed = prev.transformer()
                                                        .with(prev.inProgressSequences.without(table));
             return Transformation.success(proposed, LockedRanges.AffectedRanges.EMPTY);
+        }
+    }
+
+    public static class Serializer implements AsymmetricMetadataSerializer<MultiStepOperation<?>, DropAccordTableOperation>
+    {
+        public static final Serializer instance = new Serializer();
+
+        @Override
+        public void serialize(MultiStepOperation<?> t, DataOutputPlus out, Version version) throws IOException
+        {
+            DropAccordTableOperation plan = (DropAccordTableOperation) t;
+
+            Epoch.serializer.serialize(plan.latestModification, out, version);
+            VIntCoding.writeUnsignedVInt32(plan.next.ordinal(), out);
+            TableReferenceSerializer.instance.serialize(plan.table, out, version);
+        }
+
+        @Override
+        public DropAccordTableOperation deserialize(DataInputPlus in, Version version) throws IOException
+        {
+            Epoch lastModified = Epoch.serializer.deserialize(in, version);
+            Transformation.Kind next = Transformation.Kind.values()[VIntCoding.readUnsignedVInt32(in)];
+            TableReference table = TableReferenceSerializer.instance.deserialize(in, version);
+            return new DropAccordTableOperation(table, next, lastModified);
+        }
+
+        @Override
+        public long serializedSize(MultiStepOperation<?> t, Version version)
+        {
+            DropAccordTableOperation plan = (DropAccordTableOperation) t;
+            long size = 0;
+            size += Epoch.serializer.serializedSize(plan.latestModification, version);
+            size += VIntCoding.computeVIntSize(plan.kind().ordinal());
+            size += TableReferenceSerializer.instance.serializedSize(plan.table, version);
+            return size;
+        }
+    }
+
+    public static class TableReferenceSerializer implements MetadataSerializer<TableReference>
+    {
+        public static final TableReferenceSerializer instance = new TableReferenceSerializer();
+
+        @Override
+        public void serialize(TableReference t, DataOutputPlus out, Version version) throws IOException
+        {
+            //TODO (now, perf): keyspace/name are for human debugging, should they be serialized?
+            t.id.serialize(out);
+            out.writeUTF(t.keyspace);
+            out.writeUTF(t.name);
+        }
+
+        @Override
+        public TableReference deserialize(DataInputPlus in, Version version) throws IOException
+        {
+            TableId id = TableId.deserialize(in);
+            String keyspace = in.readUTF();
+            String name = in.readUTF();
+            return new TableReference(keyspace, name, id);
+        }
+
+        @Override
+        public long serializedSize(TableReference t, Version version)
+        {
+            long size = t.id.serializedSize();
+            size += TypeSizes.sizeof(t.keyspace);
+            size += TypeSizes.sizeof(t.name);
+            return size;
         }
     }
 }

@@ -33,6 +33,7 @@ import org.apache.cassandra.tcm.sequences.ProgressBarrier;
 import org.apache.cassandra.tcm.sequences.UnbootstrapAndLeave;
 import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializer;
 import org.apache.cassandra.tcm.serialization.MetadataSerializer;
+import org.apache.cassandra.tcm.transformations.DropAccordTableOperation;
 
 /**
  * Represents a multi-step process performed in order to transition the cluster to some state.
@@ -68,7 +69,7 @@ public abstract class MultiStepOperation<CONTEXT>
         REMOVE(UnbootstrapAndLeave.serializer),
 
         RECONFIGURE_CMS(ReconfigureCMS.serializer),
-        DROP_ACCORD_TABLE(null),
+        DROP_ACCORD_TABLE(DropAccordTableOperation.Serializer.instance),
         ;
 
         public final AsymmetricMetadataSerializer<MultiStepOperation<?>, ? extends MultiStepOperation<?>> serializer;

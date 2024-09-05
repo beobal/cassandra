@@ -110,7 +110,7 @@ public class StubClusterMetadataService extends ClusterMetadataService
         Transformation.Result result = transform.execute(metadata);
         if (result.isSuccess())
         {
-            metadata = result.success().metadata;
+            setMetadata(result.success().metadata);
             return  onSuccess.accept(result.success().metadata);
         }
         return onFailure.accept(result.rejected().code, result.rejected().reason);
