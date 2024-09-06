@@ -109,29 +109,32 @@ public class DropAccordTableTest
     public void multi()
     {
         stateful().withExamples(50).withSteps(500).check(commands(() -> State::new)
-                                                        .destroyState(state -> {
-                                                            while (!state.cms.metadata().inProgressSequences.isEmpty())
-                                                            {
-                                                                for (MultiStepOperation<?> opt : state.cms.metadata().inProgressSequences)
-                                                                    InProgressSequences.resume(opt);
-                                                            }
-                                                            // all tables are dropped, unless they were never dropped
-                                                            Keyspaces keyspaces = state.cms.metadata().schema.getKeyspaces();
-                                                            for (KeyspaceMetadata k : keyspaces)
-                                                            {
-                                                                if (k.tables.size() == 0) continue;
-                                                                if (k.replicationStrategy instanceof MetaStrategy) continue;
-                                                                for (TableMetadata t : k.tables)
-                                                                {
-                                                                    Assertions.assertThat(t.params.pendingDrop).isFalse();
-                                                                    Assertions.assertThat(state.aliveTables).contains(t.id);
-                                                                }
-                                                            }
-                                                        })
+                                                        .destroyState(DropAccordTableTest::validate)
                                                         .add(DropAccordTableTest::addTable)
                                                         .addIf(s -> !s.aliveTables.isEmpty(), DropAccordTableTest::dropTable)
                                                         .addIf(s -> !s.cms.metadata().inProgressSequences.isEmpty(), DropAccordTableTest::inProgressSequences)
                                                         .build());
+    }
+
+    private static void validate(State state)
+    {
+        while (!state.cms.metadata().inProgressSequences.isEmpty())
+        {
+            for (MultiStepOperation<?> opt : state.cms.metadata().inProgressSequences)
+                InProgressSequences.resume(opt);
+        }
+        // all tables are dropped, unless they were never dropped
+        Keyspaces keyspaces = state.cms.metadata().schema.getKeyspaces();
+        for (KeyspaceMetadata k : keyspaces)
+        {
+            if (k.tables.size() == 0) continue;
+            if (k.replicationStrategy instanceof MetaStrategy) continue;
+            for (TableMetadata t : k.tables)
+            {
+                Assertions.assertThat(t.params.pendingDrop).isFalse();
+                Assertions.assertThat(state.aliveTables).contains(t.id);
+            }
+        }
     }
 
     private static Command<State, Void, ?> addTable(RandomSource rs, State state)
