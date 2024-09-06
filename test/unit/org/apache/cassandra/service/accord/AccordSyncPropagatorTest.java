@@ -69,7 +69,7 @@ import org.apache.cassandra.net.ConnectionType;
 import org.apache.cassandra.net.Message;
 import org.apache.cassandra.net.MessageDelivery;
 import org.apache.cassandra.net.RequestCallback;
-import org.apache.cassandra.tcm.MockClusterMetadataService;
+import org.apache.cassandra.tcm.ValidatingClusterMetadataService;
 import org.apache.cassandra.tcm.serialization.Version;
 import org.apache.cassandra.utils.AccordGenerators;
 import org.apache.cassandra.utils.ByteBufferUtil;
@@ -85,7 +85,7 @@ public class AccordSyncPropagatorTest
     public static void setup() throws NoSuchFieldException, IllegalAccessException
     {
         DatabaseDescriptor.daemonInitialization();
-        MockClusterMetadataService.createAndRegister(Version.MIN_ACCORD_VERSION);
+        ValidatingClusterMetadataService.createAndRegister(Version.MIN_ACCORD_VERSION);
     }
 
     @Test

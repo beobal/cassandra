@@ -34,7 +34,7 @@ import org.apache.cassandra.schema.Types;
 import org.apache.cassandra.service.consensus.TransactionalMode;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
-import org.apache.cassandra.tcm.MockClusterMetadataService;
+import org.apache.cassandra.tcm.ValidatingClusterMetadataService;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.sequences.InProgressSequences;
 import org.apache.cassandra.tcm.serialization.Version;
@@ -69,7 +69,7 @@ public class DropAccordTableTest
     public void e2e()
     {
         qt().check(rs -> {
-            MockClusterMetadataService cms = createCMS();
+            ValidatingClusterMetadataService cms = createCMS();
             TableMetadata metadata = TABLE_GEN.next(rs);
             addTable(cms, metadata); // hack this table into the schema...
 
@@ -90,12 +90,12 @@ public class DropAccordTableTest
         });
     }
 
-    private static MockClusterMetadataService createCMS()
+    private static ValidatingClusterMetadataService createCMS()
     {
-        return MockClusterMetadataService.createAndRegister(Version.MIN_ACCORD_VERSION);
+        return ValidatingClusterMetadataService.createAndRegister(Version.MIN_ACCORD_VERSION);
     }
 
-    private static void addTable(MockClusterMetadataService cms, TableMetadata table)
+    private static void addTable(ValidatingClusterMetadataService cms, TableMetadata table)
     {
         class Ref { Types types;}
         // first mock out a keyspace

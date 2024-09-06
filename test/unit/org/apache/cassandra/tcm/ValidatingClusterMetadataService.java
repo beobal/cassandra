@@ -30,25 +30,25 @@ import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializers;
 import org.apache.cassandra.tcm.serialization.Version;
 import org.assertj.core.api.Assertions;
 
-public class MockClusterMetadataService extends StubClusterMetadataService
+public class ValidatingClusterMetadataService extends StubClusterMetadataService
 {
     private final DataOutputBuffer buffer = new DataOutputBuffer();
     private final List<Version> supportedVersions;
 
-    private MockClusterMetadataService(List<Version> supportedVersions)
+    private ValidatingClusterMetadataService(List<Version> supportedVersions)
     {
         super(new ClusterMetadata(safeGetPartitioner()));
         this.supportedVersions = supportedVersions;
     }
 
-    public static MockClusterMetadataService createAndRegister(Version minVersion)
+    public static ValidatingClusterMetadataService createAndRegister(Version minVersion)
     {
         return createAndRegister(minVersion.greaterThanOrEqual());
     }
 
-    public static MockClusterMetadataService createAndRegister(List<Version> supportedVersions)
+    public static ValidatingClusterMetadataService createAndRegister(List<Version> supportedVersions)
     {
-        MockClusterMetadataService cms = new MockClusterMetadataService(supportedVersions);
+        ValidatingClusterMetadataService cms = new ValidatingClusterMetadataService(supportedVersions);
 
         ClusterMetadataService.unsetInstance();
         ClusterMetadataService.setInstance(cms);

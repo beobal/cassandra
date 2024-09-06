@@ -91,7 +91,7 @@ import org.apache.cassandra.service.accord.AccordConfigurationService.EpochSnaps
 import org.apache.cassandra.service.consensus.TransactionalMode;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.Epoch;
-import org.apache.cassandra.tcm.MockClusterMetadataService;
+import org.apache.cassandra.tcm.ValidatingClusterMetadataService;
 import org.apache.cassandra.tcm.membership.Location;
 import org.apache.cassandra.tcm.membership.NodeAddresses;
 import org.apache.cassandra.tcm.membership.NodeId;
@@ -199,7 +199,7 @@ public class EpochSyncTest
         private static final ReplicationParams replication_params = ReplicationParams.simple(rf);
         private static final ReplicationParams meta = ReplicationParams.simpleMeta(1, Collections.singleton("dc1"));
 
-        private final MockClusterMetadataService cms = MockClusterMetadataService.createAndRegister(Version.MIN_ACCORD_VERSION);
+        private final ValidatingClusterMetadataService cms = ValidatingClusterMetadataService.createAndRegister(Version.MIN_ACCORD_VERSION);
 
         private final RandomSource rs;
         private final int minNodes, maxNodes;
