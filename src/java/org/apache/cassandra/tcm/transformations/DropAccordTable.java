@@ -25,6 +25,7 @@ import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.cassandra.cql3.ColumnIdentifier;
 import org.apache.cassandra.cql3.statements.schema.DropTableStatement;
 import org.apache.cassandra.db.TypeSizes;
 import org.apache.cassandra.exceptions.ExceptionCode;
@@ -50,6 +51,7 @@ import org.apache.cassandra.tcm.serialization.Version;
 import org.apache.cassandra.utils.JVMStabilityInspector;
 import org.apache.cassandra.utils.vint.VIntCoding;
 
+import static java.lang.String.format;
 import static org.apache.cassandra.tcm.Transformation.Kind.AWAIT_ACCORD_TABLE_COMPLETE;
 import static org.apache.cassandra.tcm.Transformation.Kind.DROP_ACCORD_TABLE;
 import static org.apache.cassandra.tcm.sequences.SequenceState.continuable;
@@ -204,7 +206,7 @@ public class DropAccordTable extends MultiStepOperation<Epoch>
         return ProgressBarrier.immediate();
     }
 
-    public static class TableReference implements SequenceKey
+    public static class TableReference implements SequenceKey, Comparable<TableReference>
     {
         public final String keyspace, name;
         public final TableId id;
@@ -253,6 +255,17 @@ public class DropAccordTable extends MultiStepOperation<Epoch>
         }
 
         @Override
+        public int compareTo(TableReference o)
+        {
+            int rc = id.compareTo(o.id);
+            if (rc != 0) return rc;
+            rc = keyspace.compareTo(o.keyspace);
+            if (rc != 0) return rc;
+            rc = name.compareTo(o.name);
+            return rc;
+        }
+
+        @Override
         public String toString()
         {
             return "TableReference{" +
@@ -260,6 +273,11 @@ public class DropAccordTable extends MultiStepOperation<Epoch>
                    ", name='" + name + '\'' +
                    ", id=" + id +
                    '}';
+        }
+
+        public String toCQLString()
+        {
+            return format("%s.%s", ColumnIdentifier.maybeQuote(keyspace), ColumnIdentifier.maybeQuote(name));
         }
     }
 
