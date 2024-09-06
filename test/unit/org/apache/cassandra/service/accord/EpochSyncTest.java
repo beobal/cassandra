@@ -80,11 +80,9 @@ import org.apache.cassandra.net.Message;
 import org.apache.cassandra.net.SimulatedMessageDelivery;
 import org.apache.cassandra.net.SimulatedMessageDelivery.Action;
 import org.apache.cassandra.net.Verb;
-import org.apache.cassandra.schema.DistributedMetadataLogKeyspace;
 import org.apache.cassandra.schema.DistributedSchema;
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.KeyspaceParams;
-import org.apache.cassandra.schema.Keyspaces;
 import org.apache.cassandra.schema.ReplicationParams;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.schema.TableParams;
@@ -92,15 +90,15 @@ import org.apache.cassandra.schema.Tables;
 import org.apache.cassandra.service.accord.AccordConfigurationService.EpochSnapshot;
 import org.apache.cassandra.service.consensus.TransactionalMode;
 import org.apache.cassandra.tcm.ClusterMetadata;
-import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.Epoch;
-import org.apache.cassandra.tcm.StubClusterMetadataService;
-import org.apache.cassandra.tcm.membership.Directory;
+import org.apache.cassandra.tcm.MockClusterMetadataService;
 import org.apache.cassandra.tcm.membership.Location;
 import org.apache.cassandra.tcm.membership.NodeAddresses;
 import org.apache.cassandra.tcm.membership.NodeId;
+import org.apache.cassandra.tcm.membership.NodeVersion;
 import org.apache.cassandra.tcm.ownership.DataPlacement;
 import org.apache.cassandra.tcm.ownership.DataPlacements;
+import org.apache.cassandra.tcm.serialization.Version;
 import org.apache.cassandra.utils.ByteArrayUtil;
 import org.apache.cassandra.utils.Pair;
 import org.assertj.core.api.Assertions;
@@ -116,8 +114,6 @@ public class EpochSyncTest
     {
         DatabaseDescriptor.clientInitialization();
         DatabaseDescriptor.setPartitionerUnsafe(Murmur3Partitioner.instance);
-
-        ClusterMetadataService.setInstance(StubClusterMetadataService.forTesting());
     }
 
     @Test
@@ -132,7 +128,7 @@ public class EpochSyncTest
                                           .addIf(cluster -> cluster.alive().size() > cluster.minNodes, EpochSyncTest::removeNode)
                                           .addIf(cluster -> cluster.hasWork(), EpochSyncTest::processSome)
                                           .add(rs -> new SimpleCommand("Validate", c -> c.validate(false)))
-                                          .add((rs, cluster) -> new SimpleCommand("Bump Epoch " + (cluster.current.epoch.getEpoch() + 1), Cluster::bumpEpoch))
+                                          .add((rs, cluster) -> new SimpleCommand("Bump Epoch " + (cluster.cms.metadata().epoch.getEpoch() + 1), Cluster::bumpEpoch))
                                           .build());
     }
 
@@ -142,7 +138,7 @@ public class EpochSyncTest
         long token = cluster.tokenGen.nextLong(rs);
         while (cluster.tokens.contains(token))
             token = cluster.tokenGen.nextLong(rs);
-        long epoch = cluster.current.epoch.getEpoch() + 1;
+        long epoch = cluster.cms.metadata().epoch.getEpoch() + 1;
         long finalToken = token;
         return new SimpleCommand("Add Node " + id + "; token=" + token + ", epoch=" + epoch,
                                  c -> c.addNode(id, finalToken));
@@ -153,7 +149,7 @@ public class EpochSyncTest
         List<Node.Id> alive = cluster.alive();
         Node.Id pick = rs.pick(alive);
         long token = cluster.instances.get(pick).token;
-        long epoch = cluster.current.epoch.getEpoch() + 1;
+        long epoch = cluster.cms.metadata().epoch.getEpoch() + 1;
         return new SimpleCommand("Remove Node " + pick + "; token=" + token + "; epoch=" + epoch, c -> c.removeNode(pick));
     }
 
@@ -203,6 +199,8 @@ public class EpochSyncTest
         private static final ReplicationParams replication_params = ReplicationParams.simple(rf);
         private static final ReplicationParams meta = ReplicationParams.simpleMeta(1, Collections.singleton("dc1"));
 
+        private final MockClusterMetadataService cms = new MockClusterMetadataService(Version.MIN_ACCORD_VERSION.greaterThanOrEqual());
+
         private final RandomSource rs;
         private final int minNodes, maxNodes;
         private final Gen.LongGen tokenGen;
@@ -213,10 +211,7 @@ public class EpochSyncTest
         private final SimulatedExecutorFactory globalExecutor;
         private final ScheduledExecutorPlus scheduler;
         private int nodeCounter = 0;
-        private ClusterMetadata current = new ClusterMetadata(Murmur3Partitioner.instance, Directory.EMPTY,
-                                                              new DistributedSchema(Keyspaces.of(
-                                                              DistributedMetadataLogKeyspace.initialMetadata(Collections.singleton("dc1")),
-                                                              KeyspaceMetadata.create("test", KeyspaceParams.simple(rf), Tables.of(TableMetadata.minimal("test", "tb1").unbuild().params(TableParams.builder().transactionalMode(TransactionalMode.full).build()).build())))));
+
         private final IFailureDetector fd = new IFailureDetector()
         {
             @Override
@@ -297,6 +292,9 @@ public class EpochSyncTest
 
         public Cluster(RandomSource rs)
         {
+            // add the test keyspace
+            createTestKeyspaceAndTable();
+
             this.rs = rs;
             this.minNodes = 3;
             this.maxNodes = 10;
@@ -331,6 +329,21 @@ public class EpochSyncTest
             }, 1, 1, TimeUnit.MINUTES);
         }
 
+        private void createTestKeyspaceAndTable()
+        {
+            ClusterMetadata current = cms.metadata();
+            Tables tables = Tables.of(TableMetadata.minimal("test", "tb1").unbuild()
+                                                   .partitioner(Murmur3Partitioner.instance)
+                                                   .params(TableParams.builder().transactionalMode(TransactionalMode.full).build())
+                                                   .build());
+            KeyspaceMetadata ks = KeyspaceMetadata.create("test", KeyspaceParams.simple(rf), tables);
+
+            cms.setMetadata(current.transformer()
+                                   .with(new DistributedSchema(current.schema.getKeyspaces().with(ks)))
+                                   .build()
+                            .metadata);
+        }
+
         void validate(boolean isDone)
         {
             for (Node.Id id : alive())
@@ -339,7 +352,7 @@ public class EpochSyncTest
                 if (removed.contains(id)) continue; // ignore removed nodes
                 AccordConfigurationService conf = inst.config;
                 TopologyManager tm = inst.topology;
-                for (long epoch = inst.epoch.getEpoch(); epoch <= current.epoch.getEpoch(); epoch++)
+                for (long epoch = inst.epoch.getEpoch(); epoch <= cms.metadata().epoch.getEpoch(); epoch++)
                 {
                     // validate config
                     EpochSnapshot snapshot = conf.getEpochSnapshot(epoch);
@@ -469,19 +482,21 @@ public class EpochSyncTest
         void addNode(Node.Id id, long token)
         {
             Invariants.checkState(!tokens.contains(token), "Attempted to add token %d for node %s but token is already taken", token, id);
-            Epoch epoch = Epoch.create(current.epoch.getEpoch() + 1);
 
-            Instance instance = new Instance(id, token, epoch, createMessaging(id), fd);
+            ClusterMetadata.Transformer builder = cms.metadata().transformer()
+                                                      .register(new NodeAddresses(address(id)), new Location("dc1", "r1"), NodeVersion.CURRENT);
+
+            Instance instance = new Instance(id, token, builder.epoch(), createMessaging(id), fd);
             instances.put(id, instance);
             tokens.add(token);
 
-            current = current.forceEpoch(epoch)
-                             .withPlacements(DataPlacements.builder(2)
-                                                           .with(meta, DataPlacement.empty())
-                                                           .with(replication_params, rebuildPlacements(epoch))
-                                                           .build())
-                             .withDirectory(current.directory.with(new NodeAddresses(address(id)), new Location("dc1", "r1")));
-            notify(current);
+            // need to ADD the instances before calling rebuildPlacements
+            builder.with(DataPlacements.builder(2)
+                                       .with(meta, DataPlacement.empty())
+                                       .with(replication_params, rebuildPlacements(builder.epoch()))
+                                       .build());
+
+            notify(builder.build().metadata);
         }
 
         void removeNode(Node.Id pick)
@@ -491,14 +506,14 @@ public class EpochSyncTest
             tokens.remove(inst.token);
             removed.add(pick);
             inst.stop();
-            current = current.forceEpoch(Epoch.create(current.epoch.getEpoch() + 1))
-                             .withDirectory(current.directory.without(new NodeId(pick.id)));
-
-            current = current.withPlacements(DataPlacements.builder(2)
-                                                           .with(meta, DataPlacement.empty())
-                                                           .with(replication_params, rebuildPlacements(current.epoch))
-                                                           .build());
-            notify(current);
+            ClusterMetadata.Transformer builder = cms.metadata().transformer()
+                                                        .unregister(new NodeId(pick.id));
+            // need to REMOVE the instances before calling rebuildPlacements
+            builder.with(DataPlacements.builder(2)
+                                       .with(meta, DataPlacement.empty())
+                                       .with(replication_params, rebuildPlacements(builder.epoch()))
+                                       .build());
+            notify(builder.build().metadata);
         }
 
         private DataPlacement rebuildPlacements(Epoch epoch)
@@ -512,8 +527,7 @@ public class EpochSyncTest
 
         void bumpEpoch()
         {
-            current = current.forceEpoch(Epoch.create(current.epoch.getEpoch() + 1));
-            notify(current);
+            notify(cms.metadata().transformer().build().metadata);
         }
 
         private void notify(ClusterMetadata current)
@@ -521,7 +535,7 @@ public class EpochSyncTest
             Ranges ranges = AccordTopology.createAccordTopology(current).ranges().mergeTouching();
             if (!current.directory.isEmpty())
                 Assertions.assertThat(ranges).hasSize(1);
-            ((StubClusterMetadataService) ClusterMetadataService.instance()).setMetadata(current);
+            cms.setMetadata(current);
             for (Node.Id id : alive())
             {
                 Instance inst = instances.get(id);

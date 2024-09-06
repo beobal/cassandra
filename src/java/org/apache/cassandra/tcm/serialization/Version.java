@@ -18,9 +18,13 @@
 
 package org.apache.cassandra.tcm.serialization;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
+import org.apache.cassandra.net.MessagingService;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.membership.NodeVersion;
 
@@ -43,6 +47,8 @@ public enum Version
     V2(2),
 
     UNKNOWN(Integer.MAX_VALUE);
+    
+    public static final Version MIN_ACCORD_VERSION = V2;
 
     private static Map<Integer, Version> values = new HashMap<>();
     static
@@ -96,5 +102,16 @@ public enum Version
             return v;
 
         throw new IllegalArgumentException("Unsupported metadata version (" + i + ")");
+    }
+
+    public List<Version> greaterThanOrEqual()
+    {
+        Version[] all = Version.values();
+        if (ordinal() == all.length - 1)
+            return Collections.singletonList(this);
+        List<Version> values = new ArrayList<>(all.length - ordinal());
+        for (int i = ordinal(); i < all.length; i++)
+            values.add(all[i]);
+        return values;
     }
 }

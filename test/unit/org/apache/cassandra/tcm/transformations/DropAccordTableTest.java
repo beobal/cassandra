@@ -18,7 +18,6 @@
 
 package org.apache.cassandra.tcm.transformations;
 
-import java.io.IOException;
 import java.util.stream.Stream;
 
 import org.junit.Test;
@@ -26,7 +25,6 @@ import org.junit.Test;
 import accord.utils.Gen;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.dht.Murmur3Partitioner;
-import org.apache.cassandra.io.util.DataOutputBuffer;
 import org.apache.cassandra.schema.DistributedSchema;
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.KeyspaceParams;
@@ -36,11 +34,10 @@ import org.apache.cassandra.schema.Types;
 import org.apache.cassandra.service.consensus.TransactionalMode;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
-import org.apache.cassandra.tcm.StubClusterMetadataService;
+import org.apache.cassandra.tcm.MockClusterMetadataService;
 import org.apache.cassandra.tcm.Transformation;
-import org.apache.cassandra.tcm.membership.NodeVersion;
 import org.apache.cassandra.tcm.sequences.InProgressSequences;
-import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializers;
+import org.apache.cassandra.tcm.serialization.Version;
 import org.apache.cassandra.tcm.transformations.DropAccordTable.PrepareDropAccordTable;
 import org.apache.cassandra.tcm.transformations.DropAccordTable.TableReference;
 import org.apache.cassandra.utils.CassandraGenerators;
@@ -72,7 +69,7 @@ public class DropAccordTableTest
     public void e2e()
     {
         qt().check(rs -> {
-            MockClusterMetadataService cms = new MockClusterMetadataService();
+            MockClusterMetadataService cms = createCMS();
             TableMetadata metadata = TABLE_GEN.next(rs);
             addTable(cms, metadata); // hack this table into the schema...
 
@@ -91,6 +88,11 @@ public class DropAccordTableTest
             // table is dropped
             Assertions.assertThat(cms.metadata().schema.getTableMetadata(metadata.id)).isNull();
         });
+    }
+
+    private static MockClusterMetadataService createCMS()
+    {
+        return new MockClusterMetadataService(Version.MIN_ACCORD_VERSION.greaterThanOrEqual());
     }
 
     private static void addTable(MockClusterMetadataService cms, TableMetadata table)
@@ -113,49 +115,5 @@ public class DropAccordTableTest
     private static void process(ClusterMetadataService cms, Transformation transformation)
     {
         cms.commit(transformation);
-    }
-
-    private static class MockClusterMetadataService extends StubClusterMetadataService
-    {
-        private static final DataOutputBuffer output = new DataOutputBuffer();
-
-        public MockClusterMetadataService()
-        {
-            super(new ClusterMetadata(Murmur3Partitioner.instance));
-
-            ClusterMetadataService.unsetInstance();
-            ClusterMetadataService.setInstance(this);
-        }
-
-        @Override
-        public <T1> T1 commit(Transformation transform, CommitSuccessHandler<T1> onSuccess, CommitFailureHandler<T1> onFailure)
-        {
-            try
-            {
-                AsymmetricMetadataSerializers.testSerde(output, transform.kind().serializer(), transform, NodeVersion.CURRENT_METADATA_VERSION);
-            }
-            catch (IOException e)
-            {
-                throw new AssertionError(transform.toString(), e);
-            }
-
-            return super.commit(transform, onSuccess, onFailure);
-        }
-
-        @Override
-        public void setMetadata(ClusterMetadata metadata)
-        {
-            if (!metadata.epoch.equals(metadata().epoch.nextEpoch()))
-                throw new AssertionError("Epochs were not sequential: expected " + metadata().epoch.nextEpoch() + " but given " + metadata.epoch);
-            try
-            {
-                AsymmetricMetadataSerializers.testSerde(output, ClusterMetadata.serializer, metadata, NodeVersion.CURRENT_METADATA_VERSION);
-            }
-            catch (IOException e)
-            {
-                throw new AssertionError(e);
-            }
-            super.setMetadata(metadata);
-        }
     }
 }
