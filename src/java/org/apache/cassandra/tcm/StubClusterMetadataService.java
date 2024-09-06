@@ -118,7 +118,7 @@ public class StubClusterMetadataService extends ClusterMetadataService
 
     protected Transformation.Result execute(Transformation transform)
     {
-        return transform.execute(metadata);
+        return transform.execute(metadata());
     }
 
     @Override
