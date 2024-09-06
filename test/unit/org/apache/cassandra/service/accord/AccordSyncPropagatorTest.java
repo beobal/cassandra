@@ -85,7 +85,7 @@ public class AccordSyncPropagatorTest
     public static void setup() throws NoSuchFieldException, IllegalAccessException
     {
         DatabaseDescriptor.daemonInitialization();
-        new MockClusterMetadataService(Version.MIN_ACCORD_VERSION.greaterThanOrEqual());
+        MockClusterMetadataService.createAndRegister(Version.MIN_ACCORD_VERSION);
     }
 
     @Test

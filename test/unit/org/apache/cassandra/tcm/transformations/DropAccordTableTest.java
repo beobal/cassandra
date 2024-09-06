@@ -92,7 +92,7 @@ public class DropAccordTableTest
 
     private static MockClusterMetadataService createCMS()
     {
-        return new MockClusterMetadataService(Version.MIN_ACCORD_VERSION.greaterThanOrEqual());
+        return MockClusterMetadataService.createAndRegister(Version.MIN_ACCORD_VERSION);
     }
 
     private static void addTable(MockClusterMetadataService cms, TableMetadata table)

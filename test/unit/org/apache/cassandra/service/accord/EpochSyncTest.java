@@ -199,7 +199,7 @@ public class EpochSyncTest
         private static final ReplicationParams replication_params = ReplicationParams.simple(rf);
         private static final ReplicationParams meta = ReplicationParams.simpleMeta(1, Collections.singleton("dc1"));
 
-        private final MockClusterMetadataService cms = new MockClusterMetadataService(Version.MIN_ACCORD_VERSION.greaterThanOrEqual());
+        private final MockClusterMetadataService cms = MockClusterMetadataService.createAndRegister(Version.MIN_ACCORD_VERSION);
 
         private final RandomSource rs;
         private final int minNodes, maxNodes;

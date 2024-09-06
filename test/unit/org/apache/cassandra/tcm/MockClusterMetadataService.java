@@ -32,16 +32,27 @@ import org.assertj.core.api.Assertions;
 
 public class MockClusterMetadataService extends StubClusterMetadataService
 {
-    private static final DataOutputBuffer output = new DataOutputBuffer();
+    private final DataOutputBuffer buffer = new DataOutputBuffer();
     private final List<Version> supportedVersions;
 
-    public MockClusterMetadataService(List<Version> supportedVersions)
+    private MockClusterMetadataService(List<Version> supportedVersions)
     {
         super(new ClusterMetadata(safeGetPartitioner()));
         this.supportedVersions = supportedVersions;
+    }
+
+    public static MockClusterMetadataService createAndRegister(Version minVersion)
+    {
+        return createAndRegister(minVersion.greaterThanOrEqual());
+    }
+
+    public static MockClusterMetadataService createAndRegister(List<Version> supportedVersions)
+    {
+        MockClusterMetadataService cms = new MockClusterMetadataService(supportedVersions);
 
         ClusterMetadataService.unsetInstance();
-        ClusterMetadataService.setInstance(this);
+        ClusterMetadataService.setInstance(cms);
+        return cms;
     }
 
     private static IPartitioner safeGetPartitioner()
@@ -50,14 +61,13 @@ public class MockClusterMetadataService extends StubClusterMetadataService
         return partitioner == null ? Murmur3Partitioner.instance : partitioner;
     }
 
-    // public static <In, Out> void testSerde(DataOutputBuffer output, AsymmetricMetadataSerializer<In, Out> serializer, In input, Version version) throws IOException
     private <In, Out> void testSerde(AsymmetricMetadataSerializer<In, Out> serializer, In input)
     {
         for (Version version : supportedVersions)
         {
             try
             {
-                AsymmetricMetadataSerializers.testSerde(output, serializer, input, version);
+                AsymmetricMetadataSerializers.testSerde(buffer, serializer, input, version);
             }
             catch (IOException e)
             {
@@ -73,18 +83,9 @@ public class MockClusterMetadataService extends StubClusterMetadataService
         if (result.isSuccess())
         {
             Transformation.Success success = result.success();
-            ClusterMetadata before = metadata();
-            ClusterMetadata after = success.metadata;
             Assertions.assertThat(success.affectedMetadata)
                       .describedAs("Affected Metadata keys do not match")
-                      .isEqualTo(MetadataKeys.diffKeys(before, after));
-            // are they actually different?
-            for (MetadataKey key : success.affectedMetadata)
-            {
-                Assertions.assertThat(MetadataKeys.extract(after, key))
-                          .describedAs("Key %s was marked as modified but actually was not", key)
-                          .isNotEqualTo(MetadataKeys.extract(before, key));
-            }
+                      .isEqualTo(MetadataKeys.diffKeys(metadata(), success.metadata));
         }
         return result;
     }
