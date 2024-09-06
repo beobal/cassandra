@@ -436,6 +436,7 @@ public class ClusterMetadata
             return epoch;
         }
 
+        //TODO (now, api): make sure this is signed off by Sam, he had expressed concerns about this
         public Transformer add(Set<MetadataKey> affectedMetadata)
         {
             modifiedKeys.addAll(affectedMetadata);

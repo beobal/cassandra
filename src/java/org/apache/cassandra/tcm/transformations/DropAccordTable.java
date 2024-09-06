@@ -19,7 +19,6 @@
 package org.apache.cassandra.tcm.transformations;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import java.util.function.Function;
 
@@ -36,6 +35,7 @@ import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.TableId;
 import org.apache.cassandra.schema.TableMetadata;
+import org.apache.cassandra.service.accord.AccordService;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.Epoch;
@@ -229,7 +229,7 @@ public class DropAccordTable extends MultiStepOperation<Epoch>
         private static String normalize(String input)
         {
             if (isASCII(input)) return input;
-            return new String(input.getBytes(StandardCharsets.US_ASCII), StandardCharsets.US_ASCII);
+            throw new IllegalArgumentException("Only ASCII is allowed: given '" + input + "'");
         }
 
         public static TableReference from(TableMetadata metadata)
@@ -357,6 +357,15 @@ public class DropAccordTable extends MultiStepOperation<Epoch>
         {
             return AWAIT_ACCORD_TABLE_COMPLETE;
         }
+
+        @Override
+        public SequenceState execute(ClusterMetadataService cms) throws Exception
+        {
+            //TODO (correctness, operability): this is more than likely to timeout, so best to "await" an existing txn_id rather than creating a new one...
+            AccordService.instance().awaitForTableDrop(table.id);
+            return super.execute(cms);
+        }
+
     }
 
     public static class DropTable extends BaseStep
@@ -460,7 +469,6 @@ public class DropAccordTable extends MultiStepOperation<Epoch>
         @Override
         public void serialize(TableReference t, DataOutputPlus out, Version version) throws IOException
         {
-            //TODO (now, perf): keyspace/name are for human debugging, should they be serialized?
             t.id.serialize(out);
             out.writeUTF(t.keyspace);
             out.writeUTF(t.name);

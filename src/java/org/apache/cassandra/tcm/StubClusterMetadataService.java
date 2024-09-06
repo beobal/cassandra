@@ -76,7 +76,7 @@ public class StubClusterMetadataService extends ClusterMetadataService
 
     private ClusterMetadata metadata;
 
-    public StubClusterMetadataService(ClusterMetadata initial)
+    protected StubClusterMetadataService(ClusterMetadata initial)
     {
         super(new UniformRangePlacement(),
               MetadataSnapshots.NO_OP,
