@@ -19,15 +19,32 @@
 package org.apache.cassandra.distributed.test.accord;
 
 import java.io.IOException;
+import java.util.UUID;
 
 import org.junit.Test;
 
+import accord.api.Key;
+import accord.local.CommandStores;
+import accord.local.KeyHistory;
+import accord.local.PreLoadContext;
+import accord.local.cfk.CommandsForKey;
+import accord.primitives.Ranges;
+import accord.primitives.TxnId;
+import accord.utils.async.AsyncChains;
+import accord.utils.async.AsyncResult;
 import org.apache.cassandra.distributed.Cluster;
 import org.apache.cassandra.distributed.api.ConsistencyLevel;
 import org.apache.cassandra.distributed.api.Feature;
 import org.apache.cassandra.distributed.api.ICoordinator;
+import org.apache.cassandra.distributed.api.IInvokableInstance;
+import org.apache.cassandra.distributed.shared.ClusterUtils;
 import org.apache.cassandra.distributed.test.TestBaseImpl;
 import org.apache.cassandra.net.Verb;
+import org.apache.cassandra.schema.TableId;
+import org.apache.cassandra.service.accord.AccordCommandStore;
+import org.apache.cassandra.service.accord.AccordSafeCommandStore;
+import org.apache.cassandra.service.accord.AccordService;
+import org.apache.cassandra.service.accord.TokenRange;
 
 import static org.apache.cassandra.service.accord.AccordTestUtils.wrapInTxn;
 
@@ -38,27 +55,30 @@ public class AccordDropTableTest extends TestBaseImpl
     {
         try (Cluster cluster = Cluster.build(3)
                                       .withoutVNodes()
-                                      .withConfig(c -> c.with(Feature.values()))
+                                      .withConfig(c -> c.with(Feature.values())
+                                                       .set("accord.progress_log_schedule_delay", "10s"))
                                       .start())
         {
             fixDistributedSchemas(cluster);
             init(cluster);
 
             int examples = 10;
-            int steps = 100;
+            int steps = 10;
             for (int i = 0; i < examples; i++)
             {
+                int j = 0;
                 try
                 {
                     addChaos(cluster, i);
-                    createTable(cluster);
-                    for (int j = 0; j < steps; j++)
+                    TableId id = createTable(cluster);
+                    for (j = 0; j < steps; j++)
                         doTxn(cluster, j);
                     dropTable(cluster);
+                    validateAccord(cluster, id);
                 }
                 catch (Throwable t)
                 {
-                    throw new AssertionError("Error at example " + i, t);
+                    throw new AssertionError("Error at example " + i + ", " + j, t);
                 }
             }
         }
@@ -68,15 +88,14 @@ public class AccordDropTableTest extends TestBaseImpl
     {
         cluster.filters().reset();
         cluster.filters().verbs(Verb.ACCORD_APPLY_REQ.id).from(1).to(3).drop();
-//        cluster.filters().verbs(Verb.ACCORD_APPLY_REQ.id).from(2).to(1).drop();
-//        cluster.filters().verbs(Verb.ACCORD_APPLY_REQ.id).from(3).to(2).drop();
     }
 
     private static void doTxn(Cluster cluster, int step)
     {
         int stepId = step % 3;
         int partitionId = step % 10;
-        ICoordinator coordinator = cluster.coordinator(stepId + 1);
+        int coordinatorId = (step % 2) + 1; // avoid node3 as it can't get applies from node1, so leads to user errors
+        ICoordinator coordinator = cluster.coordinator(coordinatorId);
         switch (stepId)
         {
             case 0: // insert
@@ -109,13 +128,47 @@ public class AccordDropTableTest extends TestBaseImpl
         }
     }
 
-    private static void createTable(Cluster cluster)
+    private static TableId createTable(Cluster cluster)
     {
         cluster.schemaChange(withKeyspace("CREATE TABLE %s.tbl(pk int PRIMARY KEY, v int) WITH transactional_mode='full'"));
+        return ClusterUtils.tableId(cluster, KEYSPACE, "tbl");
     }
 
     private static void dropTable(Cluster cluster)
     {
         cluster.schemaChange(withKeyspace("DROP TABLE %s.tbl"));
+    }
+
+    private static void validateAccord(Cluster cluster, TableId id)
+    {
+        String s = id.toString();
+        for (IInvokableInstance inst : cluster)
+        {
+            inst.runOnInstance(() -> {
+                TableId tableId = TableId.fromUUID(UUID.fromString(s));
+                AccordService accord = (AccordService) AccordService.instance();
+                PreLoadContext ctx = PreLoadContext.contextFor(Ranges.single(TokenRange.fullRange(tableId)), KeyHistory.COMMANDS);
+                CommandStores stores = accord.node().commandStores();
+                for (int storeId : stores.ids())
+                {
+                    AccordCommandStore store = (AccordCommandStore) stores.forId(storeId);
+                    AsyncResult<?> result = store.submit(ctx, input -> {
+                        AccordSafeCommandStore safe = (AccordSafeCommandStore) input;
+                        for (Key key : safe.commandsForKeysKeys())
+                        {
+                            CommandsForKey cfk = safe.maybeCommandsForKey(key).current();
+                            CommandsForKey.TxnInfo minUndecided = cfk.minUndecided();
+                            if (minUndecided != null)
+                                throw new AssertionError("Undecided txn: " + minUndecided);
+                            TxnId next = cfk.nextWaitingToApply();
+                            if (next != null)
+                                throw new AssertionError("Unapplied txn: " + next);
+                        }
+                        return null;
+                    }).beginAsResult();
+                    AsyncChains.getUnchecked(result);
+                }
+            });
+        }
     }
 }
