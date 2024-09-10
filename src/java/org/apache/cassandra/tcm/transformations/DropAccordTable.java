@@ -164,7 +164,7 @@ public class DropAccordTable extends MultiStepOperation<Epoch>
             case AWAIT_ACCORD_TABLE_COMPLETE:
                 try
                 {
-                    return awaitAccordTableComplete.execute(ClusterMetadataService.instance());
+                    return awaitAccordTableComplete.executeNext(ClusterMetadataService.instance());
                 }
                 catch (Throwable t)
                 {
@@ -175,7 +175,7 @@ public class DropAccordTable extends MultiStepOperation<Epoch>
             case DROP_ACCORD_TABLE:
                 try
                 {
-                    return dropTable.execute(ClusterMetadataService.instance());
+                    return dropTable.executeNext(ClusterMetadataService.instance());
                 }
                 catch (Throwable t)
                 {
@@ -283,7 +283,7 @@ public class DropAccordTable extends MultiStepOperation<Epoch>
 
     public interface Step
     {
-        SequenceState execute(ClusterMetadataService cms) throws Exception;
+        SequenceState executeNext(ClusterMetadataService cms) throws Exception;
     }
 
     public static abstract class BaseStep implements Step, Transformation
@@ -296,7 +296,7 @@ public class DropAccordTable extends MultiStepOperation<Epoch>
         }
 
         @Override
-        public SequenceState execute(ClusterMetadataService cms) throws Exception
+        public SequenceState executeNext(ClusterMetadataService cms) throws Exception
         {
             cms.commit(this);
             return continuable();
@@ -377,11 +377,11 @@ public class DropAccordTable extends MultiStepOperation<Epoch>
         }
 
         @Override
-        public SequenceState execute(ClusterMetadataService cms) throws Exception
+        public SequenceState executeNext(ClusterMetadataService cms) throws Exception
         {
             //TODO (correctness, operability): this is more than likely to timeout, so best to "await" an existing txn_id rather than creating a new one...
             AccordService.instance().awaitForTableDrop(table.id);
-            return super.execute(cms);
+            return super.executeNext(cms);
         }
 
     }
