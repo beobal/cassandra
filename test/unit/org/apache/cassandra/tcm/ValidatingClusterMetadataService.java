@@ -32,7 +32,6 @@ import org.assertj.core.api.Assertions;
 
 public class ValidatingClusterMetadataService extends StubClusterMetadataService
 {
-    private final DataOutputBuffer buffer = new DataOutputBuffer();
     private final List<Version> supportedVersions;
 
     private ValidatingClusterMetadataService(List<Version> supportedVersions)
@@ -65,7 +64,7 @@ public class ValidatingClusterMetadataService extends StubClusterMetadataService
     {
         for (Version version : supportedVersions)
         {
-            try
+            try (DataOutputBuffer buffer = DataOutputBuffer.scratchBuffer.get())
             {
                 AsymmetricMetadataSerializers.testSerde(buffer, serializer, input, version);
             }
