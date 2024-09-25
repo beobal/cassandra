@@ -1178,7 +1178,7 @@ public class AccordService implements IAccordService, Shutdownable
                                       if (attempt > 3) return null;
                                       switch (shouldRetry(t))
                                       {
-                                          case SUCCESS: // if the sync point was erased... how do we fetch it?  just retry
+                                          case SUCCESS: return AsyncChains.success(null);
                                           case RETRY:
                                               return awaitForTableDropSubRange(ranges, attempt + 1);
                                           case FAIL:
@@ -1187,7 +1187,7 @@ public class AccordService implements IAccordService, Shutdownable
                                               throw new UnsupportedOperationException();
                                       }
                                   })
-                                  .flatMap(s -> Await.coordinate(node, s));
+                                  .flatMap(s -> s == null ? AsyncChains.success(null) : Await.coordinate(node, s));
     }
 
     private enum RetryDecission { SUCCESS, RETRY, FAIL }
