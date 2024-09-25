@@ -1173,18 +1173,21 @@ public class AccordService implements IAccordService, Shutdownable
     {
         //TODO (on merge): CASSANDRA-19769 has the same logic... should this be refactored?  Would make it nice so we could split the range on retries?
         return CoordinateSyncPoint.exclusive(node, ranges)
-               .recover(t -> //TODO (operability): make this configurable / monitorable?
-                        {
-                            if (attempt > 3) return null;
-                            switch (shouldRetry(t))
-                            {
-                                case SUCCESS: // if the sync point was erased... how do we fetch it?  just retry
-                                case RETRY: return awaitForTableDropSubRange(ranges, attempt + 1);
-                                case FAIL: return null;
-                                default: throw new UnsupportedOperationException();
-                            }
-                        })
-               .flatMap(s -> Await.coordinate(node, s));
+                                  .recover(t -> {
+                                      //TODO (operability): make this configurable / monitorable?
+                                      if (attempt > 3) return null;
+                                      switch (shouldRetry(t))
+                                      {
+                                          case SUCCESS: // if the sync point was erased... how do we fetch it?  just retry
+                                          case RETRY:
+                                              return awaitForTableDropSubRange(ranges, attempt + 1);
+                                          case FAIL:
+                                              return null;
+                                          default:
+                                              throw new UnsupportedOperationException();
+                                      }
+                                  })
+                                  .flatMap(s -> Await.coordinate(node, s));
     }
 
     private enum RetryDecission { SUCCESS, RETRY, FAIL }
