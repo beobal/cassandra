@@ -45,6 +45,7 @@ import org.apache.cassandra.tcm.transformations.Assassinate;
 import org.apache.cassandra.tcm.transformations.BeginConsensusMigrationForTableAndRange;
 import org.apache.cassandra.tcm.transformations.CancelInProgressSequence;
 import org.apache.cassandra.tcm.transformations.CustomTransformation;
+import org.apache.cassandra.tcm.transformations.DropAccordTable;
 import org.apache.cassandra.tcm.transformations.ForceSnapshot;
 import org.apache.cassandra.tcm.transformations.MaybeFinishConsensusMigrationForTableAndRange;
 import org.apache.cassandra.tcm.transformations.PrepareJoin;
