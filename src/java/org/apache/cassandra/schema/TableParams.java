@@ -611,7 +611,7 @@ public final class TableParams
                    .extensions(deserializeMapBB(in))
                    .cdc(in.readBoolean())
                    .readRepair(ReadRepairStrategy.fromString(in.readUTF()));
-            if (version.isAtLeast(Version.V2))
+            if (version.isAtLeast(Version.MIN_ACCORD_VERSION))
             {
                 builder.transactionalMode(TransactionalMode.fromOrdinal(in.readInt()))
                        .transactionalMigrationFrom(TransactionalMigrationFromMode.fromOrdinal(in.readInt()))
@@ -640,7 +640,7 @@ public final class TableParams
                    serializedSizeMapBB(t.extensions) +
                    sizeof(t.cdc) +
                    sizeof(t.readRepair.name());
-            if (version.isAtLeast(Version.V2))
+            if (version.isAtLeast(Version.MIN_ACCORD_VERSION))
             {
                 size += sizeof(t.transactionalMode.ordinal()) +
                         sizeof(t.transactionalMigrationFrom.ordinal()) +
