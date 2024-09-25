@@ -48,11 +48,15 @@ import accord.api.Result;
 import accord.coordinate.Barrier;
 import accord.coordinate.CoordinateSyncPoint;
 import accord.coordinate.CoordinationFailed;
+import accord.coordinate.ExecuteSyncPoint;
 import accord.coordinate.Exhausted;
 import accord.coordinate.FailureAccumulator;
+import accord.coordinate.Invalidated;
 import accord.coordinate.Preempted;
 import accord.coordinate.Timeout;
 import accord.coordinate.TopologyMismatch;
+import accord.coordinate.tracking.AllTracker;
+import accord.coordinate.tracking.RequestStatus;
 import accord.impl.AbstractConfigurationService;
 import accord.impl.CoordinateDurabilityScheduling;
 import accord.impl.DefaultLocalListeners;
@@ -74,7 +78,10 @@ import accord.local.SaveStatus;
 import accord.local.ShardDistributor.EvenSplit;
 import accord.local.Status;
 import accord.local.cfk.CommandsForKey;
+import accord.messages.Callback;
+import accord.messages.ReadData;
 import accord.messages.Request;
+import accord.messages.WaitUntilApplied;
 import accord.primitives.Keys;
 import accord.primitives.Ranges;
 import accord.primitives.Seekable;
@@ -84,12 +91,15 @@ import accord.primitives.Timestamp;
 import accord.primitives.Txn;
 import accord.primitives.Txn.Kind;
 import accord.primitives.TxnId;
+import accord.topology.Topologies;
+import accord.topology.Topology;
 import accord.topology.TopologyManager;
 import accord.utils.DefaultRandom;
 import accord.utils.Invariants;
 import accord.utils.async.AsyncChain;
 import accord.utils.async.AsyncChains;
 import accord.utils.async.AsyncResult;
+import accord.utils.async.AsyncResults;
 import org.agrona.collections.Int2ObjectHashMap;
 import org.apache.cassandra.concurrent.Shutdownable;
 import org.apache.cassandra.config.CassandraRelevantProperties;
@@ -98,6 +108,8 @@ import org.apache.cassandra.cql3.statements.RequestValidations;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.cassandra.db.WriteType;
+import org.apache.cassandra.dht.AccordSplitter;
+import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.exceptions.ReadTimeoutException;
 import org.apache.cassandra.exceptions.RequestExecutionException;
 import org.apache.cassandra.exceptions.RequestTimeoutException;
@@ -108,6 +120,7 @@ import org.apache.cassandra.net.IVerbHandler;
 import org.apache.cassandra.net.Message;
 import org.apache.cassandra.net.MessageDelivery;
 import org.apache.cassandra.net.MessagingService;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.TableId;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.StorageService;
@@ -1072,5 +1085,192 @@ public class AccordService implements IAccordService, Shutdownable
             durableBefore.set(DurableBefore.merge(durableBefore.get(), safeStore.commandStore().durableBefore()));
         }));
         return new CompactionInfo(redundantBefores, ranges, durableBefore.get());
+    }
+
+    @Override
+    public void awaitForTableDrop(TableId id)
+    {
+        // Need to make sure no existing txn are still being processed for this table... this is only used by DROP TABLE so NEW txn are expected to be blocked, so just need to "wait" for existing ones to complete
+        Topology topology = node.topology().current();
+        List<TokenRange> ranges = topology.reduce(new ArrayList<>(),
+                                                  s -> ((TokenRange) s.range).table().equals(id),
+                                                  (accum, s) -> {
+                                                      accum.add((TokenRange) s.range);
+                                                      return accum;
+                                                  });
+        if (ranges.isEmpty()) return; // nothing to see here
+        List<AsyncChain<?>> syncs = new ArrayList<>(ranges.size());
+        for (TokenRange range : ranges)
+            syncs.add(awaitForTableDrop(range));
+        AsyncChain<Object[]> all = AsyncChains.allOf(syncs);
+        try
+        {
+            AsyncChains.getBlocking(all);
+        }
+        catch (InterruptedException e)
+        {
+            Thread.currentThread().interrupt();
+            throw new UncheckedInterruptedException(e);
+        }
+        catch (ExecutionException e)
+        {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private AsyncChain<?> awaitForTableDrop(TokenRange range)
+    {
+        IPartitioner partitioner = Schema.instance.getTablePartitioner(range.table());
+        Invariants.checkState(partitioner != null, "Unable to find partitioner for table %s", range.table());
+
+        AccordSplitter splitter = partitioner.accordSplitter().apply(Ranges.single(range));
+        List<TokenRange> splits = split(splitter, range);
+        List<AsyncChain<?>> syncs = new ArrayList<>(splits.size());
+        for (TokenRange tr : splits)
+            syncs.add(awaitForTableDropSubRange(tr));
+        return AsyncChains.allOf(syncs);
+    }
+
+    private List<TokenRange> split(AccordSplitter splitter, TokenRange range)
+    {
+        //TODO (now): copy logic from org.apache.cassandra.service.accord.repair.AccordRepair.repairRange
+        return Collections.singletonList(range);
+    }
+
+    private AsyncChain<?> awaitForTableDropSubRange(TokenRange range)
+    {
+        return awaitForTableDropSubRange(Ranges.single(range), 0);
+    }
+
+    private AsyncChain<SyncPoint<Ranges>> awaitForTableDropSubRange(Ranges ranges, int attempt)
+    {
+        //TODO (on merge): CASSANDRA-19769 has the same logic... should this be refactored?  Would make it nice so we could split the range on retries?
+        return CoordinateSyncPoint.exclusive(node, ranges)
+               .recover(t -> //TODO (operability): make this configurable / monitorable?
+                        {
+                            if (attempt > 3) return null;
+                            switch (shouldRetry(t))
+                            {
+                                case SUCCESS: // if the sync point was erased... how do we fetch it?  just retry
+                                case RETRY: return awaitForTableDropSubRange(ranges, attempt + 1);
+                                case FAIL: return null;
+                                default: throw new UnsupportedOperationException();
+                            }
+                        })
+               .flatMap(s -> Await.coordinate(node, s));
+    }
+
+    private enum RetryDecission { SUCCESS, RETRY, FAIL }
+    private static RetryDecission shouldRetry(Throwable t)
+    {
+        if (t.getClass() == ExecuteSyncPoint.SyncPointErased.class)
+            return RetryDecission.SUCCESS;
+        if (t instanceof Invalidated || t instanceof Preempted || t instanceof Timeout)
+            return RetryDecission.RETRY;
+        return RetryDecission.FAIL;
+    }
+
+    // TODO (duplication): this is 95% of accord.coordinate.CoordinateShardDurable
+    //   we already report all this information to EpochState; would be better to use that
+    //   Taken from ListStore...
+    private static class Await extends AsyncResults.SettableResult<SyncPoint<Ranges>> implements Callback<ReadData.ReadReply>
+    {
+        private final Node node;
+        private final AllTracker tracker;
+        private final SyncPoint<Ranges> exclusiveSyncPoint;
+
+        private Await(Node node, SyncPoint<Ranges> exclusiveSyncPoint)
+        {
+            Topologies topologies = node.topology().forEpoch(exclusiveSyncPoint.keysOrRanges, exclusiveSyncPoint.sourceEpoch());
+            this.node = node;
+            this.tracker = new AllTracker(topologies);
+            this.exclusiveSyncPoint = exclusiveSyncPoint;
+        }
+
+        public static AsyncChain<SyncPoint<Ranges>> coordinate(Node node, SyncPoint<Ranges> sp)
+        {
+            return node.withEpoch(sp.sourceEpoch(), () -> {
+                Await coordinate = new Await(node, sp);
+                coordinate.start();
+                return coordinate.recover(t -> {
+                    switch (shouldRetry(t))
+                    {
+                        case SUCCESS: // if the sync point was erased... how do we fetch it?  just retry
+                        case RETRY: return coordinate(node, sp);
+                        case FAIL: return null;
+                        default: throw new UnsupportedOperationException();
+                    }
+                });
+            });
+        }
+
+        private void start()
+        {
+            node.send(tracker.nodes(), to -> new WaitUntilApplied(to, tracker.topologies(), exclusiveSyncPoint.syncId, exclusiveSyncPoint.keysOrRanges, exclusiveSyncPoint.syncId.epoch()), this);
+        }
+        @Override
+        public void onSuccess(Node.Id from, ReadData.ReadReply reply)
+        {
+            if (!reply.isOk())
+            {
+                ReadData.CommitOrReadNack nack = (ReadData.CommitOrReadNack) reply;
+                switch (nack)
+                {
+                    default: throw new AssertionError("Unhandled: " + reply);
+
+                    case Insufficient:
+                        CoordinateSyncPoint.sendApply(node, from, exclusiveSyncPoint);
+                        return;
+                    case Rejected:
+                        tryFailure(new RuntimeException(nack.name()));
+                    case Redundant:
+                        tryFailure(new ExecuteSyncPoint.SyncPointErased());
+                        return;
+                    case Invalid:
+                        tryFailure(new Invalidated(exclusiveSyncPoint.syncId, exclusiveSyncPoint.homeKey));
+                        return;
+                }
+            }
+            else
+            {
+                if (tracker.recordSuccess(from) == RequestStatus.Success)
+                {
+                    node.configService().reportEpochRedundant(exclusiveSyncPoint.keysOrRanges, exclusiveSyncPoint.syncId.epoch());
+                    trySuccess(exclusiveSyncPoint);
+                }
+            }
+        }
+
+        private Throwable cause;
+
+        @Override
+        public void onFailure(Node.Id from, Throwable failure)
+        {
+            synchronized (this)
+            {
+                if (cause == null) cause = failure;
+                else
+                {
+                    try
+                    {
+                        cause.addSuppressed(failure);
+                    }
+                    catch (Throwable t)
+                    {
+                        // can not always add suppress
+                        node.agent().onUncaughtException(failure);
+                    }
+                }
+                failure = cause;
+            }
+            if (tracker.recordFailure(from) == RequestStatus.Failed)
+                tryFailure(failure);
+        }
+
+        @Override
+        public void onCallbackFailure(Node.Id from, Throwable failure)
+        {
+            tryFailure(failure);
+        }
     }
 }

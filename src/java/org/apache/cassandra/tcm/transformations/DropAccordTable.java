@@ -379,6 +379,8 @@ public class DropAccordTable extends MultiStepOperation<Epoch>
         @Override
         public SequenceState executeNext(ClusterMetadataService cms) throws Exception
         {
+            // make sure that Accord sees this epoch
+            AccordService.instance().epochReady(cms.metadata().epoch).get();
             //TODO (correctness, operability): this is more than likely to timeout, so best to "await" an existing txn_id rather than creating a new one...
             AccordService.instance().awaitForTableDrop(table.id);
             return super.executeNext(cms);
