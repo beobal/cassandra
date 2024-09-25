@@ -18,6 +18,7 @@
 
 package org.apache.cassandra.service.accord;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -45,6 +46,7 @@ import org.slf4j.LoggerFactory;
 import accord.api.BarrierType;
 import accord.api.LocalConfig;
 import accord.api.Result;
+import accord.api.RoutingKey;
 import accord.coordinate.Barrier;
 import accord.coordinate.CoordinateSyncPoint;
 import accord.coordinate.CoordinationFailed;
@@ -63,9 +65,9 @@ import accord.impl.DefaultLocalListeners;
 import accord.impl.DefaultRemoteListeners;
 import accord.impl.DefaultRequestTimeouts;
 import accord.impl.SizeOfIntersectionSorter;
+import accord.impl.progresslog.DefaultProgressLogs;
 import accord.local.Command;
 import accord.local.CommandStore;
-import accord.impl.progresslog.DefaultProgressLogs;
 import accord.local.CommandStores;
 import accord.local.DurableBefore;
 import accord.local.KeyHistory;
@@ -109,7 +111,6 @@ import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.cassandra.db.WriteType;
 import org.apache.cassandra.dht.AccordSplitter;
-import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.exceptions.ReadTimeoutException;
 import org.apache.cassandra.exceptions.RequestExecutionException;
 import org.apache.cassandra.exceptions.RequestTimeoutException;
@@ -143,8 +144,8 @@ import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.membership.NodeId;
-import org.apache.cassandra.transport.Dispatcher;
 import org.apache.cassandra.tracing.Tracing;
+import org.apache.cassandra.transport.Dispatcher;
 import org.apache.cassandra.utils.Blocking;
 import org.apache.cassandra.utils.Clock;
 import org.apache.cassandra.utils.ExecutorUtils;
@@ -1099,9 +1100,14 @@ public class AccordService implements IAccordService, Shutdownable
                                                       return accum;
                                                   });
         if (ranges.isEmpty()) return; // nothing to see here
+
+        ColumnFamilyStore cfs = Schema.instance.getColumnFamilyStoreInstance(id);
+        Invariants.checkState(cfs != null, "Unable to find table %s", id);
+        BigInteger targetSplitSize = BigInteger.valueOf(Math.max(1, cfs.estimateKeys() / 1_000_000));
+
         List<AsyncChain<?>> syncs = new ArrayList<>(ranges.size());
         for (TokenRange range : ranges)
-            syncs.add(awaitForTableDrop(range));
+            syncs.add(awaitForTableDrop(cfs, range, targetSplitSize));
         AsyncChain<Object[]> all = AsyncChains.allOf(syncs);
         try
         {
@@ -1118,23 +1124,44 @@ public class AccordService implements IAccordService, Shutdownable
         }
     }
 
-    private AsyncChain<?> awaitForTableDrop(TokenRange range)
+    private AsyncChain<?> awaitForTableDrop(ColumnFamilyStore cfs, TokenRange range, BigInteger targetSplitSize)
     {
-        IPartitioner partitioner = Schema.instance.getTablePartitioner(range.table());
-        Invariants.checkState(partitioner != null, "Unable to find partitioner for table %s", range.table());
-
-        AccordSplitter splitter = partitioner.accordSplitter().apply(Ranges.single(range));
-        List<TokenRange> splits = split(splitter, range);
+        List<TokenRange> splits = split(cfs, range, targetSplitSize);
         List<AsyncChain<?>> syncs = new ArrayList<>(splits.size());
         for (TokenRange tr : splits)
             syncs.add(awaitForTableDropSubRange(tr));
         return AsyncChains.allOf(syncs);
     }
 
-    private List<TokenRange> split(AccordSplitter splitter, TokenRange range)
+    private List<TokenRange> split(ColumnFamilyStore cfs, TokenRange range, BigInteger targetSplitSize)
     {
-        //TODO (now): copy logic from org.apache.cassandra.service.accord.repair.AccordRepair.repairRange
-        return Collections.singletonList(range);
+        if (targetSplitSize.equals(BigInteger.ONE)) return Collections.singletonList(range);
+
+        AccordSplitter splitter = cfs.getPartitioner().accordSplitter().apply(Ranges.single(range));
+        RoutingKey remainingStart = range.start();
+
+        BigInteger rangeSize = splitter.sizeOf(range);
+        BigInteger divide = splitter.divide(rangeSize, targetSplitSize);
+        BigInteger rangeStep = divide.equals(BigInteger.ZERO) ? rangeSize : BigInteger.ONE.max(divide);
+        BigInteger offset = BigInteger.ZERO;
+        List<TokenRange> result = new ArrayList<>();
+
+        while (splitter.compare(offset, rangeSize) < 0)
+        {
+            BigInteger remaining = rangeSize.subtract(offset);
+            BigInteger length = remaining.min(rangeStep);
+
+            TokenRange next = splitter.subRange(range, offset, splitter.add(offset, length));
+            result.add(next);
+            remainingStart = next.end();
+            offset = offset.add(length);
+        }
+
+        if (!remainingStart.equals(range.end()))
+            result.add(range.newRange(remainingStart, range.end()));
+        assert result.get(0).start().equals(range.start()) : String.format("Starting range %s does not have the same start as %s", result.get(0), range);
+        assert result.get(result.size() - 1).end().equals(range.end()) : String.format("Ending range %s does not have the same end as %s", result.get(result.size() - 1), range);
+        return result;
     }
 
     private AsyncChain<?> awaitForTableDropSubRange(TokenRange range)
