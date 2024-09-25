@@ -31,7 +31,6 @@ import accord.local.cfk.CommandsForKey;
 import accord.primitives.Ranges;
 import accord.primitives.TxnId;
 import accord.utils.async.AsyncChains;
-import accord.utils.async.AsyncResult;
 import org.apache.cassandra.distributed.Cluster;
 import org.apache.cassandra.distributed.api.ConsistencyLevel;
 import org.apache.cassandra.distributed.api.Feature;
@@ -43,6 +42,7 @@ import org.apache.cassandra.net.Verb;
 import org.apache.cassandra.schema.TableId;
 import org.apache.cassandra.service.accord.AccordCommandStore;
 import org.apache.cassandra.service.accord.AccordSafeCommandStore;
+import org.apache.cassandra.service.accord.AccordSafeCommandsForKey;
 import org.apache.cassandra.service.accord.AccordService;
 import org.apache.cassandra.service.accord.TokenRange;
 
@@ -151,11 +151,14 @@ public class AccordDropTableTest extends TestBaseImpl
                 for (int storeId : stores.ids())
                 {
                     AccordCommandStore store = (AccordCommandStore) stores.forId(storeId);
-                    AsyncResult<?> result = store.submit(ctx, input -> {
+                    AsyncChains.getUnchecked(store.submit(ctx, input -> {
                         AccordSafeCommandStore safe = (AccordSafeCommandStore) input;
                         for (Key key : safe.commandsForKeysKeys())
                         {
-                            CommandsForKey cfk = safe.maybeCommandsForKey(key).current();
+                            AccordSafeCommandsForKey safeCFK = safe.maybeCommandsForKey(key);
+                            if (safeCFK == null) // we read and found a key, but its null at load time... so ignore it
+                                continue;
+                            CommandsForKey cfk = safeCFK.current();
                             CommandsForKey.TxnInfo minUndecided = cfk.minUndecided();
                             if (minUndecided != null)
                                 throw new AssertionError("Undecided txn: " + minUndecided);
@@ -164,8 +167,7 @@ public class AccordDropTableTest extends TestBaseImpl
                                 throw new AssertionError("Unapplied txn: " + next);
                         }
                         return null;
-                    }).beginAsResult();
-                    AsyncChains.getUnchecked(result);
+                    }));
                 }
             });
         }
