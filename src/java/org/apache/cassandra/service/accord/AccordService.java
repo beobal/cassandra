@@ -1178,7 +1178,8 @@ public class AccordService implements IAccordService, Shutdownable
                                       if (attempt > 3) return null;
                                       switch (shouldRetry(t))
                                       {
-                                          case SUCCESS: return AsyncChains.success(null);
+                                          case SUCCESS:
+                                              return AsyncChains.success(null);
                                           case RETRY:
                                               return awaitForTableDropSubRange(ranges, attempt + 1);
                                           case FAIL:
