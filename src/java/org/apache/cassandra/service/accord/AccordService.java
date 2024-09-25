@@ -1169,7 +1169,13 @@ public class AccordService implements IAccordService, Shutdownable
         return awaitForTableDropSubRange(Ranges.single(range), 0);
     }
 
-    private AsyncChain<SyncPoint<Ranges>> awaitForTableDropSubRange(Ranges ranges, int attempt)
+    private AsyncChain<Void> awaitForTableDropSubRange(Ranges ranges, int attempt)
+    {
+        return exclusiveSyncPoint(ranges, attempt)
+               .flatMap(s -> s == null ? AsyncChains.success(null) : Await.coordinate(node, s));
+    }
+
+    private AsyncChain<SyncPoint<Ranges>> exclusiveSyncPoint(Ranges ranges, int attempt)
     {
         //TODO (on merge): CASSANDRA-19769 has the same logic... should this be refactored?  Would make it nice so we could split the range on retries?
         return CoordinateSyncPoint.exclusive(node, ranges)
@@ -1181,14 +1187,13 @@ public class AccordService implements IAccordService, Shutdownable
                                           case SUCCESS:
                                               return AsyncChains.success(null);
                                           case RETRY:
-                                              return awaitForTableDropSubRange(ranges, attempt + 1);
+                                              return exclusiveSyncPoint(ranges, attempt + 1);
                                           case FAIL:
                                               return null;
                                           default:
                                               throw new UnsupportedOperationException();
                                       }
-                                  })
-                                  .flatMap(s -> s == null ? AsyncChains.success(null) : Await.coordinate(node, s));
+                                  });
     }
 
     private enum RetryDecission { SUCCESS, RETRY, FAIL }
@@ -1218,15 +1223,16 @@ public class AccordService implements IAccordService, Shutdownable
             this.exclusiveSyncPoint = exclusiveSyncPoint;
         }
 
-        public static AsyncChain<SyncPoint<Ranges>> coordinate(Node node, SyncPoint<Ranges> sp)
+        public static AsyncChain<Void> coordinate(Node node, SyncPoint<Ranges> sp)
         {
             return node.withEpoch(sp.sourceEpoch(), () -> {
                 Await coordinate = new Await(node, sp);
                 coordinate.start();
-                return coordinate.recover(t -> {
+                AsyncChain<Void> chain = coordinate.map(i -> null);
+                return chain.recover(t -> {
                     switch (shouldRetry(t))
                     {
-                        case SUCCESS: // if the sync point was erased... how do we fetch it?  just retry
+                        case SUCCESS: return AsyncChains.success(null);
                         case RETRY: return coordinate(node, sp);
                         case FAIL: return null;
                         default: throw new UnsupportedOperationException();
