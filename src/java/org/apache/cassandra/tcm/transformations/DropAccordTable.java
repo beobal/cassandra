@@ -19,6 +19,7 @@
 package org.apache.cassandra.tcm.transformations;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Objects;
 import java.util.function.Function;
 
@@ -56,6 +57,7 @@ import static org.apache.cassandra.tcm.Transformation.Kind.AWAIT_ACCORD_TABLE_CO
 import static org.apache.cassandra.tcm.Transformation.Kind.DROP_ACCORD_TABLE;
 import static org.apache.cassandra.tcm.sequences.SequenceState.continuable;
 import static org.apache.cassandra.tcm.sequences.SequenceState.error;
+import static org.apache.cassandra.utils.Clock.Global.nanoTime;
 
 public class DropAccordTable extends MultiStepOperation<Epoch>
 {
@@ -380,9 +382,13 @@ public class DropAccordTable extends MultiStepOperation<Epoch>
         public SequenceState executeNext(ClusterMetadataService cms) throws Exception
         {
             // make sure that Accord sees this epoch
+            long startNanos = nanoTime();
             AccordService.instance().epochReady(cms.metadata().epoch).get();
+            long epochEndNanos = nanoTime();
             //TODO (correctness, operability): this is more than likely to timeout, so best to "await" an existing txn_id rather than creating a new one...
             AccordService.instance().awaitForTableDrop(table.id);
+            long awaitEndNanos = nanoTime();
+            logger.info("Wait for Accord to see the drop table was success.  Took {} to wait for Accord to learn about the change, then {} to process everything", Duration.ofNanos(epochEndNanos - startNanos), Duration.ofNanos(awaitEndNanos - epochEndNanos));
             return super.executeNext(cms);
         }
 

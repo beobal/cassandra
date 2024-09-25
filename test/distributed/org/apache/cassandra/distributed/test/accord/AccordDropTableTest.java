@@ -55,7 +55,8 @@ public class AccordDropTableTest extends TestBaseImpl
     {
         try (Cluster cluster = Cluster.build(3)
                                       .withoutVNodes()
-                                      .withConfig(c -> c.with(Feature.values()))
+                                      .withConfig(c -> c.with(Feature.values())
+                                                       .set("auto_snapshot", false))
                                       .start())
         {
             fixDistributedSchemas(cluster);
