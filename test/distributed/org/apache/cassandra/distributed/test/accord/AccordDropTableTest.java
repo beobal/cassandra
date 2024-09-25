@@ -55,8 +55,7 @@ public class AccordDropTableTest extends TestBaseImpl
     {
         try (Cluster cluster = Cluster.build(3)
                                       .withoutVNodes()
-                                      .withConfig(c -> c.with(Feature.values())
-                                                       .set("accord.progress_log_schedule_delay", "10s"))
+                                      .withConfig(c -> c.with(Feature.values()))
                                       .start())
         {
             fixDistributedSchemas(cluster);
