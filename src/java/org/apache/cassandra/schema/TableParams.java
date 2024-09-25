@@ -582,7 +582,7 @@ public final class TableParams
             serializeMapBB(t.extensions, out);
             out.writeBoolean(t.cdc);
             out.writeUTF(t.readRepair.name());
-            if (version.isAtLeast(Version.V2))
+            if (version.isAtLeast(Version.MIN_ACCORD_VERSION))
             {
                 out.writeInt(t.transactionalMode.ordinal());
                 out.writeInt(t.transactionalMigrationFrom.ordinal());
