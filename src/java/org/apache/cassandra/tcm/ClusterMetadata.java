@@ -199,16 +199,6 @@ public class ClusterMetadata
         this.accordStaleReplicas = accordStaleReplicas;
     }
 
-    public ClusterMetadata withDirectory(Directory directory)
-    {
-        return new ClusterMetadata(epoch, partitioner, schema, directory, tokenMap, placements, accordFastPath, lockedRanges, inProgressSequences, consensusMigrationState, extensions, accordStaleReplicas);
-    }
-
-    public ClusterMetadata withPlacements(DataPlacements placements)
-    {
-        return new ClusterMetadata(epoch, partitioner, schema, directory, tokenMap, placements, accordFastPath, lockedRanges, inProgressSequences, consensusMigrationState, extensions, accordStaleReplicas);
-    }
-
     public Set<InetAddressAndPort> fullCMSMembers()
     {
         if (fullCMSEndpoints == null)
