@@ -1074,7 +1074,7 @@ public class ClusterMetadata
             ConsensusMigrationState consensusMigrationState;
             AccordStaleReplicas staleReplicas;
 
-            if (version.isAtLeast(V2))
+            if (version.isAtLeast(MIN_ACCORD_VERSION))
             {
                 accordFastPath = AccordFastPath.serializer.deserialize(in, version);
                 consensusMigrationState = ConsensusMigrationState.serializer.deserialize(in, version);
@@ -1131,7 +1131,7 @@ public class ClusterMetadata
                     TokenMap.serializer.serializedSize(metadata.tokenMap, version) +
                     DataPlacements.serializer.serializedSize(metadata.placements, version);
 
-            if (version.isAtLeast(V2))
+            if (version.isAtLeast(MIN_ACCORD_VERSION))
             {
                 size += AccordFastPath.serializer.serializedSize(metadata.accordFastPath, version) +
                         ConsensusMigrationState.serializer.serializedSize(metadata.consensusMigrationState, version) +
