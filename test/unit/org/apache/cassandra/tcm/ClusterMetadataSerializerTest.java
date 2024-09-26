@@ -21,10 +21,17 @@ package org.apache.cassandra.tcm;
 import org.junit.Test;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.io.util.DataInputBuffer;
 import org.apache.cassandra.io.util.DataOutputBuffer;
+import org.apache.cassandra.service.accord.AccordFastPath;
+import org.apache.cassandra.service.accord.AccordStaleReplicas;
+import org.apache.cassandra.service.consensus.migration.ConsensusMigrationState;
 import org.apache.cassandra.tcm.membership.NodeVersion;
 import org.apache.cassandra.tcm.serialization.AsymmetricMetadataSerializers;
+import org.apache.cassandra.tcm.serialization.Version;
 import org.apache.cassandra.utils.CassandraGenerators.ClusterMetadataBuilder;
+import org.assertj.core.api.Assertions;
+import org.quicktheories.core.Gen;
 
 import static org.apache.cassandra.utils.FailingConsumer.orFail;
 import static org.quicktheories.QuickTheory.qt;
@@ -42,6 +49,35 @@ public class ClusterMetadataSerializerTest
         DataOutputBuffer output = new DataOutputBuffer();
         qt().forAll(new ClusterMetadataBuilder().build()).checkAssert(orFail(cm -> {
             AsymmetricMetadataSerializers.testSerde(output, ClusterMetadata.serializer, cm, NodeVersion.CURRENT_METADATA_VERSION);
+        }));
+    }
+
+    @Test
+    public void serdeWithoutAccord()
+    {
+        DataOutputBuffer output = new DataOutputBuffer();
+        Gen<ClusterMetadata> gen = new ClusterMetadataBuilder().build().assuming(cm -> {
+            if (!cm.consensusMigrationState.equals(ConsensusMigrationState.EMPTY))
+                return true;
+            if (!cm.accordStaleReplicas.equals(AccordStaleReplicas.EMPTY))
+                return true;
+            if (!cm.accordFastPath.equals(AccordFastPath.EMPTY))
+                return true;
+            return false;
+        });
+        qt().forAll(gen).checkAssert(orFail(cm -> {
+            output.clear();
+            Version version = Version.V2; // this is the version before accord
+            long expectedSize = ClusterMetadata.serializer.serializedSize(cm, version);
+            ClusterMetadata.serializer.serialize(cm, output, version);
+            Assertions.assertThat(output.getLength()).describedAs("The serialized size and bytes written do not match").isEqualTo(expectedSize);
+            DataInputBuffer in = new DataInputBuffer(output.unsafeGetBufferAndFlip(), false);
+            ClusterMetadata read = ClusterMetadata.serializer.deserialize(in, version);
+            Assertions.assertThat(read).isNotEqualTo(cm);
+
+            Assertions.assertThat(read.consensusMigrationState).isEqualTo(ConsensusMigrationState.EMPTY);
+            Assertions.assertThat(read.accordStaleReplicas).isEqualTo(AccordStaleReplicas.EMPTY);
+            Assertions.assertThat(read.accordFastPath).isEqualTo(AccordFastPath.EMPTY);
         }));
     }
 }
