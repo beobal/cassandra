@@ -24,7 +24,9 @@ import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -86,6 +88,10 @@ import org.apache.cassandra.schema.MemtableParams;
 import org.apache.cassandra.schema.TableId;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.schema.TableParams;
+import org.apache.cassandra.service.accord.fastpath.FastPathStrategy;
+import org.apache.cassandra.service.accord.fastpath.InheritKeyspaceFastPathStrategy;
+import org.apache.cassandra.service.accord.fastpath.ParameterizedFastPathStrategy;
+import org.apache.cassandra.service.accord.fastpath.SimpleFastPathStrategy;
 import org.apache.cassandra.service.consensus.TransactionalMode;
 import org.apache.cassandra.utils.AbstractTypeGenerators.TypeGenBuilder;
 import org.apache.cassandra.utils.AbstractTypeGenerators.ValueDomain;
@@ -218,6 +224,107 @@ public final class CassandraGenerators
         return SourceDSL.arbitrary().pick("big", "bti");
     }
 
+    public static class TableParamsBuilder
+    {
+        @Nullable
+        private Gen<String> memtableKeyGen = null;
+        @Nullable
+        private Gen<TransactionalMode> transactionalMode = null;
+        @Nullable
+        private Gen<FastPathStrategy> fastPathStrategy = null;
+
+        public TableParamsBuilder withKnownMemtables()
+        {
+            Set<String> known = MemtableParams.knownDefinitions();
+            // for testing reason, some invalid types are added; filter out
+            List<String> valid = known.stream().filter(name -> !name.startsWith("test_")).collect(Collectors.toList());
+            memtableKeyGen = SourceDSL.arbitrary().pick(valid);
+            return this;
+        }
+
+        public TableParamsBuilder withTransactionalMode(Gen<TransactionalMode> transactionalMode)
+        {
+            this.transactionalMode = transactionalMode;
+            return this;
+        }
+
+        public TableParamsBuilder withTransactionalMode()
+        {
+            return withTransactionalMode(SourceDSL.arbitrary().enumValues(TransactionalMode.class));
+        }
+
+        public TableParamsBuilder withTransactionalMode(TransactionalMode transactionalMode)
+        {
+            return withTransactionalMode(SourceDSL.arbitrary().constant(transactionalMode));
+        }
+
+        public TableParamsBuilder withFastPathStrategy()
+        {
+            fastPathStrategy = rnd -> {
+                FastPathStrategy.Kind kind = SourceDSL.arbitrary().enumValues(FastPathStrategy.Kind.class).generate(rnd);
+                switch (kind)
+                {
+                    case SIMPLE:
+                        return SimpleFastPathStrategy.instance;
+                    case INHERIT_KEYSPACE:
+                        return InheritKeyspaceFastPathStrategy.instance;
+                    case PARAMETERIZED:
+                    {
+                        Map<String, String> map = new HashMap<>();
+                        int size = SourceDSL.integers().between(1, Integer.MAX_VALUE).generate(rnd);
+                        map.put(ParameterizedFastPathStrategy.SIZE, Integer.toString(size));
+                        Set<String> names = new HashSet<>();
+                        Gen<String> nameGen = SourceDSL.strings().allPossible().ofLengthBetween(1, 10).assuming(s -> !s.trim().isEmpty());
+                        int numNames = SourceDSL.integers().between(1, 10).generate(rnd);
+                        for (int i = 0; i < numNames; i++)
+                        {
+                            while (!names.add(nameGen.generate(rnd))) {}
+                        }
+                        List<String> sortedNames = new ArrayList<>(names);
+                        sortedNames.sort(Comparator.naturalOrder());
+                        List<String> dcs = new ArrayList<>(names.size());
+                        boolean auto = SourceDSL.booleans().all().generate(rnd);
+                        if (auto)
+                        {
+                            dcs.addAll(sortedNames);
+                        }
+                        else
+                        {
+                            for (String name : sortedNames)
+                            {
+                                int weight = SourceDSL.integers().between(0, 10).generate(rnd);
+                                dcs.add(name + ":" + weight);
+                            }
+                        }
+                        // str: dcFormat(,dcFormat)*
+                        //      dcFormat: name | weight
+                        //      weight: int: >= 0
+                        //      note: can't mix auto and user defined weight; need one or the other.  Names must be unique
+                        map.put(ParameterizedFastPathStrategy.DCS, String.join(",", dcs));
+                        return ParameterizedFastPathStrategy.fromMap(map);
+                    }
+                    default:
+                        throw new UnsupportedOperationException(kind.name());
+                }
+            };
+            return this;
+        }
+
+        public Gen<TableParams> build()
+        {
+            return rnd -> {
+                TableParams.Builder params = TableParams.builder();
+                if (memtableKeyGen != null)
+                    params.memtable(MemtableParams.get(memtableKeyGen.generate(rnd)));
+                if (transactionalMode != null)
+                    params.transactionalMode(transactionalMode.generate(rnd));
+                if (fastPathStrategy != null)
+                    params.fastPath(fastPathStrategy.generate(rnd));
+                return params.build();
+            };
+        }
+    }
+
     public static class TableMetadataBuilder
     {
         private Gen<String> ksNameGen = CassandraGenerators.KEYSPACE_NAME_GEN;
@@ -230,10 +337,8 @@ public final class CassandraGenerators
         private Gen<Integer> numClusteringColumnsGen = SourceDSL.integers().between(1, 2);
         private Gen<Integer> numRegularColumnsGen = SourceDSL.integers().between(1, 5);
         private Gen<Integer> numStaticColumnsGen = SourceDSL.integers().between(0, 2);
-        private Gen<String> memtableKeyGen = null;
+        private TableParamsBuilder paramsBuilder = new TableParamsBuilder();
         private Gen<Boolean> useCounter = ignore -> false;
-        @Nullable
-        private Gen<TransactionalMode> transactionalMode = null;
         Gen<IPartitioner> partitionerGen = partitioners();
 
         public static TypeGenBuilder defaultTypeGen()
@@ -269,21 +374,19 @@ public final class CassandraGenerators
 
         public TableMetadataBuilder withTransactionalMode(Gen<TransactionalMode> transactionalMode)
         {
-            this.transactionalMode = transactionalMode;
+            paramsBuilder.withTransactionalMode(transactionalMode);
             return this;
         }
 
         public TableMetadataBuilder withTransactionalMode(TransactionalMode transactionalMode)
         {
-            return withTransactionalMode(SourceDSL.arbitrary().constant(transactionalMode));
+            paramsBuilder.withTransactionalMode(transactionalMode);
+            return this;
         }
 
         public TableMetadataBuilder withKnownMemtables()
         {
-            Set<String> known = MemtableParams.knownDefinitions();
-            // for testing reason, some invalid types are added; filter out
-            List<String> valid = known.stream().filter(name -> !name.startsWith("test_")).collect(Collectors.toList());
-            memtableKeyGen = SourceDSL.arbitrary().pick(valid);
+            paramsBuilder.withKnownMemtables();
             return this;
         }
 
@@ -423,17 +526,13 @@ public final class CassandraGenerators
         {
             String ks = ksNameGen.generate(rnd);
             String tableName = tableNameGen.generate(rnd);
-            TableParams.Builder params = TableParams.builder();
-            if (memtableKeyGen != null)
-                params.memtable(MemtableParams.get(memtableKeyGen.generate(rnd)));
-            if (transactionalMode != null)
-                params.transactionalMode(transactionalMode.generate(rnd));
+            TableParams params = paramsBuilder.build().generate(rnd);
             boolean isCounter = useCounter.generate(rnd);
             TableMetadata.Builder builder = TableMetadata.builder(ks, tableName, tableIdGen.generate(rnd))
                                                          .partitioner(partitionerGen.generate(rnd))
                                                          .kind(tableKindGen.generate(rnd))
                                                          .isCounter(isCounter)
-                                                         .params(params.build());
+                                                         .params(params);
 
             int numPartitionColumns = numPartitionColumnsGen.generate(rnd);
             int numClusteringColumns = numClusteringColumnsGen.generate(rnd);

@@ -572,10 +572,7 @@ public final class TableParams
             out.writeUTF(t.speculativeRetry.toString());
             out.writeUTF(t.additionalWritePolicy.toString());
             if (version.isAtLeast(Version.V2))
-            {
                 out.writeUTF(t.memtable.configurationKey());
-                FastPathStrategy.serializer.serialize(t.fastPath, out, version);
-            }
             serializeMap(t.caching.asMap(), out);
             serializeMap(t.compaction.asMap(), out);
             serializeMap(t.compression.asMap(), out);
@@ -584,6 +581,7 @@ public final class TableParams
             out.writeUTF(t.readRepair.name());
             if (version.isAtLeast(Version.MIN_ACCORD_VERSION))
             {
+                FastPathStrategy.serializer.serialize(t.fastPath, out, version);
                 out.writeInt(t.transactionalMode.ordinal());
                 out.writeInt(t.transactionalMigrationFrom.ordinal());
                 out.writeBoolean(t.pendingDrop);
@@ -604,7 +602,6 @@ public final class TableParams
                    .speculativeRetry(SpeculativeRetryPolicy.fromString(in.readUTF()))
                    .additionalWritePolicy(SpeculativeRetryPolicy.fromString(in.readUTF()))
                    .memtable(version.isAtLeast(Version.V2) ? MemtableParams.get(in.readUTF()) : MemtableParams.DEFAULT)
-                   .fastPath(version.isAtLeast(Version.V2) ? FastPathStrategy.serializer.deserialize(in, version) : FastPathStrategy.simple())
                    .caching(CachingParams.fromMap(deserializeMap(in)))
                    .compaction(CompactionParams.fromMap(deserializeMap(in)))
                    .compression(CompressionParams.fromMap(deserializeMap(in)))
@@ -613,7 +610,8 @@ public final class TableParams
                    .readRepair(ReadRepairStrategy.fromString(in.readUTF()));
             if (version.isAtLeast(Version.MIN_ACCORD_VERSION))
             {
-                builder.transactionalMode(TransactionalMode.fromOrdinal(in.readInt()))
+                builder.fastPath(FastPathStrategy.serializer.deserialize(in, version))
+                       .transactionalMode(TransactionalMode.fromOrdinal(in.readInt()))
                        .transactionalMigrationFrom(TransactionalMigrationFromMode.fromOrdinal(in.readInt()))
                        .pendingDrop(in.readBoolean());
             }
@@ -633,7 +631,6 @@ public final class TableParams
                    sizeof(t.speculativeRetry.toString()) +
                    sizeof(t.additionalWritePolicy.toString()) +
                    (version.isAtLeast(Version.V2) ? sizeof(t.memtable.configurationKey()) : 0) +
-                   (version.isAtLeast(Version.V2) ? FastPathStrategy.serializer.serializedSize(t.fastPath, version) : 0) +
                    serializedSizeMap(t.caching.asMap()) +
                    serializedSizeMap(t.compaction.asMap()) +
                    serializedSizeMap(t.compression.asMap()) +
@@ -642,7 +639,8 @@ public final class TableParams
                    sizeof(t.readRepair.name());
             if (version.isAtLeast(Version.MIN_ACCORD_VERSION))
             {
-                size += sizeof(t.transactionalMode.ordinal()) +
+                size += FastPathStrategy.serializer.serializedSize(t.fastPath, version) +
+                        sizeof(t.transactionalMode.ordinal()) +
                         sizeof(t.transactionalMigrationFrom.ordinal()) +
                         sizeof(t.pendingDrop);
             }
