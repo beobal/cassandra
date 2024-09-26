@@ -22,6 +22,8 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.cassandra.schema.TableId;
+
 public interface CMSOperationsMBean
 {
     public void initializeCMS(List<String> ignore);
@@ -45,4 +47,7 @@ public interface CMSOperationsMBean
     public boolean cancelInProgressSequences(String sequenceOwner, String expectedSequenceKind);
 
     public void unregisterLeftNodes(List<String> nodeIds);
+
+    public void resumeDropAccordTable(String tableId);
+
 }

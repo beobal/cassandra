@@ -27,6 +27,7 @@ import java.util.function.Function;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 
 import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.cassandra.io.util.DataOutputPlus;
@@ -216,6 +217,11 @@ public class InProgressSequences implements MetadataValue<InProgressSequences>, 
     public Iterator<MultiStepOperation<?>> iterator()
     {
         return state.values().iterator();
+    }
+
+    public ImmutableSet<MultiStepOperation.SequenceKey> keys()
+    {
+        return state.keySet();
     }
 
     public static class Serializer implements MetadataSerializer<InProgressSequences>
