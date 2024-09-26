@@ -36,7 +36,7 @@ public class TableParamsTest
     public void serdeLatest()
     {
         DataOutputBuffer output = new DataOutputBuffer();
-        qt().withFixedSeed(1602561790256791L).forAll(tableParams()).checkAssert(FailingConsumer.orFail(params -> {
+        qt().forAll(tableParams()).checkAssert(FailingConsumer.orFail(params -> {
             AsymmetricMetadataSerializers.testSerde(output, TableParams.serializer, params, NodeVersion.CURRENT_METADATA_VERSION);
         }));
     }
