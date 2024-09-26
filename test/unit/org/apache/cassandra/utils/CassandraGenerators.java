@@ -34,6 +34,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -47,6 +48,7 @@ import com.google.common.collect.ImmutableSet;
 import org.apache.commons.lang3.builder.MultilineRecursiveToStringStyle;
 import org.apache.commons.lang3.builder.ReflectionToStringBuilder;
 
+import accord.local.Node;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.cql3.ColumnIdentifier;
 import org.apache.cassandra.cql3.Duration;
@@ -84,15 +86,28 @@ import org.apache.cassandra.net.NoPayload;
 import org.apache.cassandra.net.PingRequest;
 import org.apache.cassandra.net.Verb;
 import org.apache.cassandra.schema.ColumnMetadata;
+import org.apache.cassandra.schema.DistributedSchema;
 import org.apache.cassandra.schema.MemtableParams;
 import org.apache.cassandra.schema.TableId;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.schema.TableParams;
+import org.apache.cassandra.service.accord.AccordFastPath;
+import org.apache.cassandra.service.accord.AccordStaleReplicas;
 import org.apache.cassandra.service.accord.fastpath.FastPathStrategy;
 import org.apache.cassandra.service.accord.fastpath.InheritKeyspaceFastPathStrategy;
 import org.apache.cassandra.service.accord.fastpath.ParameterizedFastPathStrategy;
 import org.apache.cassandra.service.accord.fastpath.SimpleFastPathStrategy;
 import org.apache.cassandra.service.consensus.TransactionalMode;
+import org.apache.cassandra.service.consensus.migration.ConsensusMigrationState;
+import org.apache.cassandra.tcm.ClusterMetadata;
+import org.apache.cassandra.tcm.Epoch;
+import org.apache.cassandra.tcm.extensions.ExtensionKey;
+import org.apache.cassandra.tcm.extensions.ExtensionValue;
+import org.apache.cassandra.tcm.membership.Directory;
+import org.apache.cassandra.tcm.ownership.DataPlacements;
+import org.apache.cassandra.tcm.ownership.TokenMap;
+import org.apache.cassandra.tcm.sequences.InProgressSequences;
+import org.apache.cassandra.tcm.sequences.LockedRanges;
 import org.apache.cassandra.utils.AbstractTypeGenerators.TypeGenBuilder;
 import org.apache.cassandra.utils.AbstractTypeGenerators.ValueDomain;
 import org.quicktheories.core.Gen;
@@ -1101,5 +1116,83 @@ public final class CassandraGenerators
             }
             return partitioner.decorateKey(valueGen.generate(rs));
         };
+    }
+
+    private enum EpochConstants { FIRST, EMPTY, UPGRADE_STARTUP, UPGRADE_GOSSIP}
+    public static Gen<Epoch> epochs()
+    {
+        return rnd -> {
+            if (SourceDSL.booleans().all().generate(rnd))
+            {
+                switch (SourceDSL.arbitrary().enumValues(EpochConstants.class).generate(rnd))
+                {
+                    case FIRST: return Epoch.FIRST;
+                    case EMPTY: return Epoch.EMPTY;
+                    case UPGRADE_STARTUP: return Epoch.UPGRADE_STARTUP;
+                    case UPGRADE_GOSSIP: return Epoch.UPGRADE_GOSSIP;
+                    default: throw new UnsupportedOperationException();
+                }
+            }
+
+            return Epoch.create(SourceDSL.longs().between(2, Long.MAX_VALUE).generate(rnd));
+        };
+    }
+
+    public static Gen<Node.Id> accordNodeId()
+    {
+        return SourceDSL.integers().all().map(Node.Id::new);
+    }
+
+    public static Gen<AccordStaleReplicas> accordStaleReplicas()
+    {
+        Gen<Set<Node.Id>> staleIdsGen = Generators.set(accordNodeId(), SourceDSL.integers().between(0, 10));
+        Gen<Epoch> epochGen = epochs();
+        return rnd -> new AccordStaleReplicas(staleIdsGen.generate(rnd), epochGen.generate(rnd));
+    }
+
+    public static Gen<AccordFastPath> accordFastPath()
+    {
+        Gen<List<Node.Id>> nodesGen = Generators.uniqueList(accordNodeId(), SourceDSL.integers().between(0, 10));
+        Gen<AccordFastPath.Status> statusGen = SourceDSL.arbitrary().enumValues(AccordFastPath.Status.class);
+        Gen<Long> updateTimeMillis = TIMESTAMP_NANOS.map(TimeUnit.NANOSECONDS::toMillis);
+        Gen<Long> updateDelayMillis = SourceDSL.longs().between(0, TimeUnit.HOURS.toMillis(2));
+        return rnd -> {
+            AccordFastPath accum = AccordFastPath.EMPTY;
+            for (Node.Id node : nodesGen.generate(rnd))
+            {
+                AccordFastPath.Status status = statusGen.generate(rnd);
+                // can't add a NORMAL node that doesn't exist, it must be ab-NORMAL first...
+                if (status == AccordFastPath.Status.NORMAL)
+                    accum = accum.withNodeStatusSince(node, AccordFastPath.Status.UNAVAILABLE, 0, 0);
+                accum = accum.withNodeStatusSince(node, status, updateTimeMillis.generate(rnd), updateDelayMillis.generate(rnd));
+            }
+            return accum;
+        };
+    }
+
+    public static class ClusterMetadataBuilder
+    {
+        private Gen<Epoch> epochGen = epochs();
+        private Gen<IPartitioner> partitionerGen = nonLocalPartitioners();
+        private Gen<AccordStaleReplicas> accordStaleReplicasGen = accordStaleReplicas();
+        private Gen<AccordFastPath> accordFastPathGen = accordFastPath();
+        public Gen<ClusterMetadata> build()
+        {
+            return rnd -> {
+                Epoch epoch = epochGen.generate(rnd);
+                IPartitioner partitioner = partitionerGen.generate(rnd);
+                Directory directory = Directory.EMPTY;
+                DistributedSchema schema = DistributedSchema.first(directory.knownDatacenters());
+                TokenMap tokenMap = new TokenMap(partitioner);
+                DataPlacements placements = DataPlacements.EMPTY;
+                AccordFastPath accordFastPath = accordFastPathGen.generate(rnd);
+                LockedRanges lockedRanges = LockedRanges.EMPTY;
+                InProgressSequences inProgressSequences = InProgressSequences.EMPTY;
+                ConsensusMigrationState consensusMigrationState = ConsensusMigrationState.EMPTY;
+                Map<ExtensionKey<?, ?>, ExtensionValue<?>> extensions = ImmutableMap.of();
+                AccordStaleReplicas accordStaleReplicas = accordStaleReplicasGen.generate(rnd);
+                return new ClusterMetadata(epoch, partitioner, schema, directory, tokenMap, placements, accordFastPath, lockedRanges, inProgressSequences, consensusMigrationState, extensions, accordStaleReplicas);
+            };
+        }
     }
 }

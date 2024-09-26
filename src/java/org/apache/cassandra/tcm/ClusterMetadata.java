@@ -81,6 +81,7 @@ import org.apache.cassandra.utils.Pair;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static org.apache.cassandra.config.CassandraRelevantProperties.LINE_SEPARATOR;
 import static org.apache.cassandra.db.TypeSizes.sizeof;
+import static org.apache.cassandra.tcm.serialization.Version.MIN_ACCORD_VERSION;
 import static org.apache.cassandra.tcm.serialization.Version.V2;
 
 public class ClusterMetadata
@@ -1025,7 +1026,7 @@ public class ClusterMetadata
             Directory.serializer.serialize(metadata.directory, out, version);
             TokenMap.serializer.serialize(metadata.tokenMap, out, version);
             DataPlacements.serializer.serialize(metadata.placements, out, version);
-            if (version.isAtLeast(V2))
+            if (version.isAtLeast(MIN_ACCORD_VERSION))
             {
                 AccordFastPath.serializer.serialize(metadata.accordFastPath, out, version);
                 ConsensusMigrationState.serializer.serialize(metadata.consensusMigrationState, out, version);
