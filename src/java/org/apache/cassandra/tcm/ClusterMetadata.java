@@ -82,7 +82,6 @@ import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static org.apache.cassandra.config.CassandraRelevantProperties.LINE_SEPARATOR;
 import static org.apache.cassandra.db.TypeSizes.sizeof;
 import static org.apache.cassandra.tcm.serialization.Version.MIN_ACCORD_VERSION;
-import static org.apache.cassandra.tcm.serialization.Version.V2;
 
 public class ClusterMetadata
 {

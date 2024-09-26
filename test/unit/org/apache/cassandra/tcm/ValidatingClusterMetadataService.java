@@ -54,7 +54,7 @@ public class ValidatingClusterMetadataService extends StubClusterMetadataService
         return cms;
     }
 
-    private static IPartitioner safeGetPartitioner()
+    public static IPartitioner safeGetPartitioner()
     {
         IPartitioner partitioner = DatabaseDescriptor.getPartitioner();
         return partitioner == null ? Murmur3Partitioner.instance : partitioner;

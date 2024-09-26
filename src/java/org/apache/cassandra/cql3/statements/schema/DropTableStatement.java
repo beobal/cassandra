@@ -29,8 +29,8 @@ import org.apache.cassandra.service.ClientState;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.sequences.InProgressSequences;
-import org.apache.cassandra.tcm.transformations.DropAccordTable.PrepareDropAccordTable;
-import org.apache.cassandra.tcm.transformations.DropAccordTable.TableReference;
+import org.apache.cassandra.tcm.transformations.PrepareDropAccordTable;
+import org.apache.cassandra.tcm.sequences.DropAccordTable.TableReference;
 import org.apache.cassandra.transport.Event.SchemaChange;
 import org.apache.cassandra.transport.Event.SchemaChange.Change;
 import org.apache.cassandra.transport.Event.SchemaChange.Target;
@@ -44,19 +44,12 @@ public final class DropTableStatement extends AlterSchemaStatement
 {
     private final String tableName;
     private final boolean ifExists;
-    private final boolean ignoreAccordChecks;
 
     public DropTableStatement(String keyspaceName, String tableName, boolean ifExists)
-    {
-        this(keyspaceName, tableName, ifExists, false);
-    }
-
-    public DropTableStatement(String keyspaceName, String tableName, boolean ifExists, boolean ignoreAccordChecks)
     {
         super(keyspaceName);
         this.tableName = tableName;
         this.ifExists = ifExists;
-        this.ignoreAccordChecks = ignoreAccordChecks;
     }
 
     @Override
@@ -101,7 +94,7 @@ public final class DropTableStatement extends AlterSchemaStatement
         if (table.isView())
             throw ire("Cannot use DROP TABLE on a materialized view. Please use DROP MATERIALIZED VIEW instead.");
 
-        if (!ignoreAccordChecks && table.isAccordEnabled() && table.params.pendingDrop)
+        if (table.isAccordEnabled() && table.params.pendingDrop)
             throw ire("Table '%s.%s' is already being dropped", keyspaceName, tableName);
 
         Iterable<ViewMetadata> views = keyspace.views.forTable(table.id);
