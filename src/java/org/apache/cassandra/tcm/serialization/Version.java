@@ -40,19 +40,23 @@ public enum Version
     /**
      *  - Added version to PlacementForRange serializer
      *  - Serialize MemtableParams when serializing TableParams
-     *  TODO (on rebase to trunk): V2 already exists so accord adds must be in a new version
+     */
+    V2(2),
+
+    /**
      *  - Added AccordFastPath
+     *  - Added ConsensusMigrationState
      *  - Added AccordStaleReplicas
      *  - TableParam now has pendingDrop (accord table drop is multistep)
      */
-    V2(2),
+    V3(3),
 
     UNKNOWN(Integer.MAX_VALUE);
 
     /**
      * The version that Accord was added to TCM.
      */
-    public static final Version MIN_ACCORD_VERSION = V2;
+    public static final Version MIN_ACCORD_VERSION = V3;
 
     private static Map<Integer, Version> values = new HashMap<>();
     static
