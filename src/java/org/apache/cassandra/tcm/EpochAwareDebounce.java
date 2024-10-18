@@ -23,6 +23,7 @@ import java.util.function.Supplier;
 
 import org.apache.cassandra.utils.Closeable;
 import org.apache.cassandra.utils.concurrent.Future;
+import org.apache.cassandra.utils.concurrent.ImmediateFuture;
 
 /**
  * When debouncing from a replica we know exactly which epoch we need, so to avoid retries we
@@ -59,33 +60,22 @@ public class EpochAwareDebounce implements Closeable
             if (running == SENTINEL)
                 continue;
 
-            if (running == CLOSED)
-                throwOnAlreadyClosed();
-
-            if (running != null && !running.future.isDone() && running.epoch.isEqualOrAfter(epoch))
+            // The inflight future is sufficient, or we are shutting down the debouncer
+            if ((running != null && !running.future.isDone() && running.epoch.isEqualOrAfter(epoch)) || running == CLOSED)
                 return running.future;
 
             if (currentFuture.compareAndSet(running, SENTINEL))
             {
                 EpochAwareFuture promise = new EpochAwareFuture(epoch, fetchFunction.get());
-                boolean res = currentFuture.compareAndSet(SENTINEL, promise);
-
-                if (currentFuture.get() == CLOSED)
-                    throwOnAlreadyClosed();
-
-                assert res : "Should not have happened";
-                return promise.future;
+                EpochAwareFuture current = currentFuture.compareAndExchange(SENTINEL, promise);
+                // we have to explicitly check here as close() unconditionally sets currentFuture
+                return current == CLOSED ? CLOSED.future : promise.future;
             }
         }
     }
 
-    private static void throwOnAlreadyClosed()
-    {
-        throw new IllegalStateException("Cannot fetch cluster metadata after EpochAwareDebounce is closed");
-    }
-
     private static final EpochAwareFuture SENTINEL = new EpochAwareFuture(Epoch.EMPTY, null);
-    private static final EpochAwareFuture CLOSED = new EpochAwareFuture(Epoch.EMPTY, null);
+    private static final EpochAwareFuture CLOSED = new EpochAwareFuture(Epoch.EMPTY, ImmediateFuture.cancelled());
 
     @Override
     public void close()
