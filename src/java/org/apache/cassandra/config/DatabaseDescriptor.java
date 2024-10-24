@@ -1509,10 +1509,10 @@ public class DatabaseDescriptor
                             ? createAddressConfig(conf.addresses_config)
                             : NodeAddressConfig.DEFAULT;
         }
+        addressConfig.configureAddresses();
         initializationLocator = new Locator(FBUtilities.getBroadcastAddressAndPort(),
                                             initialLocationProvider);
         nodeProximity = conf.dynamic_snitch ? new DynamicEndpointSnitch(proximity) : proximity;
-        addressConfig.configureAddresses();
         localAddressReconnector = addressConfig.preferLocalConnections()
                                   ? new ReconnectableSnitchHelper(initializationLocator, true)
                                   : new IEndpointStateChangeSubscriber() { /* NO-OP */ };

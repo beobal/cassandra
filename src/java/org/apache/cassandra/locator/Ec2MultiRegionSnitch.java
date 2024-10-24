@@ -53,7 +53,8 @@ public class Ec2MultiRegionSnitch extends Ec2Snitch
         this(Ec2MetadataServiceConnector.create(props));
     }
 
-    Ec2MultiRegionSnitch(AbstractCloudMetadataServiceConnector connector) throws IOException
+    @VisibleForTesting
+    public Ec2MultiRegionSnitch(AbstractCloudMetadataServiceConnector connector) throws IOException
     {
         super(connector);
         addressConfig = new Ec2MultiRegionAddressConfig(connector);

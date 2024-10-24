@@ -36,9 +36,9 @@ public class Ec2MultiRegionAddressConfig implements NodeAddressConfig
     private static final Logger logger = LoggerFactory.getLogger(Ec2MultiRegionAddressConfig.class);
 
     @VisibleForTesting
-    static final String PUBLIC_IP_QUERY = "/latest/meta-data/public-ipv4";
+    public static final String PUBLIC_IP_QUERY = "/latest/meta-data/public-ipv4";
     @VisibleForTesting
-    static final String PRIVATE_IP_QUERY = "/latest/meta-data/local-ipv4";
+    public static final String PRIVATE_IP_QUERY = "/latest/meta-data/local-ipv4";
     private final String localPublicAddress;
     private final String localPrivateAddress;
     private final AbstractCloudMetadataServiceConnector connector;
