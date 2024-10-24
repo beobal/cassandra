@@ -60,8 +60,15 @@ public class Ec2MultiRegionSnitch extends Ec2Snitch
         addressConfig = new Ec2MultiRegionAddressConfig(connector);
     }
 
+    @Override
     public void configureAddresses()
     {
         addressConfig.configureAddresses();
+    }
+
+    @Override
+    public boolean preferLocalConnections()
+    {
+        return true;
     }
 }

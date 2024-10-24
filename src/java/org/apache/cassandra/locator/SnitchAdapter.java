@@ -56,18 +56,12 @@ public class SnitchAdapter implements InitialLocationProvider, NodeProximity, No
     @Override
     public void configureAddresses()
     {
-        // only Ec2MultiRegionSnitch overrides broadcast and local address from config
-        if (snitch instanceof Ec2MultiRegionSnitch)
-            ((Ec2MultiRegionSnitch)snitch).configureAddresses();
+        snitch.configureAddresses();
     }
 
     @Override
     public boolean preferLocalConnections()
     {
-        if(snitch instanceof Ec2MultiRegionSnitch)
-            return true;
-        if (snitch instanceof GossipingPropertyFileSnitch)
-            return ((GossipingPropertyFileSnitch)snitch).preferLocal;
-        return false;
+        return snitch.preferLocalConnections();
     }
 }

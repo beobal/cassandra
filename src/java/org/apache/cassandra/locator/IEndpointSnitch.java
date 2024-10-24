@@ -96,5 +96,11 @@ public interface IEndpointSnitch
     {
         return true;
     }
+
+    default void configureAddresses() {}
+    default boolean preferLocalConnections()
+    {
+        return false; 
+    }
 }
 

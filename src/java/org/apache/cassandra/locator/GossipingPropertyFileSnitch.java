@@ -62,4 +62,10 @@ public class GossipingPropertyFileSnitch extends AbstractNetworkTopologySnitch
     {
         return fromConfig.datacenter;
     }
+
+    @Override
+    public boolean preferLocalConnections()
+    {
+        return preferLocal;
+    }
 }
