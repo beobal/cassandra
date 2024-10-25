@@ -298,6 +298,7 @@ public class DatabaseDescriptor
         sstableFormats = null;
         clearMBean("org.apache.cassandra.db:type=DynamicEndpointSnitch");
         clearMBean("org.apache.cassandra.db:type=EndpointSnitchInfo");
+        clearMBean("org.apache.cassandra.db:type=LocationInfo");
     }
 
     private static void clearMBean(String name)
