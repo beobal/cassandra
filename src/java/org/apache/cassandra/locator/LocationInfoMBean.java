@@ -15,15 +15,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.cassandra.locator;
 
 import java.net.UnknownHostException;
 
-/**
- * MBean exposing standard Snitch info
- */
-@Deprecated(since = "CEP-21")
-public interface EndpointSnitchInfoMBean
+public interface LocationInfoMBean
 {
     /**
      * Provides the Rack name depending on the respective snitch used, given the host name/ip
@@ -49,9 +46,6 @@ public interface EndpointSnitchInfoMBean
      */
     public String getDatacenter();
 
-    /**
-     * Provides the snitch name of the cluster
-     * @return Snitch name
-     */
-    public String getSnitchName();
+    public String getNodeProximityName();
+    public boolean hasLegacySnitchAdapter();
 }

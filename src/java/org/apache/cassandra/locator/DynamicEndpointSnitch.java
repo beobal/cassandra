@@ -326,7 +326,10 @@ public class DynamicEndpointSnitch implements NodeProximity, LatencySubscribers.
 
     public String getSubsnitchClassName()
     {
-        return delegate.getClass().getName();
+        Class<?> clazz = delegate.getClass();
+        if (delegate instanceof SnitchAdapter)
+            clazz = ((SnitchAdapter)delegate).snitch.getClass();
+        return clazz.getName();
     }
 
     public List<Double> dumpTimings(String hostname) throws UnknownHostException

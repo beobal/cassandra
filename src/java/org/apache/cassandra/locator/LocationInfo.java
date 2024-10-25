@@ -22,12 +22,11 @@ import java.net.UnknownHostException;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.utils.MBeanWrapper;
 
-@Deprecated(since = "CEP-21")
-public class EndpointSnitchInfo implements EndpointSnitchInfoMBean
+public class LocationInfo implements LocationInfoMBean
 {
     public static void create()
     {
-        MBeanWrapper.instance.registerMBean(new EndpointSnitchInfo(), "org.apache.cassandra.db:type=EndpointSnitchInfo");
+        MBeanWrapper.instance.registerMBean(new LocationInfo(), "org.apache.cassandra.db:type=LocationInfo");
     }
 
     public String getDatacenter(String host) throws UnknownHostException
@@ -50,10 +49,18 @@ public class EndpointSnitchInfo implements EndpointSnitchInfoMBean
         return DatabaseDescriptor.getLocator().local().rack;
     }
 
-    public String getSnitchName()
+    public String getNodeProximityName()
     {
         NodeProximity proximity = DatabaseDescriptor.getNodeProximity();
         Class<?> clazz = proximity instanceof SnitchAdapter ? ((SnitchAdapter)proximity).snitch.getClass() : proximity.getClass();
         return clazz.getName();
+    }
+
+    public boolean hasLegacySnitchAdapter()
+    {
+        NodeProximity proximity = DatabaseDescriptor.getNodeProximity();
+        if (proximity instanceof DynamicEndpointSnitch)
+            return ((DynamicEndpointSnitch)proximity).delegate instanceof SnitchAdapter;
+        return proximity instanceof SnitchAdapter;
     }
 }

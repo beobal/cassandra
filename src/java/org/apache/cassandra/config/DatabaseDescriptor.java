@@ -106,6 +106,7 @@ import org.apache.cassandra.locator.EndpointSnitchInfo;
 import org.apache.cassandra.locator.IEndpointSnitch;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.locator.Locator;
+import org.apache.cassandra.locator.LocationInfo;
 import org.apache.cassandra.locator.InitialLocationProvider;
 import org.apache.cassandra.locator.NodeAddressConfig;
 import org.apache.cassandra.locator.ReconnectableSnitchHelper;
@@ -1518,6 +1519,7 @@ public class DatabaseDescriptor
                                   : new IEndpointStateChangeSubscriber() { /* NO-OP */ };
 
         EndpointSnitchInfo.create();
+        LocationInfo.create();
     }
 
     public static void applyFailureDetector()
