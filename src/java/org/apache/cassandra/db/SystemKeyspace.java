@@ -652,13 +652,12 @@ public final class SystemKeyspace
                      ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         // If this node has not yet been registered in cluster metadata, record the initialization location provided
-        // by the configured snitch, this will also be used when registering an new node in cluster metadata during its
+        // by the configured Locator, this will also be used when registering an new node in cluster metadata during its
         // intial startup.
         // If the node is present in cluster metadata (i.e. has been registered already and we have replayed the
-        // metadata log), then get the location from there (via the snitch).
-        // We do this in case either the snitch config or location in metadata has been modified in any way, as cluster
+        // metadata log), then get the location from there (via the Locator).
+        // We do this in case either the Locator config or location in metadata has been modified in any way, as cluster
         // metadata is the ultimate source of truth.
-        // TODO fix this comment
         Location location = DatabaseDescriptor.getLocator().local();
         executeOnceInternal(format(req, LOCAL),
                             LOCAL,
