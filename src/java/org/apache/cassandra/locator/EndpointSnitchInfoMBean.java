@@ -21,6 +21,8 @@ import java.net.UnknownHostException;
 
 /**
  * MBean exposing standard Snitch info
+ *
+ * @deprecated see CASSANDRA-19488
  */
 @Deprecated(since = "CEP-21")
 public interface EndpointSnitchInfoMBean
