@@ -41,21 +41,9 @@ public class Ec2MultiRegionAddressConfig implements NodeAddressConfig
     public static final String PRIVATE_IP_QUERY = "/latest/meta-data/local-ipv4";
     private final String localPublicAddress;
     private final String localPrivateAddress;
-    private final AbstractCloudMetadataServiceConnector connector;
-
-    public Ec2MultiRegionAddressConfig() throws IOException, ConfigurationException
-    {
-        this(new SnitchProperties());
-    }
-
-    public Ec2MultiRegionAddressConfig(SnitchProperties props) throws IOException, ConfigurationException
-    {
-        this(Ec2MetadataServiceConnector.create(props));
-    }
 
     Ec2MultiRegionAddressConfig(AbstractCloudMetadataServiceConnector connector) throws IOException
     {
-        this.connector = connector;
         this.localPublicAddress = connector.apiCall(PUBLIC_IP_QUERY);
         logger.info("EC2 multi region address config using publicIP as identifier: {}", localPublicAddress);
         this.localPrivateAddress = connector.apiCall(PRIVATE_IP_QUERY);

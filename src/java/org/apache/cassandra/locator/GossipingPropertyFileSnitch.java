@@ -18,17 +18,12 @@
 
 package org.apache.cassandra.locator;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.tcm.membership.Location;
 
 
 public class GossipingPropertyFileSnitch extends AbstractNetworkTopologySnitch
 {
-    private static final Logger logger = LoggerFactory.getLogger(GossipingPropertyFileSnitch.class);
-
     private final Location fromConfig;
     public final boolean preferLocal;
     private static final Location DEFAULT_REMOTE = new Location("UNKNOWN_DC", "UNKNOWN_RACK");

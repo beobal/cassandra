@@ -69,6 +69,6 @@ public class Ec2MultiRegionSnitch extends Ec2Snitch
     @Override
     public boolean preferLocalConnections()
     {
-        return true;
+        return addressConfig.preferLocalConnections();
     }
 }

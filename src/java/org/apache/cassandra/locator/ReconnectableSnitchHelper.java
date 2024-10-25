@@ -79,11 +79,6 @@ public class ReconnectableSnitchHelper implements IEndpointStateChangeSubscriber
         }
     }
 
-    public void beforeChange(InetAddressAndPort endpoint, EndpointState currentState, ApplicationState newStateKey, VersionedValue newValue)
-    {
-        // no-op
-    }
-
     public void onJoin(InetAddressAndPort endpoint, EndpointState epState)
     {
         if (preferLocal && !Gossiper.instance.isDeadState(epState))
@@ -125,20 +120,5 @@ public class ReconnectableSnitchHelper implements IEndpointStateChangeSubscriber
         VersionedValue internalIPAndPorts = state.getApplicationState(ApplicationState.INTERNAL_ADDRESS_AND_PORT);
         if (preferLocal && internalIP != null)
             reconnect(endpoint, internalIPAndPorts != null ? internalIPAndPorts : internalIP);
-    }
-
-    public void onDead(InetAddressAndPort endpoint, EndpointState state)
-    {
-        // do nothing.
-    }
-
-    public void onRemove(InetAddressAndPort endpoint)
-    {
-        // do nothing.
-    }
-
-    public void onRestart(InetAddressAndPort endpoint, EndpointState state)
-    {
-        // do nothing.
     }
 }
