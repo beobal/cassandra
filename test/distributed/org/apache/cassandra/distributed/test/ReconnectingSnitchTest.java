@@ -29,6 +29,8 @@ import org.apache.cassandra.distributed.Cluster;
 import org.apache.cassandra.distributed.api.ConsistencyLevel;
 import org.apache.cassandra.distributed.api.Feature;
 import org.apache.cassandra.exceptions.ConfigurationException;
+import org.apache.cassandra.gms.ApplicationState;
+import org.apache.cassandra.gms.Gossiper;
 import org.apache.cassandra.locator.AbstractCloudMetadataServiceConnector;
 import org.apache.cassandra.locator.Ec2MultiRegionSnitch;
 import org.apache.cassandra.locator.InetAddressAndPort;
@@ -61,6 +63,14 @@ public class ReconnectingSnitchTest extends TestBaseImpl
                 String pattern = "Initiated reconnect to an Internal IP "+toInternalIp(ep)+" for the " + ep;
                 assertEquals(shouldBeEmpty, cluster.get(1).logs().grep(pattern).getResult().isEmpty());
             }
+            cluster.forEach(inst -> inst.runOnInstance(() -> {
+                for (InetAddressAndPort ep : Gossiper.instance.endpointStateMap.keySet())
+                {
+                    InetAddressAndPort internal = toInternalIp(ep);
+                    InetAddressAndPort fromGossip = InetAddressAndPort.getByNameUnchecked(Gossiper.instance.getApplicationState(ep, ApplicationState.INTERNAL_ADDRESS_AND_PORT));
+                    assertEquals(internal, fromGossip);
+                }
+            }));
         }
     }
 
