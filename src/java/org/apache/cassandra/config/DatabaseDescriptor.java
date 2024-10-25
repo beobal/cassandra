@@ -1488,7 +1488,7 @@ public class DatabaseDescriptor
         boolean hasModernConfig = conf.initial_location_provider != null && conf.node_proximity != null;
 
         if (hasLegacyConfig == hasModernConfig)
-            throw new ConfigurationException("Configuration must specify either node_proximity_sorter and " +
+            throw new ConfigurationException("Configuration must specify either node_proximity and " +
                                              "initial_location_provider or endpoint_snitch but not both. ");
 
         InitialLocationProvider initialLocationProvider;

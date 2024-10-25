@@ -100,7 +100,7 @@ public interface IEndpointSnitch
     default void configureAddresses() {}
     default boolean preferLocalConnections()
     {
-        return false; 
+        return false;
     }
 }
 
