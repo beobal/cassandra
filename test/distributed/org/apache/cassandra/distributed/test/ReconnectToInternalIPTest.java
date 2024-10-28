@@ -28,13 +28,18 @@ import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.distributed.Cluster;
 import org.apache.cassandra.distributed.api.ConsistencyLevel;
 import org.apache.cassandra.distributed.api.Feature;
+import org.apache.cassandra.distributed.impl.InstanceConfig;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.gms.ApplicationState;
 import org.apache.cassandra.gms.Gossiper;
 import org.apache.cassandra.locator.AbstractCloudMetadataServiceConnector;
+import org.apache.cassandra.locator.Ec2MultiRegionAddressConfig;
 import org.apache.cassandra.locator.Ec2MultiRegionSnitch;
 import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.locator.InitialLocationProvider;
+import org.apache.cassandra.locator.NetworkTopologyProximity;
 import org.apache.cassandra.locator.SnitchProperties;
+import org.apache.cassandra.tcm.membership.Location;
 
 import static org.apache.cassandra.locator.Ec2LocationProvider.ZONE_NAME_QUERY;
 import static org.apache.cassandra.locator.Ec2MultiRegionAddressConfig.PRIVATE_IP_QUERY;
@@ -42,10 +47,10 @@ import static org.apache.cassandra.locator.Ec2MultiRegionAddressConfig.PUBLIC_IP
 import static org.apache.cassandra.utils.Pair.create;
 import static org.junit.Assert.assertEquals;
 
-public class ReconnectingSnitchTest extends TestBaseImpl
+public class ReconnectToInternalIPTest extends TestBaseImpl
 {
     @Test
-    public void testMultiRegionSnitch() throws IOException
+    public void testWithSnitchConfig() throws IOException
     {
         try (Cluster cluster = init(builder().withNodes(4)
                                              .withConfig(c -> c.set("endpoint_snitch", TestMultiRegionSnitch.class.getName())
@@ -55,24 +60,68 @@ public class ReconnectingSnitchTest extends TestBaseImpl
                                                                .with(Feature.NETWORK, Feature.GOSSIP))
                                              .start()))
         {
-            cluster.schemaChange(withKeyspace("create table %s.tbl (id int primary key)"));
-            cluster.coordinator(1).execute(withKeyspace("insert into %s.tbl (id) values (1)"), ConsistencyLevel.ALL);
-            // node1 should only reconnect to node2:
-            for (int i = 1; i <= cluster.size(); i++)
+            doTest(cluster);
+        }
+    }
+
+    @Test
+    public void testWithModernConfig() throws IOException
+    {
+        try (Cluster cluster = init(builder().withNodes(4)
+                                            .withConfig(c -> {
+                                                c.set("node_proximity", NetworkTopologyProximity.class.getName())
+                                                 .set("initial_location_provider", TestMultiRegionLocationProvider.class.getName())
+                                                 .set("addresses_config", TestMultiRegionAddressConfig.class.getName())
+                                                 .set("prefer_local_connections", true)
+                                                 .set("listen_on_broadcast_address", true)
+                                                 .with(Feature.NETWORK, Feature.GOSSIP);
+                                                ((InstanceConfig)c).remove("endpoint_snitch");
+                                             })
+                                             .start()))
+        {
+            doTest(cluster);
+        }
+    }
+
+    private static void doTest(Cluster cluster)
+    {
+        cluster.schemaChange(withKeyspace("create table %s.tbl (id int primary key)"));
+        cluster.coordinator(1).execute(withKeyspace("insert into %s.tbl (id) values (1)"), ConsistencyLevel.ALL);
+        // node1 should only reconnect to node2:
+        for (int i = 1; i <= cluster.size(); i++)
+        {
+            boolean shouldBeEmpty = i != 2;
+            InetSocketAddress ep = cluster.get(i).config().broadcastAddress();
+            String pattern = "Initiated reconnect to an Internal IP "+toInternalIp(ep)+" for the " + ep;
+            assertEquals(shouldBeEmpty, cluster.get(1).logs().grep(pattern).getResult().isEmpty());
+        }
+        cluster.forEach(inst -> inst.runOnInstance(() -> {
+            for (InetAddressAndPort ep : Gossiper.instance.endpointStateMap.keySet())
             {
-                boolean shouldBeEmpty = i != 2;
-                InetSocketAddress ep = cluster.get(i).config().broadcastAddress();
-                String pattern = "Initiated reconnect to an Internal IP "+toInternalIp(ep)+" for the " + ep;
-                assertEquals(shouldBeEmpty, cluster.get(1).logs().grep(pattern).getResult().isEmpty());
+                InetAddressAndPort internal = toInternalIp(ep);
+                InetAddressAndPort fromGossip = InetAddressAndPort.getByNameUnchecked(Gossiper.instance.getApplicationState(ep, ApplicationState.INTERNAL_ADDRESS_AND_PORT));
+                assertEquals(internal, fromGossip);
             }
-            cluster.forEach(inst -> inst.runOnInstance(() -> {
-                for (InetAddressAndPort ep : Gossiper.instance.endpointStateMap.keySet())
-                {
-                    InetAddressAndPort internal = toInternalIp(ep);
-                    InetAddressAndPort fromGossip = InetAddressAndPort.getByNameUnchecked(Gossiper.instance.getApplicationState(ep, ApplicationState.INTERNAL_ADDRESS_AND_PORT));
-                    assertEquals(internal, fromGossip);
-                }
-            }));
+        }));
+    }
+
+    public static class TestMultiRegionLocationProvider implements InitialLocationProvider
+    {
+        @Override
+        public Location initialLocation()
+        {
+            InetAddressAndPort configuredBA = InetAddressAndPort.getByNameUnchecked(DatabaseDescriptor.getRawConfig().broadcast_address);
+            byte lastByte = configuredBA.addressBytes[configuredBA.addressBytes.length - 1];
+            String zone = (lastByte == 1 || lastByte == 2) ? "us-east-1" : "us-west-1";
+            return new Location(zone, zone + 'a');
+        }
+    }
+
+    public static class TestMultiRegionAddressConfig extends Ec2MultiRegionAddressConfig
+    {
+        public TestMultiRegionAddressConfig() throws IOException
+        {
+            super(new TestCloudMetadataConnector());
         }
     }
 
@@ -83,6 +132,7 @@ public class ReconnectingSnitchTest extends TestBaseImpl
             super(new TestCloudMetadataConnector());
         }
     }
+
     public static class TestCloudMetadataConnector extends AbstractCloudMetadataServiceConnector
     {
         public TestCloudMetadataConnector()
@@ -95,7 +145,7 @@ public class ReconnectingSnitchTest extends TestBaseImpl
                               String query,
                               String method,
                               Map<String, String> extraHeaders,
-                              int expectedResponseCode) throws IOException
+                              int expectedResponseCode)
         {
             InetAddressAndPort configuredBA = InetAddressAndPort.getByNameUnchecked(DatabaseDescriptor.getRawConfig().broadcast_address);
             switch (query)

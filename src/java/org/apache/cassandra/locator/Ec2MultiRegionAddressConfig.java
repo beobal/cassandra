@@ -42,7 +42,8 @@ public class Ec2MultiRegionAddressConfig implements NodeAddressConfig
     private final String localPublicAddress;
     private final String localPrivateAddress;
 
-    Ec2MultiRegionAddressConfig(AbstractCloudMetadataServiceConnector connector) throws IOException
+    @VisibleForTesting
+    public Ec2MultiRegionAddressConfig(AbstractCloudMetadataServiceConnector connector) throws IOException
     {
         this.localPublicAddress = connector.apiCall(PUBLIC_IP_QUERY);
         logger.info("EC2 multi region address config using publicIP as identifier: {}", localPublicAddress);
