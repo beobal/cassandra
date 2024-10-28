@@ -347,12 +347,22 @@ public class InstanceConfig implements IInstanceConfig
     public InstanceConfig forVersion(Semver version)
     {
         // Versions before 4.0 need to set 'seed_provider' without specifying the port
-        if (UpgradeTestBase.v40.compareTo(version) < 0)
+        // Versions before 5.0 need to set 'endpoint_snitch', not initial_location_provider + node_proximity
+        if (version.compareTo(UpgradeTestBase.v51) >= 0)
             return this;
-        else
-            return new InstanceConfig(this)
-                            .set("seed_provider", new ParameterizedClass(SimpleSeedProvider.class.getName(),
-                                                                         Collections.singletonMap("seeds", "127.0.0.1")));
+
+        InstanceConfig config = new InstanceConfig(this);
+        config.remove("initial_location_provider");
+        config.remove("node_proximity");
+        config.set("endpoint_snitch", "org.apache.cassandra.distributed.impl.DistributedTestSnitch");
+
+        // 4.0+ has seed_provider without port
+        if (version.compareTo(UpgradeTestBase.v40) >= 0)
+            return config;
+
+        config.set("seed_provider", new ParameterizedClass(SimpleSeedProvider.class.getName(),
+                                                           Collections.singletonMap("seeds", "127.0.0.1")));
+        return config;
     }
 
     public String toString()

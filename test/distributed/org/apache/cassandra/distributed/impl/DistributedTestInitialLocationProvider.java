@@ -31,6 +31,7 @@ public class DistributedTestInitialLocationProvider implements InitialLocationPr
     {
         mapping = topology;
     }
+
     @Override
     public Location initialLocation()
     {
