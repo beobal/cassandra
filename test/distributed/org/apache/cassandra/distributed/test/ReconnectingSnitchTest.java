@@ -49,6 +49,8 @@ public class ReconnectingSnitchTest extends TestBaseImpl
     {
         try (Cluster cluster = init(builder().withNodes(4)
                                              .withConfig(c -> c.set("endpoint_snitch", TestMultiRegionSnitch.class.getName())
+                                                               .set("node_proximity", null)
+                                                               .set("initial_location_provider", null)
                                                                .set("listen_on_broadcast_address", true)
                                                                .with(Feature.NETWORK, Feature.GOSSIP))
                                              .start()))
