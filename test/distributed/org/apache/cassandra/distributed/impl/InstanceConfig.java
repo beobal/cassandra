@@ -37,6 +37,7 @@ import org.apache.cassandra.distributed.api.IInstanceConfig;
 import org.apache.cassandra.distributed.shared.NetworkTopology;
 import org.apache.cassandra.distributed.upgrade.UpgradeTestBase;
 import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.locator.NetworkTopologyProximity;
 import org.apache.cassandra.locator.SimpleSeedProvider;
 
 public class InstanceConfig implements IInstanceConfig
@@ -105,7 +106,8 @@ public class InstanceConfig implements IInstanceConfig
                 .set("commitlog_sync_period_in_ms", 10000)
                 .set("storage_port", storage_port)
                 .set("native_transport_port", native_transport_port)
-                .set("endpoint_snitch", DistributedTestSnitch.class.getName())
+                .set("initial_location_provider", DistributedTestInitialLocationProvider.class.getName())
+                .set("node_proximity", NetworkTopologyProximity.class.getName())
                 .set("seed_provider", new ParameterizedClass(SimpleSeedProvider.class.getName(),
                         Collections.singletonMap("seeds", seedIp + ':' + seedPort)))
                 .set("discovery_timeout", "3s")
@@ -184,7 +186,7 @@ public class InstanceConfig implements IInstanceConfig
     @Override
     public InetSocketAddress broadcastAddress()
     {
-        return DistributedTestSnitch.fromCassandraInetAddressAndPort(getBroadcastAddressAndPort());
+        return TestEndpointCache.fromCassandraInetAddressAndPort(getBroadcastAddressAndPort());
     }
 
     public void unsetBroadcastAddressAndPort()

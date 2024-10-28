@@ -178,8 +178,8 @@ import static org.apache.cassandra.distributed.api.Feature.GOSSIP;
 import static org.apache.cassandra.distributed.api.Feature.JMX;
 import static org.apache.cassandra.distributed.api.Feature.NATIVE_PROTOCOL;
 import static org.apache.cassandra.distributed.api.Feature.NETWORK;
-import static org.apache.cassandra.distributed.impl.DistributedTestSnitch.fromCassandraInetAddressAndPort;
-import static org.apache.cassandra.distributed.impl.DistributedTestSnitch.toCassandraInetAddressAndPort;
+import static org.apache.cassandra.distributed.impl.TestEndpointCache.fromCassandraInetAddressAndPort;
+import static org.apache.cassandra.distributed.impl.TestEndpointCache.toCassandraInetAddressAndPort;
 import static org.apache.cassandra.net.Verb.BATCH_STORE_REQ;
 import static org.apache.cassandra.service.CassandraDaemon.logSystemInfo;
 
@@ -622,7 +622,7 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
                 {
                     assert config.networkTopology().contains(config.broadcastAddress()) : String.format("Network topology %s doesn't contain the address %s",
                                                                                                         config.networkTopology(), config.broadcastAddress());
-                    DistributedTestSnitch.assign(config.networkTopology());
+                    DistributedTestInitialLocationProvider.assign(config.networkTopology());
                     CassandraDaemon.getInstanceForTesting().activate(false);
                     // TODO: filters won't work for the messages dispatched during startup
                     registerInboundFilter(cluster);
@@ -707,7 +707,7 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
 
         assert config.networkTopology().contains(config.broadcastAddress()) : String.format("Network topology %s doesn't contain the address %s",
                                                                                             config.networkTopology(), config.broadcastAddress());
-        DistributedTestSnitch.assign(config.networkTopology());
+        DistributedTestInitialLocationProvider.assign(config.networkTopology());
         DatabaseDescriptor.daemonInitialization();
         if (config.has(JMX))
             startJmx();

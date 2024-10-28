@@ -23,19 +23,10 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.cassandra.distributed.shared.NetworkTopology;
-import org.apache.cassandra.gms.ApplicationState;
-import org.apache.cassandra.gms.Gossiper;
-import org.apache.cassandra.locator.AbstractNetworkTopologySnitch;
 import org.apache.cassandra.locator.InetAddressAndPort;
-import org.apache.cassandra.service.StorageService;
-import org.apache.cassandra.utils.FBUtilities;
 
-// TODO convert to Locator & InitialLocationProvider - currently this is being handled like any other
-//  legacy snitch, by using SnitchAdapter to provide access via those new interfaces. This is valid and
-//  useful as it exercises the migration path, but we do also need to verify the new methods of configuration
-public class DistributedTestSnitch extends AbstractNetworkTopologySnitch
+public class TestEndpointCache
 {
-    private static NetworkTopology mapping = null;
     private static final Map<InetAddressAndPort, InetSocketAddress> cache = new ConcurrentHashMap<>();
     private static final Map<InetSocketAddress, InetAddressAndPort> cacheInverse = new ConcurrentHashMap<>();
 
@@ -45,7 +36,7 @@ public class DistributedTestSnitch extends AbstractNetworkTopologySnitch
         if (m == null)
         {
             m = InetAddressAndPort.getByAddressOverrideDefaults(addressAndPort.getAddress(), addressAndPort.getPort());
-            cache.put(m, addressAndPort);
+            cacheInverse.put(addressAndPort, m);
         }
         return m;
     }
@@ -59,32 +50,5 @@ public class DistributedTestSnitch extends AbstractNetworkTopologySnitch
             cache.put(addressAndPort, m);
         }
         return m;
-    }
-
-    @Override
-    public String getLocalRack()
-    {
-        return mapping.localRack(FBUtilities.getBroadcastAddressAndPort());
-    }
-
-    @Override
-    public String getLocalDatacenter()
-    {
-        return mapping.localDC(FBUtilities.getBroadcastAddressAndPort());
-    }
-
-    static void assign(NetworkTopology newMapping)
-    {
-        mapping = new NetworkTopology(newMapping);
-    }
-
-    public void gossiperStarting()
-    {
-        super.gossiperStarting();
-
-        Gossiper.instance.addLocalApplicationState(ApplicationState.INTERNAL_ADDRESS_AND_PORT,
-                                                   StorageService.instance.valueFactory.internalAddressAndPort(FBUtilities.getLocalAddressAndPort()));
-        Gossiper.instance.addLocalApplicationState(ApplicationState.INTERNAL_IP,
-                                                   StorageService.instance.valueFactory.internalIP(FBUtilities.getJustLocalAddress()));
     }
 }
