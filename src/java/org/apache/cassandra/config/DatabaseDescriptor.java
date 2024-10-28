@@ -2157,13 +2157,6 @@ public class DatabaseDescriptor
         nodeProximity = proximity;
     }
 
-    public static void setEndpointSnitch(IEndpointSnitch eps)
-    {
-        logger.info("Use of {} is deprecated and should be replaced by an initial_location_provider and a node_proximity",
-                    IEndpointSnitch.class.getName());
-        nodeProximity = new SnitchAdapter(eps);
-    }
-
     public static IFailureDetector newFailureDetector()
     {
         return newFailureDetector.get();
