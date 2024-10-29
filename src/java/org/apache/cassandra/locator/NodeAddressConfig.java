@@ -39,8 +39,8 @@ public interface NodeAddressConfig
             // Previously the equivalent config was hard coded for Ec2MultiRegionSnitch and read from
             // cassandra-rackdc.properties in the case of GossipingPropertyFileSnitch. In legacy config
             // mode, where one of those IEndpointSnitch impls is still specified the original behaviour
-            // is preserved. For modern config, the option can be specified in the node config, separately
-            // from NodeProximity and InitilLocationProvider config.
+            // is preserved. For modern config the option can be specified in the main yaml, distinct
+            // from the NodeProximity and InitialLocationProvider options.
             return DatabaseDescriptor.preferLocalConnections();
         }
     };

@@ -28,7 +28,6 @@ import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.distributed.Cluster;
 import org.apache.cassandra.distributed.api.ConsistencyLevel;
 import org.apache.cassandra.distributed.api.Feature;
-import org.apache.cassandra.distributed.impl.InstanceConfig;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.gms.ApplicationState;
 import org.apache.cassandra.gms.Gossiper;
@@ -68,15 +67,13 @@ public class ReconnectToInternalIPTest extends TestBaseImpl
     public void testWithModernConfig() throws IOException
     {
         try (Cluster cluster = init(builder().withNodes(4)
-                                            .withConfig(c -> {
-                                                c.set("node_proximity", NetworkTopologyProximity.class.getName())
-                                                 .set("initial_location_provider", TestMultiRegionLocationProvider.class.getName())
-                                                 .set("addresses_config", TestMultiRegionAddressConfig.class.getName())
-                                                 .set("prefer_local_connections", true)
-                                                 .set("listen_on_broadcast_address", true)
-                                                 .with(Feature.NETWORK, Feature.GOSSIP);
-                                                ((InstanceConfig)c).remove("endpoint_snitch");
-                                             })
+                                            .withConfig(c -> c.set("endpoint_snitch", null)
+                                                              .set("node_proximity", NetworkTopologyProximity.class.getName())
+                                                              .set("initial_location_provider", TestMultiRegionLocationProvider.class.getName())
+                                                              .set("listen_on_broadcast_address", true)
+                                                              .set("addresses_config", TestMultiRegionAddressConfig.class.getName())
+                                                              .set("prefer_local_connections", true)
+                                                 .with(Feature.NETWORK, Feature.GOSSIP))
                                              .start()))
         {
             doTest(cluster);
