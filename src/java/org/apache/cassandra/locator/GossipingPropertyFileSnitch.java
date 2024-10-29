@@ -26,24 +26,12 @@ public class GossipingPropertyFileSnitch extends AbstractNetworkTopologySnitch
 {
     private final Location fromConfig;
     public final boolean preferLocal;
-    private static final Location DEFAULT_REMOTE = new Location("UNKNOWN_DC", "UNKNOWN_RACK");
 
     public GossipingPropertyFileSnitch() throws ConfigurationException
     {
-        SnitchProperties properties = loadConfiguration();
-
-        fromConfig = new Location(properties.get("dc", DEFAULT_REMOTE.datacenter).trim(),
-                                  properties.get("rack", DEFAULT_REMOTE.rack).trim());
+        SnitchProperties properties = RackDCFileLocationProvider.loadConfiguration();
+        fromConfig = new RackDCFileLocationProvider(properties).initialLocation();
         preferLocal = Boolean.parseBoolean(properties.get("prefer_local", "false"));
-    }
-
-    private static SnitchProperties loadConfiguration() throws ConfigurationException
-    {
-        final SnitchProperties properties = new SnitchProperties();
-        if (!properties.contains("dc") || !properties.contains("rack"))
-            throw new ConfigurationException("DC or rack not found in snitch properties, check your configuration in: " + SnitchProperties.RACKDC_PROPERTY_FILENAME);
-
-        return properties;
     }
 
     @Override
