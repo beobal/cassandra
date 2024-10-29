@@ -40,6 +40,7 @@ import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.StubClusterMetadataService;
 import org.apache.cassandra.utils.FBUtilities;
 
+import static org.apache.cassandra.locator.TopologyFileLocationProvider.PROPERTIES_FILENAME;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -64,7 +65,7 @@ public class PropertyFileSnitchTest
     {
         ClusterMetadataService.unsetInstance();
         ClusterMetadataService.setInstance(StubClusterMetadataService.forTesting());
-        String confFile = FBUtilities.resourceToFile(PropertyFileSnitch.SNITCH_PROPERTIES_FILENAME);
+        String confFile = FBUtilities.resourceToFile(PROPERTIES_FILENAME);
         effectiveFile = Paths.get(confFile);
         backupFile = Paths.get(confFile + ".bak");
         localAddress = FBUtilities.getBroadcastAddressAndPort();
@@ -106,7 +107,7 @@ public class PropertyFileSnitchTest
         {
             String expectedMessage = String.format("Snitch definitions at %s do not define a location for this node's " +
                                                    "broadcast address %s, nor does it provides a default",
-                                                   PropertyFileSnitch.SNITCH_PROPERTIES_FILENAME, localAddress);
+                                                   PROPERTIES_FILENAME, localAddress);
             assertTrue(e.getMessage().contains(expectedMessage));
         }
     }

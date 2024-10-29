@@ -17,19 +17,8 @@
  */
 package org.apache.cassandra.locator;
 
-import java.io.InputStream;
-import java.net.UnknownHostException;
-import java.util.Map;
-import java.util.Properties;
-
-import com.google.common.annotations.VisibleForTesting;
-import org.apache.commons.lang3.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.tcm.membership.Location;
-import org.apache.cassandra.utils.FBUtilities;
 
 /**
  * <p>
@@ -50,22 +39,12 @@ import org.apache.cassandra.utils.FBUtilities;
  */
 public class PropertyFileSnitch extends AbstractNetworkTopologySnitch
 {
-    private static final Logger logger = LoggerFactory.getLogger(PropertyFileSnitch.class);
-
-    public static final String SNITCH_PROPERTIES_FILENAME = "cassandra-topology.properties";
-    // All the defaults
-    private static final String DEFAULT_PROPERTY = "default";
-    @VisibleForTesting
-    public static final String DEFAULT_DC = "default";
-    @VisibleForTesting
-    public static final String DEFAULT_RACK = "default";
-
     // Used only during initialization of a new node. This provides the location it will register in cluster metadata
     private final Location local;
 
     public PropertyFileSnitch() throws ConfigurationException
     {
-        local = loadConfiguration();
+        local = new TopologyFileLocationProvider().initialLocation();
     }
 
     @Override
@@ -78,86 +57,5 @@ public class PropertyFileSnitch extends AbstractNetworkTopologySnitch
     public String getLocalDatacenter()
     {
         return local.datacenter;
-    }
-
-    private Location makeLocation(String value)
-    {
-        if (value == null || value.isEmpty())
-            return null;
-
-        String[] parts = value.split(":");
-        if (parts.length < 2)
-        {
-            return new Location(DEFAULT_DC, DEFAULT_RACK);
-        }
-        else
-        {
-            return new Location(parts[0].trim(), parts[1].trim());
-        }
-    }
-
-    private Location loadConfiguration() throws ConfigurationException
-    {
-        Properties properties = new Properties();
-        try (InputStream stream = getClass().getClassLoader().getResourceAsStream(SNITCH_PROPERTIES_FILENAME))
-        {
-            properties.load(stream);
-        }
-        catch (Exception e)
-        {
-            throw new ConfigurationException("Unable to read " + SNITCH_PROPERTIES_FILENAME, e);
-        }
-
-        Location local = null;
-        InetAddressAndPort broadcastAddress = FBUtilities.getBroadcastAddressAndPort();
-        for (Map.Entry<Object, Object> entry : properties.entrySet())
-        {
-            String key = (String) entry.getKey();
-            String value = (String) entry.getValue();
-            if (DEFAULT_PROPERTY.equals(key))
-                continue;
-
-            String hostString = StringUtils.remove(key, '/');
-            try
-            {
-                InetAddressAndPort host = InetAddressAndPort.getByName(hostString);
-                if (host.equals(broadcastAddress))
-                {
-                    local = makeLocation(value);
-                    break;
-                }
-            }
-            catch (UnknownHostException e)
-            {
-                throw new ConfigurationException("Unknown host " + hostString, e);
-            }
-
-        }
-
-        // This may be null, which is ok unless config doesn't contain the location of the local node
-        Location defaultLocation = makeLocation(properties.getProperty(DEFAULT_PROPERTY));
-
-        if (local == null)
-        {
-            if (defaultLocation == null)
-            {
-                throw new ConfigurationException(String.format("Snitch definitions at %s do not define a location for " +
-                                                               "this node's broadcast address %s, nor does it provides a default",
-                                                               SNITCH_PROPERTIES_FILENAME, broadcastAddress));
-            }
-            else
-            {
-                logger.debug("Broadcast address {} was not present in snitch config, using default location {}. " +
-                            "This only matters on first boot, before registering with the cluster metadata service",
-                            broadcastAddress, defaultLocation);
-                local = defaultLocation;
-            }
-        }
-
-        logger.debug("Loaded location {} for broadcast address {} from property file. " +
-                     "This only matters on first boot, before registering with the cluster metadata service",
-                      local, broadcastAddress);
-
-        return local;
     }
 }
