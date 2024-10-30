@@ -20,7 +20,9 @@ package org.apache.cassandra.distributed.test;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.util.Map;
+import java.util.concurrent.TimeoutException;
 
 import org.junit.Test;
 
@@ -45,11 +47,12 @@ import static org.apache.cassandra.locator.Ec2MultiRegionAddressConfig.PRIVATE_I
 import static org.apache.cassandra.locator.Ec2MultiRegionAddressConfig.PUBLIC_IP_QUERY;
 import static org.apache.cassandra.utils.Pair.create;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class ReconnectToInternalIPTest extends TestBaseImpl
 {
     @Test
-    public void testWithSnitchConfig() throws IOException
+    public void testWithSnitchConfig() throws Exception
     {
         try (Cluster cluster = init(builder().withNodes(4)
                                              .withConfig(c -> c.set("endpoint_snitch", TestMultiRegionSnitch.class.getName())
@@ -64,7 +67,7 @@ public class ReconnectToInternalIPTest extends TestBaseImpl
     }
 
     @Test
-    public void testWithModernConfig() throws IOException
+    public void testWithModernConfig() throws Exception
     {
         try (Cluster cluster = init(builder().withNodes(4)
                                             .withConfig(c -> c.set("endpoint_snitch", null)
@@ -80,23 +83,28 @@ public class ReconnectToInternalIPTest extends TestBaseImpl
         }
     }
 
-    private static void doTest(Cluster cluster)
+    private static void doTest(Cluster cluster) throws TimeoutException
     {
         cluster.schemaChange(withKeyspace("create table %s.tbl (id int primary key)"));
         cluster.coordinator(1).execute(withKeyspace("insert into %s.tbl (id) values (1)"), ConsistencyLevel.ALL);
-        // node1 should only reconnect to node2:
-        for (int i = 1; i <= cluster.size(); i++)
+        // node1 should only reconnect to node2, but currently this is still driven by gossip so may not happen immediately
+        InetSocketAddress ep = cluster.get(2).config().broadcastAddress();
+        String pattern = "Initiated reconnect to an Internal IP "+toInternalIp(ep)+" for the " + ep;
+        cluster.get(1).logs().watchFor(Duration.ofSeconds(10), pattern);
+
+        // node1 should not reconnect to node3 or node4
+        for (int i = 3; i <= 4; i++)
         {
-            boolean shouldBeEmpty = i != 2;
-            InetSocketAddress ep = cluster.get(i).config().broadcastAddress();
-            String pattern = "Initiated reconnect to an Internal IP "+toInternalIp(ep)+" for the " + ep;
-            assertEquals(shouldBeEmpty, cluster.get(1).logs().grep(pattern).getResult().isEmpty());
+            ep = cluster.get(i).config().broadcastAddress();
+            pattern = "Initiated reconnect to an Internal IP "+toInternalIp(ep)+" for the " + ep;
+            assertTrue(cluster.get(1).logs().grep(pattern).getResult().isEmpty());
         }
+
         cluster.forEach(inst -> inst.runOnInstance(() -> {
-            for (InetAddressAndPort ep : Gossiper.instance.endpointStateMap.keySet())
+            for (InetAddressAndPort endpoint : Gossiper.instance.endpointStateMap.keySet())
             {
-                InetAddressAndPort internal = toInternalIp(ep);
-                InetAddressAndPort fromGossip = InetAddressAndPort.getByNameUnchecked(Gossiper.instance.getApplicationState(ep, ApplicationState.INTERNAL_ADDRESS_AND_PORT));
+                InetAddressAndPort internal = toInternalIp(endpoint);
+                InetAddressAndPort fromGossip = InetAddressAndPort.getByNameUnchecked(Gossiper.instance.getApplicationState(endpoint, ApplicationState.INTERNAL_ADDRESS_AND_PORT));
                 assertEquals(internal, fromGossip);
             }
         }));
