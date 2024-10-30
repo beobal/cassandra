@@ -38,6 +38,9 @@ public class AzureCloudLocationProvider extends CloudMetadataLocationProvider
     static final String API_VERSION_PROPERTY_KEY = "azure_api_version";
     static final String DEFAULT_API_VERSION = "2021-12-13";
 
+    /**
+     * Used via reflection by DatabaseDescriptor::createInitialLocationProvider
+     */
     public AzureCloudLocationProvider() throws IOException
     {
         this(new SnitchProperties());

@@ -48,6 +48,9 @@ public class CloudstackLocationProvider extends CloudMetadataLocationProvider
     "file:///var/lib/dhclient/dhclient.eth0.leases"
     };
 
+    /**
+     * Used via reflection by DatabaseDescriptor::createInitialLocationProvider
+     */
     public CloudstackLocationProvider() throws IOException
     {
         this(new SnitchProperties(new Properties()));

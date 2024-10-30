@@ -37,6 +37,9 @@ public class Ec2LocationProvider extends CloudMetadataLocationProvider
 
     private final boolean usingLegacyNaming;
 
+    /**
+     * Used via reflection by DatabaseDescriptor::createInitialLocationProvider
+     */
     public Ec2LocationProvider() throws IOException, ConfigurationException
     {
         this(new SnitchProperties());

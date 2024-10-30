@@ -42,6 +42,14 @@ public class Ec2MultiRegionAddressConfig implements NodeAddressConfig
     private final String localPublicAddress;
     private final String localPrivateAddress;
 
+    /**
+     * Used via reflection by DatabaseDescriptor::createAddressConfig
+     */
+    public Ec2MultiRegionAddressConfig() throws IOException
+    {
+        this(Ec2MetadataServiceConnector.create(new SnitchProperties()));
+    }
+
     @VisibleForTesting
     public Ec2MultiRegionAddressConfig(AbstractCloudMetadataServiceConnector connector) throws IOException
     {

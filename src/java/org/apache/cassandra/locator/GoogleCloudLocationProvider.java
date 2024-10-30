@@ -31,6 +31,9 @@ public class GoogleCloudLocationProvider extends CloudMetadataLocationProvider
     static final String DEFAULT_METADATA_SERVICE_URL = "http://metadata.google.internal";
     static final String ZONE_NAME_QUERY_URL = "/computeMetadata/v1/instance/zone";
 
+    /**
+     * Used via reflection by DatabaseDescriptor::createInitialLocationProvider
+     */
     public GoogleCloudLocationProvider() throws IOException
     {
         this(new SnitchProperties());

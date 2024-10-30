@@ -29,6 +29,9 @@ public class AlibabaCloudLocationProvider extends CloudMetadataLocationProvider
     static final String DEFAULT_METADATA_SERVICE_URL = "http://100.100.100.200";
     static final String ZONE_NAME_QUERY_URL = "/latest/meta-data/zone-id";
 
+    /**
+     * Used via reflection by DatabaseDescriptor::createInitialLocationProvider
+     */
     public AlibabaCloudLocationProvider() throws IOException
     {
         this(new SnitchProperties());
