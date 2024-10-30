@@ -20,7 +20,9 @@ package org.apache.cassandra.locator;
 /**
  * An endpoint snitch tells Cassandra information about network topology that it can use to route
  * requests more efficiently.
+ * @deprecated See CASSANDRA-19488
  */
+@Deprecated(since = "CEP-21")
 public abstract class AbstractNetworkTopologySnitch extends AbstractEndpointSnitch
 {
     private static final NodeProximity proximity = new NetworkTopologyProximity();

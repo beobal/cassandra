@@ -21,7 +21,9 @@ package org.apache.cassandra.locator;
  * A simple endpoint snitch implementation that treats Strategy order as proximity,
  * allowing non-read-repaired reads to prefer a single endpoint, which improves
  * cache locality.
+ * @deprecated See CASSANDRA-19488
  */
+@Deprecated(since = "CEP-21")
 public class SimpleSnitch extends AbstractEndpointSnitch
 {
     private static final NodeProximity sorter = new NoOpProximity();

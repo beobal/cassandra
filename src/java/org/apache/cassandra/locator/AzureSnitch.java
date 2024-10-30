@@ -33,7 +33,9 @@ import static org.apache.cassandra.locator.AzureCloudLocationProvider.DEFAULT_ME
  * A datacenter is resolved from {@code location} field and a rack is resolved by looking into {@code zone} field first.
  * When zone is not set, or it is empty string, it will look into {@code platformFaultDomain} field. Such resolved
  * value is prepended by {@code rack-} string.
+ * @deprecated See CASSANDRA-19488
  */
+@Deprecated(since = "CEP-21")
 public class AzureSnitch extends AbstractCloudMetadataServiceSnitch
 {
     public AzureSnitch() throws IOException

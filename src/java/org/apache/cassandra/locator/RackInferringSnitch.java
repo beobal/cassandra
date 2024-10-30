@@ -27,7 +27,9 @@ import org.apache.cassandra.utils.FBUtilities;
  * Local location is derived from (broadcast) ip address and added to ClusterMetadata during node
  * registration. Every member of the cluster is required to do this, hence remote peers' Location
  * can always be retrieved, consistently.
+ * @deprecated See CASSANDRA-19488
  */
+@Deprecated(since = "CEP-21")
 public class RackInferringSnitch extends AbstractNetworkTopologySnitch
 {
     final Location local;

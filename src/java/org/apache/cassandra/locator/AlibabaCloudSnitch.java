@@ -31,7 +31,9 @@ import static org.apache.cassandra.locator.AlibabaCloudLocationProvider.ZONE_NAM
  * format of the zone-id is like 'cn-hangzhou-a' where cn means china, hangzhou
  * means the hangzhou region, a means the az id. We use 'cn-hangzhou' as the dc,
  * and 'a' as the zone-id.
+ * @deprecated See CASSANDRA-19488
  */
+@Deprecated(since = "CEP-21")
 public class AlibabaCloudSnitch extends AbstractCloudMetadataServiceSnitch
 {
     public AlibabaCloudSnitch() throws IOException

@@ -33,7 +33,9 @@ import org.apache.cassandra.exceptions.ConfigurationException;
  *
  * Operational: All the nodes in this cluster needs to be able to (modify the
  * Security group settings in AWS) communicate via Public IP's.
+ * @deprecated See CASSANDRA-19488
  */
+@Deprecated(since = "CEP-21")
 public class Ec2MultiRegionSnitch extends Ec2Snitch
 {
 

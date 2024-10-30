@@ -23,10 +23,9 @@ import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.tcm.membership.Location;
 
 /**
- * // TODO
  * @deprecated
  */
-@Deprecated(since = "5.1")
+@Deprecated(since = "CEP-21")
 public abstract class AbstractEndpointSnitch implements IEndpointSnitch
 {
     public abstract int compareEndpoints(InetAddressAndPort target, Replica r1, Replica r2);

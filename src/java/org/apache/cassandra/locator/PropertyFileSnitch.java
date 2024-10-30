@@ -36,7 +36,9 @@ import org.apache.cassandra.tcm.membership.Location;
  * this is done automatically with location derived from gossip state (ultimately from system.local).
  * Once registered, the Rack & DC should not be changed but currently the only safeguards against this are the
  * StartupChecks which validate the snitch against system.local.
+ * @deprecated See CASSANDRA-19488
  */
+@Deprecated(since = "CEP-21")
 public class PropertyFileSnitch extends AbstractNetworkTopologySnitch
 {
     // Used only during initialization of a new node. This provides the location it will register in cluster metadata

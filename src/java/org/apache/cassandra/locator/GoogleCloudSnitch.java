@@ -22,7 +22,9 @@ import java.io.IOException;
 /**
  * A snitch that assumes an GCE region is a DC and an GCE availability_zone
  * is a rack. This information is available in the config for the node.
+ * @deprecated See CASSANDRA-19488
  */
+@Deprecated(since = "CEP-21")
 public class GoogleCloudSnitch extends AbstractCloudMetadataServiceSnitch
 {
     public GoogleCloudSnitch() throws IOException

@@ -43,7 +43,9 @@ import org.apache.cassandra.exceptions.ConfigurationException;
  * to a user is {@link Ec2MetadataServiceConnector.V2Connector#AWS_EC2_METADATA_TOKEN_TTL_SECONDS_HEADER_PROPERTY}
  * which is by default set to {@link Ec2MetadataServiceConnector.V2Connector#MAX_TOKEN_TIME_IN_SECONDS}. TTL has
  * to be an integer from the range [30, 21600].
+ * @deprecated See CASSANDRA-19488
  */
+@Deprecated(since = "CEP-21")
 public class Ec2Snitch extends AbstractCloudMetadataServiceSnitch
 {
     private static final String SNITCH_PROP_NAMING_SCHEME = "ec2_naming_scheme";

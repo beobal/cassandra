@@ -21,7 +21,10 @@ package org.apache.cassandra.locator;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.tcm.membership.Location;
 
-
+/**
+ * @deprecated See CASSANDRA-19488
+ */
+@Deprecated(since = "CEP-21")
 public class GossipingPropertyFileSnitch extends AbstractNetworkTopologySnitch
 {
     private final Location fromConfig;
