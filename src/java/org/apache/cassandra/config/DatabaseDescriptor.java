@@ -1511,6 +1511,9 @@ public class DatabaseDescriptor
                             ? createAddressConfig(conf.addresses_config)
                             : NodeAddressConfig.DEFAULT;
         }
+        // this is done here and not in applyAddressConfig as historically, Ec2MultiRegionSnitch is
+        // responsible for querying the cloud metadata service to get the public IP used for
+        // broadcast_address and we only want to instantiate the snitch here.
         addressConfig.configureAddresses();
         initializationLocator = new Locator(FBUtilities.getBroadcastAddressAndPort(),
                                             initialLocationProvider);
