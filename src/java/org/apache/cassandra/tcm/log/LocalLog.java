@@ -285,8 +285,7 @@ public abstract class LocalLog implements Closeable
         assert metadata.epoch.isBefore(FIRST) : String.format("Metadata epoch %s should be before first", metadata.epoch);
         Transformation transform = PreInitialize.withFirstCMS(addr);
         append(new Entry(Entry.Id.NONE, FIRST, transform));
-        waitForHighestConsecutive();
-        metadata = metadata();
+        metadata = waitForHighestConsecutive();
         assert metadata.epoch.is(Epoch.FIRST) : String.format("Epoch: %s. CMS: %s", metadata.epoch, metadata.fullCMSMembers());
     }
 
