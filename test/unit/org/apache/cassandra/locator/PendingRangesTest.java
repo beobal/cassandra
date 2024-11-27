@@ -80,7 +80,7 @@ public class PendingRangesTest
     {
         ClusterMetadataService.unsetInstance();
         ClusterMetadataService.setInstance(ClusterMetadataTestHelper.syncInstanceForTest());
-        ClusterMetadataService.instance().log().bootstrap(FBUtilities.getBroadcastAddressAndPort());
+        ClusterMetadataService.instance().log().unsafeBootstrapForTesting(FBUtilities.getBroadcastAddressAndPort());
     }
 
     @Test

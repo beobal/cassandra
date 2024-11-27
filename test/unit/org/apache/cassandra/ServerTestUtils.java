@@ -280,7 +280,7 @@ public final class ServerTestUtils
 
         ClusterMetadataService.setInstance(service);
         log.readyUnchecked();
-        log.bootstrap(FBUtilities.getBroadcastAddressAndPort());
+        log.unsafeBootstrapForTesting(FBUtilities.getBroadcastAddressAndPort());
         service.commit(new Initialize(ClusterMetadata.current()));
         QueryProcessor.registerStatementInvalidatingListener();
         service.mark();
@@ -315,7 +315,7 @@ public final class ServerTestUtils
         ClusterMetadataService.setInstance(cms);
         ((SystemKeyspaceStorage)LogStorage.SystemKeyspace).truncate();
         log.readyUnchecked();
-        log.bootstrap(FBUtilities.getBroadcastAddressAndPort());
+        log.unsafeBootstrapForTesting(FBUtilities.getBroadcastAddressAndPort());
         cms.mark();
     }
 

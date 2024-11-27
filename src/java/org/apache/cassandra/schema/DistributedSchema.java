@@ -32,7 +32,6 @@ import java.util.UUID;
 import com.google.common.base.Preconditions;
 
 import org.apache.cassandra.auth.AuthKeyspace;
-import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.cql3.functions.UserFunction;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.Mutation;
@@ -62,13 +61,14 @@ public class DistributedSchema implements MetadataValue<DistributedSchema>
 
     public static DistributedSchema first(Set<String> knownDatacenters)
     {
+        // When upgrading from a 5.0 or earlier, knownDatacenters will be popluated
+        // If empty, then the cluster and the CMS is being initialized for the first time, in
+        // which a case use an empty DC name as a placeholder. This will be replaced in the
+        // execution of the PreInitialize transformation on the node which becomes the first
+        // CMS member.
         if (knownDatacenters.isEmpty())
-        {
-            if (DatabaseDescriptor.getLocalDataCenter() != null)
-                knownDatacenters = Collections.singleton(DatabaseDescriptor.getLocalDataCenter());
-            else
-                knownDatacenters = Collections.singleton("datacenter1");
-        }
+                knownDatacenters = Collections.singleton("");
+
         return new DistributedSchema(Keyspaces.of(DistributedMetadataLogKeyspace.initialMetadata(knownDatacenters)), Epoch.FIRST);
     }
 
@@ -227,7 +227,7 @@ public class DistributedSchema implements MetadataValue<DistributedSchema>
         });
 
         // Avoid system table side effects during initialization
-        if (epoch.isEqualOrAfter(Epoch.FIRST))
+        if (epoch.isAfter(Epoch.FIRST))
         {
             Collection<Mutation> mutations = SchemaKeyspace.convertSchemaDiffToMutations(ksDiff, FBUtilities.timestampMicros());
             SchemaKeyspace.applyChanges(mutations);

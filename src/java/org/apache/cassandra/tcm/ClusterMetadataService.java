@@ -114,7 +114,6 @@ public class ClusterMetadataService
     {
         ClusterMetadataService tmp = instance();
         Locator locator = DatabaseDescriptor.getLocator();
-        // TODO maybe revisit this - is it just leaking the implementation detail?
         if (locator != null)
             locator.resetState();
         instance = null;
@@ -257,7 +256,8 @@ public class ClusterMetadataService
     {
         if (instance != null)
             return;
-        ClusterMetadata emptyFromSystemTables = emptyWithSchemaFromSystemTables(Collections.singleton("DC1"))
+        String localDC = DatabaseDescriptor.getLocalDataCenter();
+        ClusterMetadata emptyFromSystemTables = emptyWithSchemaFromSystemTables(Collections.singleton(localDC))
                                                 .forceEpoch(Epoch.EMPTY);
 
         LocalLog.LogSpec logSpec = LocalLog.logSpec()
@@ -286,7 +286,7 @@ public class ClusterMetadataService
                                                                 new PeerLogFetcher(log));
 
         log.readyUnchecked();
-        log.bootstrap(FBUtilities.getBroadcastAddressAndPort());
+        log.bootstrap(FBUtilities.getBroadcastAddressAndPort(), localDC);
         ClusterMetadataService.setInstance(cms);
     }
 

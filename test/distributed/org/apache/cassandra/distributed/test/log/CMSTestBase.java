@@ -86,7 +86,7 @@ public class CMSTestBase
 
             ClusterMetadataService.setInstance(service);
             log.readyUnchecked();
-            log.bootstrap(FBUtilities.getBroadcastAddressAndPort());
+            log.unsafeBootstrapForTesting(FBUtilities.getBroadcastAddressAndPort());
             service.commit(new Initialize(ClusterMetadata.current()) {
                 public Result execute(ClusterMetadata prev)
                 {

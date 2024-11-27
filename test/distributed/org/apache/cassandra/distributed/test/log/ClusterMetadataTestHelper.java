@@ -135,7 +135,7 @@ public class ClusterMetadataTestHelper
                                                                                         Commit.Replicator.NO_OP,
                                                                                         true);
         log.readyUnchecked();
-        log.bootstrap(FBUtilities.getBroadcastAddressAndPort());
+        log.unsafeBootstrapForTesting(FBUtilities.getBroadcastAddressAndPort());
         QueryProcessor.registerStatementInvalidatingListener();
         service.mark();
         return service;
