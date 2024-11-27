@@ -29,9 +29,6 @@ public class CloudMetadataLocationProvider implements InitialLocationProvider
 {
     static final Logger logger = LoggerFactory.getLogger(CloudMetadataLocationProvider.class);
 
-    static final String DEFAULT_DC = "UNKNOWN-DC";
-    static final String DEFAULT_RACK = "UNKNOWN-RACK";
-
     protected final AbstractCloudMetadataServiceConnector connector;
 
     public final Location location;

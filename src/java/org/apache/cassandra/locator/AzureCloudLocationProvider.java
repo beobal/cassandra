@@ -23,6 +23,7 @@ import java.io.IOException;
 import com.google.common.collect.ImmutableMap;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.locator.AbstractCloudMetadataServiceConnector.DefaultCloudMetadataServiceConnector;
 import org.apache.cassandra.tcm.membership.Location;
 import org.apache.cassandra.utils.JsonUtils;
@@ -71,9 +72,9 @@ public class AzureCloudLocationProvider extends CloudMetadataLocationProvider
         String datacenter;
         String rack;
 
-        // TODO should we throw here if _initial_ location cannot be obtained?
         if (location == null || location.isNull() || location.asText().isEmpty())
-            datacenter = DEFAULT_DC;
+            throw new ConfigurationException("Unable to retrieve initial location from cloud metadata service. " +
+                                             "This is required for registration, please check configuration");
         else
             datacenter = location.asText();
 
@@ -81,7 +82,8 @@ public class AzureCloudLocationProvider extends CloudMetadataLocationProvider
         {
             if (platformFaultDomain == null || platformFaultDomain.isNull() || platformFaultDomain.asText().isEmpty())
             {
-                rack = DEFAULT_RACK;
+                throw new ConfigurationException("Unable to retrieve initial zone or platform fault domain from cloud metadata service. " +
+                                                 "This is required for registration, please check configuration");
             }
             else
             {
