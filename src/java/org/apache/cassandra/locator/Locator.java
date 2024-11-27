@@ -127,8 +127,6 @@ public class Locator
                 if (location.epoch.isAfter(Epoch.EMPTY))
                     return location.location;
 
-                // We should never get to this point
-                // TODO maybe replace with an assertion
                 ClusterMetadata metadata = ClusterMetadata.current();
                 Location registered = metadata.directory.location(metadata.myNodeId());
                 local.set(new VersionedLocation(metadata.epoch, registered));
