@@ -32,6 +32,7 @@ import java.util.UUID;
 import com.google.common.base.Preconditions;
 
 import org.apache.cassandra.auth.AuthKeyspace;
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.cql3.functions.UserFunction;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.Mutation;
@@ -227,7 +228,7 @@ public class DistributedSchema implements MetadataValue<DistributedSchema>
         });
 
         // Avoid system table side effects during initialization
-        if (epoch.isAfter(Epoch.FIRST))
+        if (epoch.isEqualOrAfter(Epoch.FIRST) && !DatabaseDescriptor.isClientOrToolInitialized())
         {
             Collection<Mutation> mutations = SchemaKeyspace.convertSchemaDiffToMutations(ksDiff, FBUtilities.timestampMicros());
             SchemaKeyspace.applyChanges(mutations);
