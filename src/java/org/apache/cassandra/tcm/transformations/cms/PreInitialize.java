@@ -135,7 +135,7 @@ public class PreInitialize implements Transformation
             PreInitialize bcms = (PreInitialize)t;
             out.writeBoolean(bcms.addr != null);
             if (bcms.addr != null)
-                InetAddressAndPort.MetadataSerializer.serializer.serialize(((PreInitialize) t).addr, out, version);
+                InetAddressAndPort.MetadataSerializer.serializer.serialize(bcms.addr, out, version);
             if (bcms.datacenter != null && version.isAtLeast(Version.V5))
                 out.writeUTF(bcms.datacenter);
         }

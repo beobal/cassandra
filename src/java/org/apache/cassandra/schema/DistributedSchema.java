@@ -62,11 +62,17 @@ public class DistributedSchema implements MetadataValue<DistributedSchema>
 
     public static DistributedSchema first(Set<String> knownDatacenters)
     {
-        // When upgrading from a 5.0 or earlier, knownDatacenters will be popluated
-        // If empty, then the cluster and the CMS is being initialized for the first time, in
-        // which a case use an empty DC name as a placeholder. This will be replaced in the
-        // execution of the PreInitialize transformation on the node which becomes the first
-        // CMS member.
+        // During upgrades from pre-5.1 versions, the replication params of the system_cluster_metadata
+        // keyspace using one of the existing DCs. This is so that this keyspace does not cause issues
+        // for tooling, clients or control plane systems which may inspect schema and have specific
+        // expectations about DC layout. This keyspace is unused until the CMS is initialized.
+        // For new clusters which start out on 5.1 or later, this is not necessary to the initial
+        // replication params use a empty string for the placeholder DC name.
+
+        // During CMS initialization, the replication of this keyspace will be set for real using
+        // the DC of the first node to become a CMS member. This happens in the PreInitialize
+        // transformation when executed on the first CMS member.
+
         if (knownDatacenters.isEmpty())
                 knownDatacenters = Collections.singleton("");
 
