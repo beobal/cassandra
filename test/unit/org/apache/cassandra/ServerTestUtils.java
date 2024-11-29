@@ -59,6 +59,7 @@ import org.apache.cassandra.tcm.Processor;
 import org.apache.cassandra.tcm.log.LocalLog;
 import org.apache.cassandra.tcm.log.LogStorage;
 import org.apache.cassandra.tcm.log.SystemKeyspaceStorage;
+import org.apache.cassandra.tcm.membership.Location;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.ownership.PlacementProvider;
 import org.apache.cassandra.tcm.ownership.UniformRangePlacement;
@@ -261,6 +262,7 @@ public final class ServerTestUtils
 
         Function<LocalLog, Processor> processorFactory = AtomicLongBackedProcessor::new;
         IPartitioner partitioner = DatabaseDescriptor.getPartitioner();
+        Location location = DatabaseDescriptor.getLocator().local();
         boolean addListeners = true;
         ClusterMetadata initial = new ClusterMetadata(partitioner);
         if (!Keyspace.isInitialized())
@@ -280,7 +282,7 @@ public final class ServerTestUtils
 
         ClusterMetadataService.setInstance(service);
         log.readyUnchecked();
-        log.unsafeBootstrapForTesting(FBUtilities.getBroadcastAddressAndPort());
+        log.bootstrap(FBUtilities.getBroadcastAddressAndPort(), location.datacenter);
         service.commit(new Initialize(ClusterMetadata.current()));
         QueryProcessor.registerStatementInvalidatingListener();
         service.mark();
