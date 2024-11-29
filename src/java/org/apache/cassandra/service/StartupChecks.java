@@ -144,8 +144,6 @@ public class StartupChecks
                                                                       checkDataDirs,
                                                                       checkSSTablesFormat,
                                                                       checkSystemKeyspaceState,
-                                                                      checkDatacenter,
-                                                                      checkRack,
                                                                       checkLegacyAuthTables,
                                                                       new DataResurrectionCheck());
 
@@ -730,48 +728,6 @@ public class StartupChecks
             catch (ConfigurationException e)
             {
                 throw new StartupException(StartupException.ERR_WRONG_CONFIG, "Fatal exception during initialization", e);
-            }
-        }
-    };
-
-    public static final StartupCheck checkDatacenter = new StartupCheck()
-    {
-        @Override
-        public void execute(StartupChecksOptions options) throws StartupException
-        {
-            String storedDc = SystemKeyspace.getDatacenter();
-            if (storedDc != null)
-            {
-                String currentDc = DatabaseDescriptor.getLocator().local().datacenter;
-                if (!storedDc.equals(currentDc))
-                {
-                    String formatMessage = "Snitch config specifies a different datacenter (%s) for this node than the previous value (%s). " +
-                                           "Modifying config in this way has no effect, if the location of node is to be changed it " +
-                                           "must be done using the appropriate and safe methods. Please fix the snitch configuration " +
-                                           "or consult documentation for how to do this.";
-                    logger.info(String.format(formatMessage, currentDc, storedDc));
-                }
-            }
-        }
-    };
-
-    public static final StartupCheck checkRack = new StartupCheck()
-    {
-        @Override
-        public void execute(StartupChecksOptions options) throws StartupException
-        {
-            String storedRack = SystemKeyspace.getRack();
-            if (storedRack != null)
-            {
-                String currentRack = DatabaseDescriptor.getLocator().local().rack;
-                if (!storedRack.equals(currentRack))
-                {
-                    String formatMessage = "Snitch config specifies a different rack (%s) for this node than the previous value (%s). " +
-                                           "Modifying config in this way has no effect, if the location of node is to be changed it " +
-                                           "must be done using the appropriate and safe methods. Please fix the snitch configuration " +
-                                           "or consult documentation for how to do this.";
-                    logger.info(String.format(formatMessage, currentRack, storedRack));
-                }
             }
         }
     };
