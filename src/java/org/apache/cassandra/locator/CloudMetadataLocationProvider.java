@@ -18,9 +18,12 @@
 
 package org.apache.cassandra.locator;
 
+import java.io.IOException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.tcm.membership.Location;
 
 import static java.lang.String.format;
@@ -30,20 +33,36 @@ public class CloudMetadataLocationProvider implements InitialLocationProvider
     static final Logger logger = LoggerFactory.getLogger(CloudMetadataLocationProvider.class);
 
     protected final AbstractCloudMetadataServiceConnector connector;
+    private final LocationResolver locationResolver;
+    private volatile Location location;
 
-    public final Location location;
-
-    public CloudMetadataLocationProvider(AbstractCloudMetadataServiceConnector connector, Location location)
+    public CloudMetadataLocationProvider(AbstractCloudMetadataServiceConnector connector, LocationResolver locationResolver)
     {
         this.connector = connector;
-        this.location = location;
-        logger.info(format("%s using datacenter: %s, rack: %s, connector: %s, properties: %s",
-                           getClass().getName(), location.datacenter, location.rack, connector, connector.getProperties()));
+        this.locationResolver = locationResolver;
     }
 
     @Override
     public final Location initialLocation()
     {
+        if (location == null)
+        {
+            try
+            {
+                location = locationResolver.resolve(connector);
+                logger.info(format("%s using datacenter: %s, rack: %s, connector: %s, properties: %s",
+                                   getClass().getName(), location.datacenter, location.rack, connector, connector.getProperties()));
+            }
+            catch (IOException e)
+            {
+                throw new ConfigurationException("Unable to resolve initial location using cloud metadata service connector", e);
+            }
+        }
         return location;
+    }
+
+    public interface LocationResolver
+    {
+        Location resolve(AbstractCloudMetadataServiceConnector connector) throws IOException;
     }
 }

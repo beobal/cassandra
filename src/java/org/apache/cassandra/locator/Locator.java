@@ -34,7 +34,6 @@ import org.apache.cassandra.utils.FBUtilities;
 /**
  *
  */
-// TODO rename
 public class Locator
 {
     private static final Logger logger = LoggerFactory.getLogger(Locator.class);
@@ -43,8 +42,17 @@ public class Locator
     private final AtomicReference<State> state = new AtomicReference<>(State.INITIAL);
 
     private final InetAddressAndPort localEndpoint;
-    private final Location initializationLocation;
-    private final AtomicReference<VersionedLocation> local;     //  not initialized until ClusterMetadata is available
+    private final InitialLocationProvider locationProvider;
+
+    // This is the Location used to register this node during its initial startup. It's lazily initialized
+    // using the supplied InitialLocationProvider and memoized here as that may be a non-trivial operation.
+    // Some providers fetch location metadata from remote services etc. It should usually be unnecessary to
+    // access the initialization location after a node's first startup.
+    private volatile Location initializationLocation;
+
+    // Set from ClusterMetadata. After initial registration has happened, location of this node itself
+    // is always taken from ClusterMetadata.
+    private volatile VersionedLocation local;
 
     private static class VersionedLocation
     {
@@ -60,8 +68,8 @@ public class Locator
     public Locator(InetAddressAndPort localEndpoint, InitialLocationProvider provider)
     {
         this.localEndpoint = localEndpoint;
-        this.initializationLocation = provider.initialLocation();
-        this.local = new AtomicReference<>(new VersionedLocation(Epoch.EMPTY, Location.UNKNOWN));
+        this.locationProvider = provider;
+        this.local = new VersionedLocation(Epoch.EMPTY, Location.UNKNOWN);
     }
 
     public static Locator forClients()
@@ -105,9 +113,9 @@ public class Locator
         switch (state.get())
         {
             case INITIAL:
-                return endpoint.equals(localEndpoint) ? initializationLocation : Location.UNKNOWN;
+                return endpoint.equals(localEndpoint) ? initialLocation() : Location.UNKNOWN;
             case UNREGISTERED:
-                return endpoint.equals(localEndpoint) ? initializationLocation : fromClusterMetadata(endpoint);
+                return endpoint.equals(localEndpoint) ? initialLocation() : fromClusterMetadata(endpoint);
             default:
                 return fromClusterMetadata(endpoint);
         }
@@ -119,17 +127,17 @@ public class Locator
         {
             case INITIAL:
             case UNREGISTERED:
-                return initializationLocation;
+                return initialLocation();
             default:
                 // For now, local location is immutable and once registered with cluster metadata, it cannot be
                 // changed. Revisit this if that assumption changes.
-                VersionedLocation location = local.get();
+                VersionedLocation location = local;
                 if (location.epoch.isAfter(Epoch.EMPTY))
                     return location.location;
 
                 ClusterMetadata metadata = ClusterMetadata.current();
                 Location registered = metadata.directory.location(metadata.myNodeId());
-                local.set(new VersionedLocation(metadata.epoch, registered));
+                local = new VersionedLocation(metadata.epoch, registered);
                 return registered;
         }
     }
@@ -143,4 +151,10 @@ public class Locator
         return nodeId != null ? metadata.directory.location(nodeId) : Location.UNKNOWN;
     }
 
+    private Location initialLocation()
+    {
+        if (initializationLocation == null)
+            initializationLocation = locationProvider.initialLocation();
+        return initializationLocation;
+    }
 }

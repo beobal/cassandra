@@ -1515,8 +1515,7 @@ public class DatabaseDescriptor
         // responsible for querying the cloud metadata service to get the public IP used for
         // broadcast_address and we only want to instantiate the snitch here.
         addressConfig.configureAddresses();
-        initializationLocator = new Locator(FBUtilities.getBroadcastAddressAndPort(),
-                                            initialLocationProvider);
+        initializationLocator = new Locator(FBUtilities.getBroadcastAddressAndPort(), initialLocationProvider);
         nodeProximity = conf.dynamic_snitch ? new DynamicEndpointSnitch(proximity) : proximity;
         localAddressReconnector = addressConfig.preferLocalConnections()
                                   ? new ReconnectableSnitchHelper(initializationLocator, true)

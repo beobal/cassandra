@@ -52,7 +52,7 @@ public class Ec2LocationProvider extends CloudMetadataLocationProvider
 
     Ec2LocationProvider(AbstractCloudMetadataServiceConnector connector) throws IOException
     {
-        super(connector, getLocation(connector));
+        super(connector, Ec2LocationProvider::getLocation);
         usingLegacyNaming = isUsingLegacyNaming(connector.getProperties());
     }
 

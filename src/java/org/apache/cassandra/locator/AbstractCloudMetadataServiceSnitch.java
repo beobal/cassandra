@@ -23,9 +23,6 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.cassandra.tcm.membership.Location;
-import org.apache.cassandra.utils.Pair;
-
 /**
  * @deprecated See CASSANDRA-19488
  */
@@ -37,11 +34,6 @@ abstract class AbstractCloudMetadataServiceSnitch extends AbstractNetworkTopolog
     protected final CloudMetadataLocationProvider locationProvider;
 
     private Map<InetAddressAndPort, Map<String, String>> savedEndpoints;
-
-    public AbstractCloudMetadataServiceSnitch(AbstractCloudMetadataServiceConnector connector, Pair<String, String> dcAndRack)
-    {
-        this(new CloudMetadataLocationProvider(connector, new Location(dcAndRack.left, dcAndRack.right)));
-    }
 
     public AbstractCloudMetadataServiceSnitch(CloudMetadataLocationProvider locationProvider)
     {

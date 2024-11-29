@@ -62,8 +62,8 @@ public class AzureConnectorMockingTest
         SnitchProperties snitchProperties = new SnitchProperties(p);
         DefaultCloudMetadataServiceConnector connector = new DefaultCloudMetadataServiceConnector(snitchProperties);
         AzureCloudLocationProvider locationProvider = new AzureCloudLocationProvider(connector);
-        assertEquals("rack-1", locationProvider.location.rack);
-        assertEquals("PolandCentral", locationProvider.location.datacenter);
+        assertEquals("rack-1", locationProvider.initialLocation().rack);
+        assertEquals("PolandCentral", locationProvider.initialLocation().datacenter);
 
         AzureSnitch azureSnitch = new AzureSnitch(connector);
         assertEquals("rack-1", azureSnitch.getLocalRack());
@@ -89,8 +89,8 @@ public class AzureConnectorMockingTest
         SnitchProperties snitchProperties = new SnitchProperties(p);
         DefaultCloudMetadataServiceConnector connector = new DefaultCloudMetadataServiceConnector(snitchProperties);
         AzureCloudLocationProvider locationProvider = new AzureCloudLocationProvider(connector);
-        assertEquals("rack-5", locationProvider.location.rack);
-        assertEquals("PolandCentral", locationProvider.location.datacenter);
+        assertEquals("rack-5", locationProvider.initialLocation().rack);
+        assertEquals("PolandCentral", locationProvider.initialLocation().datacenter);
 
         AzureSnitch azureSnitch = new AzureSnitch(connector);
         assertEquals("rack-5", azureSnitch.getLocalRack());

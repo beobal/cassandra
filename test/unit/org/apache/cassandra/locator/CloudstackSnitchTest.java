@@ -66,8 +66,8 @@ public class CloudstackSnitchTest
 
         // for registering a new node, location is obtained from the cloud metadata service
         CloudstackLocationProvider locationProvider = new CloudstackLocationProvider(spiedConnector);
-        assertEquals("ch-gva", locationProvider.location.datacenter);
-        assertEquals("1", locationProvider.location.rack);
+        assertEquals("ch-gva", locationProvider.initialLocation().datacenter);
+        assertEquals("1", locationProvider.initialLocation().rack);
 
         CloudstackSnitch snitch = new CloudstackSnitch(spiedConnector);
         assertEquals("ch-gva", snitch.getLocalDatacenter());
@@ -86,8 +86,8 @@ public class CloudstackSnitchTest
 
         // for registering a new node, location is obtained from the cloud metadata service
         CloudstackLocationProvider locationProvider = new CloudstackLocationProvider(spiedConnector);
-        assertEquals("us-east", locationProvider.location.datacenter);
-        assertEquals("1a", locationProvider.location.rack);
+        assertEquals("us-east", locationProvider.initialLocation().datacenter);
+        assertEquals("1a", locationProvider.initialLocation().rack);
 
         CloudstackSnitch snitch = new CloudstackSnitch(spiedConnector);
         assertEquals("us-east", snitch.getLocalDatacenter());

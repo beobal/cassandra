@@ -130,8 +130,8 @@ public class Ec2SnitchTest
         when(connectorMock.getProperties()).thenReturn(new SnitchProperties());
 
         Ec2LocationProvider locationProvider = new Ec2LocationProvider(connectorMock);
-        assertEquals("us-east-2", locationProvider.location.datacenter);
-        assertEquals("us-east-2d", locationProvider.location.rack);
+        assertEquals("us-east-2", locationProvider.initialLocation().datacenter);
+        assertEquals("us-east-2d", locationProvider.initialLocation().rack);
 
         Ec2Snitch snitch = new Ec2Snitch(connectorMock);
         // for registering a new node, location is obtained from the cloud metadata service
@@ -146,8 +146,8 @@ public class Ec2SnitchTest
         });
 
         Ec2LocationProvider mrLocationProvider = new Ec2LocationProvider(connectorMock);
-        assertEquals("us-east-2", mrLocationProvider.location.datacenter);
-        assertEquals("us-east-2d", mrLocationProvider.location.rack);
+        assertEquals("us-east-2", mrLocationProvider.initialLocation().datacenter);
+        assertEquals("us-east-2d", mrLocationProvider.initialLocation().rack);
 
         Ec2MultiRegionSnitch mrSnitch = new Ec2MultiRegionSnitch(multiRegionConnectorMock);
         // for registering a new node, location is obtained from the cloud metadata service
@@ -257,8 +257,8 @@ public class Ec2SnitchTest
     private void testLegacyRacInternal(Ec2LocationProvider provider) throws Exception
     {
         // for registering a new node, location is obtained from the cloud metadata service
-        assertEquals("us-east", provider.location.datacenter);
-        assertEquals("1d", provider.location.rack);
+        assertEquals("us-east", provider.initialLocation().datacenter);
+        assertEquals("1d", provider.initialLocation().rack);
     }
 
     private void testLegacyRacInternal(Ec2Snitch snitch) throws Exception
@@ -271,8 +271,8 @@ public class Ec2SnitchTest
     private void testLegacyNewRegionsInternal(Ec2LocationProvider provider) throws Exception
     {
         // for registering a new node, location is obtained from the cloud metadata service
-        assertEquals("us-east-2", provider.location.datacenter);
-        assertEquals("2d", provider.location.rack);
+        assertEquals("us-east-2", provider.initialLocation().datacenter);
+        assertEquals("2d", provider.initialLocation().rack);
     }
 
     private void testLegacyNewRegionsInternal(Ec2Snitch snitch) throws Exception

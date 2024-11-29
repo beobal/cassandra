@@ -23,7 +23,6 @@ import org.apache.cassandra.locator.AbstractCloudMetadataServiceConnector.Defaul
 
 import static org.apache.cassandra.locator.AbstractCloudMetadataServiceConnector.METADATA_URL_PROPERTY;
 import static org.apache.cassandra.locator.AlibabaCloudLocationProvider.DEFAULT_METADATA_SERVICE_URL;
-import static org.apache.cassandra.locator.AlibabaCloudLocationProvider.ZONE_NAME_QUERY_URL;
 
 /**
  * A snitch that assumes an ECS region is a DC and an ECS availability_zone
@@ -49,7 +48,6 @@ public class AlibabaCloudSnitch extends AbstractCloudMetadataServiceSnitch
 
     public AlibabaCloudSnitch(AbstractCloudMetadataServiceConnector connector) throws IOException
     {
-        super(new CloudMetadataLocationProvider(connector, SnitchUtils.parseLocation(connector.apiCall(ZONE_NAME_QUERY_URL),
-                                                                                     connector.getProperties().getDcSuffix())));
+        super(new AlibabaCloudLocationProvider(connector));
     }
 }

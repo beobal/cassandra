@@ -66,8 +66,8 @@ public class AlibabaCloudSnitchTest
 
         // for registering a new node, location is obtained from the cloud metadata service
         AlibabaCloudLocationProvider locationProvider = new AlibabaCloudLocationProvider(spiedConnector);
-        assertEquals("cn-hangzhou", locationProvider.location.datacenter);
-        assertEquals("f", locationProvider.location.rack);
+        assertEquals("cn-hangzhou", locationProvider.initialLocation().datacenter);
+        assertEquals("f", locationProvider.initialLocation().rack);
 
         AlibabaCloudSnitch snitch = new AlibabaCloudSnitch(spiedConnector);
         assertEquals("cn-hangzhou", snitch.getLocalDatacenter());
@@ -85,8 +85,8 @@ public class AlibabaCloudSnitchTest
 
         // for registering a new node, location is obtained from the cloud metadata service
         AlibabaCloudLocationProvider locationProvider = new AlibabaCloudLocationProvider(spiedConnector);
-        assertEquals("us-east", locationProvider.location.datacenter);
-        assertEquals("1a", locationProvider.location.rack);
+        assertEquals("us-east", locationProvider.initialLocation().datacenter);
+        assertEquals("1a", locationProvider.initialLocation().rack);
 
         AlibabaCloudSnitch snitch = new AlibabaCloudSnitch(spiedConnector);
         assertEquals("us-east", snitch.getLocalDatacenter());

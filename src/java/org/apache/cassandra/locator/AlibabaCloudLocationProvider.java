@@ -45,7 +45,6 @@ public class AlibabaCloudLocationProvider extends CloudMetadataLocationProvider
 
     public AlibabaCloudLocationProvider(AbstractCloudMetadataServiceConnector connector) throws IOException
     {
-        super(connector, SnitchUtils.parseLocation(connector.apiCall(ZONE_NAME_QUERY_URL),
-                                                   connector.getProperties().getDcSuffix()));
+        super(connector, c -> SnitchUtils.parseLocation(c.apiCall(ZONE_NAME_QUERY_URL), c.getProperties().getDcSuffix()));
     }
 }

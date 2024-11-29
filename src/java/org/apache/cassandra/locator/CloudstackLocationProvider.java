@@ -63,7 +63,7 @@ public class CloudstackLocationProvider extends CloudMetadataLocationProvider
 
     public CloudstackLocationProvider(AbstractCloudMetadataServiceConnector connector) throws IOException
     {
-        super(connector, resolveLocation(connector));
+        super(connector, CloudstackLocationProvider::resolveLocation);
         logger.warn("{} is deprecated and not actively maintained. It will be removed in the next " +
                     "major version of Cassandra.", CloudstackSnitch.class.getName());
     }

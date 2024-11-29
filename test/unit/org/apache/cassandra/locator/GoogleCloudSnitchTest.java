@@ -67,8 +67,8 @@ public class GoogleCloudSnitchTest
 
         // for registering a new node, location is obtained from the cloud metadata service
         GoogleCloudLocationProvider locationProvider = new GoogleCloudLocationProvider(spiedConnector);
-        assertEquals("us-central1", locationProvider.location.datacenter);
-        assertEquals("a", locationProvider.location.rack);
+        assertEquals("us-central1", locationProvider.initialLocation().datacenter);
+        assertEquals("a", locationProvider.initialLocation().rack);
 
         GoogleCloudSnitch snitch = new GoogleCloudSnitch(spiedConnector);
         assertEquals("us-central1", snitch.getLocalDatacenter());
@@ -87,8 +87,8 @@ public class GoogleCloudSnitchTest
 
         // local endpoint is not yet registered, so location is obtained from the cloud metadata service connector
         GoogleCloudLocationProvider locationProvider = new GoogleCloudLocationProvider(spiedConnector);
-        assertEquals("asia-east1", locationProvider.location.datacenter);
-        assertEquals("a", locationProvider.location.rack);
+        assertEquals("asia-east1", locationProvider.initialLocation().datacenter);
+        assertEquals("a", locationProvider.initialLocation().rack);
 
         GoogleCloudSnitch snitch = new GoogleCloudSnitch(spiedConnector);
         assertEquals("asia-east1", snitch.getLocalDatacenter());

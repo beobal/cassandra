@@ -55,7 +55,7 @@ public class AzureCloudLocationProvider extends CloudMetadataLocationProvider
 
     public AzureCloudLocationProvider(AbstractCloudMetadataServiceConnector connector) throws IOException
     {
-        super(connector, resolveLocation(connector));
+        super(connector, AzureCloudLocationProvider::resolveLocation);
     }
 
     static Location resolveLocation(AbstractCloudMetadataServiceConnector connector) throws IOException
