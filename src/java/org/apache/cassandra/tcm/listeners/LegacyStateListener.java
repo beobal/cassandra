@@ -28,13 +28,13 @@ import com.google.common.collect.Sets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.SystemKeyspace;
 import org.apache.cassandra.db.virtual.PeersTable;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.gms.Gossiper;
 import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.net.MessagingService;
 import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.tcm.ClusterMetadata;
@@ -119,8 +119,10 @@ public class LegacyStateListener implements ChangeListener.Async
 
             if (next.directory.peerState(change) == REGISTERED)
             {
-                // Inform LocatorAdapter so we can re-establish any connections made prior to this node registering
-                DatabaseDescriptor.getLocator().onPeerRegistration(next.directory.endpoint(change));
+                // Re-establish any connections made prior to this node registering
+                InetAddressAndPort endpoint = next.directory.endpoint(change);
+                logger.info("Peer with address {} has registered, interrupting any previously established connections", endpoint);
+                MessagingService.instance().interruptOutbound(endpoint);
             }
             else if (next.directory.peerState(change) == LEFT)
             {

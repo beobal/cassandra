@@ -188,6 +188,7 @@ import org.apache.cassandra.streaming.StreamState;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.MultiStepOperation;
+import org.apache.cassandra.tcm.RegistrationStatus;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.compatibility.GossipHelper;
 import org.apache.cassandra.tcm.compatibility.TokenRingUtils;
@@ -835,7 +836,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             self = Register.maybeRegister();
         }
 
-        DatabaseDescriptor.getLocator().onRegistration();
+        RegistrationStatus.instance.onRegistration();
         Startup.maybeExecuteStartupTransformation(self);
 
         try

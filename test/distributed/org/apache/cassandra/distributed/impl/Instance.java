@@ -140,6 +140,7 @@ import org.apache.cassandra.streaming.async.NettyStreamingChannel;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.EpochAwareDebounce;
+import org.apache.cassandra.tcm.RegistrationStatus;
 import org.apache.cassandra.tcm.Startup;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.membership.NodeState;
@@ -806,7 +807,7 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
             Schema.instance.saveSystemKeyspace();
             ClusterMetadataService.instance().processor().fetchLogAndWait();
             NodeId self = Register.maybeRegister();
-            DatabaseDescriptor.getLocator().onRegistration();
+            RegistrationStatus.instance.onRegistration();
             boolean joinRing = config.get(Constants.KEY_DTEST_JOIN_RING) == null || (boolean) config.get(Constants.KEY_DTEST_JOIN_RING);
             if (ClusterMetadata.current().directory.peerState(self) != NodeState.JOINED && joinRing)
             {

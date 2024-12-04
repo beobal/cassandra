@@ -45,9 +45,11 @@ import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.service.ClientWarn;
 import org.apache.cassandra.tcm.ClusterMetadata;
+import org.apache.cassandra.tcm.RegistrationStatus;
 import org.apache.cassandra.tcm.compatibility.TokenRingUtils;
 import org.apache.cassandra.tcm.membership.Directory;
 import org.apache.cassandra.tcm.membership.Location;
+import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.tcm.ownership.VersionedEndpoints;
 import org.apache.cassandra.utils.FBUtilities;
 
@@ -214,7 +216,7 @@ public class NetworkTopologyStrategyTest
             {
                 ServerTestUtils.resetCMS();
                 Random rand = new Random(run);
-                Directory directory = generateDirectory(datacenters, nodes, rand);
+                Locator locator = generateLocator(datacenters, nodes, rand);
 
                 for (int i = 0; i < NODES; ++i)  // Nodes
                 {
@@ -223,14 +225,27 @@ public class NetworkTopologyStrategyTest
                     {
                         tokens.add(Murmur3Partitioner.instance.getRandomToken(rand));
                     }
-                    ClusterMetadataTestHelper.addEndpoint(nodes.get(i), tokens, directory.location(nodes.get(i)));
+                    // Here we fake the registration status because we want all the nodes to be registered in cluster
+                    // metadata using the locations we setup in generateLocator. This registration occurs as a part of
+                    // the addEndpoint call here and behaves as expected for all nodes _except_ the one with the address
+                    // which matches the local broadcast address (i.e. 127.0.0.1, which is #2 in the list of nodes).
+                    // The location we want this to be registered with is {DC: rf5_1, rack: 3}, but while
+                    // RegistrationStatus.instance indicates that the node is yet to be registered, the Locator will
+                    // correctly return the initialization location obtained from
+                    // DatabaseDescriptor::getInitialLocationProvider, which ultimately resolves to
+                    // SimpleLocationProvider (because test/conf/cassandra.yaml specifies use of SimpleSnitch) and so
+                    // we register that one node with the location {DC: datacenter1, rack: rack1}.
+                    // This is purely an artefact of the contrived testing setup and in more realistic scenarios,
+                    // including the majority of tests, isn't an issue.
+                    RegistrationStatus.instance.onRegistration();
+                    ClusterMetadataTestHelper.addEndpoint(nodes.get(i), tokens, locator.location(nodes.get(i)));
                 }
-                testEquivalence(ClusterMetadata.current(), directory, datacenters, rand);
+                testEquivalence(ClusterMetadata.current(), locator, datacenters, rand);
             }
         }
     }
 
-    void testEquivalence(ClusterMetadata metadata, Directory directory, Map<String, Integer> datacenters, Random rand)
+    void testEquivalence(ClusterMetadata metadata, Locator locator, Map<String, Integer> datacenters, Random rand)
     {
         NetworkTopologyStrategy nts = new NetworkTopologyStrategy("ks",
                                                                   datacenters.entrySet()
@@ -239,7 +254,7 @@ public class NetworkTopologyStrategyTest
         for (int i=0; i<1000; ++i)
         {
             Token token = Murmur3Partitioner.instance.getRandomToken(rand);
-            List<InetAddressAndPort> expected = calculateNaturalEndpoints(token, metadata, datacenters, directory);
+            List<InetAddressAndPort> expected = calculateNaturalEndpoints(token, metadata, datacenters, locator);
             List<InetAddressAndPort> actual = new ArrayList<>(nts.calculateNaturalReplicas(token, metadata).endpoints());
             if (endpointsDiffer(expected, actual))
             {
@@ -265,10 +280,11 @@ public class NetworkTopologyStrategyTest
         return !s1.equals(s2);
     }
 
-    Directory generateDirectory(Map<String, Integer> datacenters, Collection<InetAddressAndPort> nodes, Random rand)
+    Locator generateLocator(Map<String, Integer> datacenters, Collection<InetAddressAndPort> nodes, Random rand)
     {
-        final Map<InetAddressAndPort, String> nodeToRack = new HashMap<>();
-        final Map<InetAddressAndPort, String> nodeToDC = new HashMap<>();
+        final Map<NodeId, String> nodeToRack = new HashMap<>();
+        final Map<NodeId, String> nodeToDC = new HashMap<>();
+        final Map<InetAddressAndPort, NodeId> epToId = new HashMap<>();
         Map<String, List<String>> racksPerDC = new HashMap<>();
         datacenters.forEach((dc, rf) -> racksPerDC.put(dc, randomRacks(rf, rand)));
         int rf = datacenters.values().stream().mapToInt(x -> x).sum();
@@ -280,29 +296,33 @@ public class NetworkTopologyStrategyTest
                 dcs[pos++] = dce.getKey();
         }
 
+        int id = 0;
         for (InetAddressAndPort node : nodes)
         {
             String dc = dcs[rand.nextInt(rf)];
             List<String> racks = racksPerDC.get(dc);
             String rack = racks.get(rand.nextInt(racks.size()));
-            nodeToRack.put(node, rack);
-            nodeToDC.put(node, dc);
+            NodeId nodeId = new NodeId(++id);
+            nodeToRack.put(nodeId, rack);
+            nodeToDC.put(nodeId, dc);
+            epToId.put(node, nodeId);
         }
 
-        return new Directory()
+        Directory dir = new Directory()
         {
             @Override
-            public Location local()
+            public NodeId peerId(InetAddressAndPort endpoint)
             {
-                return location(FBUtilities.getBroadcastAddressAndPort());
+                return epToId.get(endpoint);
             }
 
             @Override
-            public Location location(InetAddressAndPort endpoint)
+            public Location location(NodeId id)
             {
-                return new Location(nodeToDC.get(endpoint), nodeToRack.get(endpoint));
+                return new Location(nodeToDC.get(id), nodeToRack.get(id));
             }
         };
+        return Locator.usingDirectory(dir);
     }
 
     private List<String> randomRacks(int rf, Random rand)
@@ -315,7 +335,7 @@ public class NetworkTopologyStrategyTest
     }
 
     // Copy of older endpoints calculation algorithm for comparison
-    public static List<InetAddressAndPort> calculateNaturalEndpoints(Token searchToken, ClusterMetadata metadata, Map<String, Integer> datacenters, Directory directory)
+    public static List<InetAddressAndPort> calculateNaturalEndpoints(Token searchToken, ClusterMetadata metadata, Map<String, Integer> datacenters, Locator locator)
     {
         // we want to preserve insertion order so that the first added endpoint becomes primary
         Set<InetAddressAndPort> replicas = new LinkedHashSet<>();
@@ -346,7 +366,7 @@ public class NetworkTopologyStrategyTest
         {
             Token next = tokenIter.next();
             InetAddressAndPort ep = metadata.directory.endpoint(metadata.tokenMap.owner(next));
-            Location location = directory.location(ep);
+            Location location = locator.location(ep);
             String dc = location.datacenter;
             // have we already found all replicas for this dc?
             if (!datacenters.containsKey(dc) || hasSufficientReplicas(dc, dcReplicas, allEndpoints, datacenters))

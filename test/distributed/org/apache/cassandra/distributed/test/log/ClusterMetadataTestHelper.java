@@ -60,6 +60,7 @@ import org.apache.cassandra.tcm.ClusterMetadataService;
 import org.apache.cassandra.tcm.Commit;
 import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.MetadataSnapshots;
+import org.apache.cassandra.tcm.RegistrationStatus;
 import org.apache.cassandra.tcm.Transformation;
 import org.apache.cassandra.tcm.log.LocalLog;
 import org.apache.cassandra.tcm.membership.Directory;
@@ -290,7 +291,10 @@ public class ClusterMetadataTestHelper
     {
         try
         {
-            return commit(new Register(addr(endpoint), new Location(dc, rack), NodeVersion.CURRENT)).directory.peerId(endpoint);
+            NodeId id = commit(new Register(addr(endpoint), new Location(dc, rack), NodeVersion.CURRENT)).directory.peerId(endpoint);
+            if (endpoint.equals(FBUtilities.getBroadcastAddressAndPort()))
+                RegistrationStatus.instance.onRegistration();
+            return id;
         }
         catch (Throwable e)
         {
@@ -814,6 +818,8 @@ public class ClusterMetadataTestHelper
         {
             Location l = new Location(dc, rack);
             commit(new Register(addr(endpoint), l, NodeVersion.CURRENT));
+            if (endpoint.equals(FBUtilities.getBroadcastAddressAndPort()))
+                RegistrationStatus.instance.onRegistration();
             lazyJoin(endpoint, new HashSet<>(t)).prepareJoin()
                                                 .startJoin()
                                                 .midJoin()

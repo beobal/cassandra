@@ -556,7 +556,7 @@ public class PaxosRepair extends AbstractPaxosRepair
                                                       : metadata.placements.get(replication).reads.forRange(range).endpoints();
         return hasSufficientLiveNodesForTopologyChange(allEndpoints,
                                                        liveEndpoints,
-                                                       ep -> metadata.directory.location(ep).datacenter,
+                                                       ep -> metadata.locator.location(ep).datacenter,
                                                        DatabaseDescriptor.paxoTopologyRepairNoDcChecks(),
                                                        DatabaseDescriptor.paxoTopologyRepairStrictEachQuorum());
     }

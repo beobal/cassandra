@@ -89,7 +89,7 @@ public class TokenAllocationTest
 
     private static TokenAllocation createForTest(ClusterMetadata metadata, int replicas, int numTokens)
     {
-        return TokenAllocation.create(metadata.directory.local().datacenter, metadata, replicas, numTokens);
+        return TokenAllocation.create(metadata.locator.local().datacenter, metadata, replicas, numTokens);
     }
 
     @Test

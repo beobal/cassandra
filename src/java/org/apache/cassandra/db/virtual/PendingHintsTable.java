@@ -24,6 +24,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.marshal.InetAddressType;
 import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.db.marshal.LongType;
@@ -36,10 +37,9 @@ import org.apache.cassandra.gms.FailureDetectorMBean;
 import org.apache.cassandra.hints.HintsService;
 import org.apache.cassandra.hints.PendingHintsInfo;
 import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.locator.Locator;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.StorageService;
-import org.apache.cassandra.tcm.ClusterMetadata;
-import org.apache.cassandra.tcm.membership.Directory;
 import org.apache.cassandra.tcm.membership.Location;
 
 public final class PendingHintsTable extends AbstractVirtualTable
@@ -82,7 +82,7 @@ public final class PendingHintsTable extends AbstractVirtualTable
     public DataSet data()
     {
         List<PendingHintsInfo> pendingHints = HintsService.instance.getPendingHintsInfo();
-        Directory directory = ClusterMetadata.current().directory;
+        Locator locator = DatabaseDescriptor.getLocator();
 
         SimpleDataSet result = new SimpleDataSet(metadata());
 
@@ -103,7 +103,7 @@ public final class PendingHintsTable extends AbstractVirtualTable
             String status = "Unknown";
             if (addressAndPort != null)
             {
-                location = directory.location(addressAndPort);
+                location = locator.location(addressAndPort);
                 address = addressAndPort.getAddress();
                 port = addressAndPort.getPort();
                 rack = location.rack;

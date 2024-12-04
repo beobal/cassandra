@@ -18,33 +18,44 @@
 
 package org.apache.cassandra.locator;
 
-import java.util.concurrent.atomic.AtomicReference;
-
-import com.google.common.annotations.VisibleForTesting;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import org.apache.cassandra.net.MessagingService;
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.Epoch;
+import org.apache.cassandra.tcm.RegistrationStatus;
+import org.apache.cassandra.tcm.membership.Directory;
 import org.apache.cassandra.tcm.membership.Location;
 import org.apache.cassandra.tcm.membership.NodeId;
 import org.apache.cassandra.utils.FBUtilities;
 
 /**
- *
+ * Provides Location (datacenter & rack) information for endpoints. Usually this is obtained directly
+ * from ClusterMetadata.directory, using either a specific directory instance or the most current
+ * published one. During initial startup, location info for the local node may be derived from some
+ * other source, such as a config file or cloud metadata api. This is then used to register the node
+ * and its location in ClusterMetadata, which then becomes the ultimate source of truth.
  */
 public class Locator
 {
-    private static final Logger logger = LoggerFactory.getLogger(Locator.class);
-
-    private enum State {INITIAL, UNREGISTERED, REGISTERED};
-    private final AtomicReference<State> state = new AtomicReference<>(State.INITIAL);
-
     private final InetAddressAndPort localEndpoint;
+
+    // Indicates whether the *local node* is yet to register itself with ClusterMetadata.
+    // This is relevant because once a node is registered, it's location is always derived
+    // from ClusterMetadata. However, before registering the location is obtained from
+    // configuration. This pre-registration location is what the node supplies to ClusterMetadata
+    // when registering and is also used to determine DC locality of peers, for instance when
+    // establishing initial internode connections during the discovery phase.
+    private final RegistrationStatus state;
+
+    // Source of truth for location lookups. This may be null, in which case every lookup will
+    // use the most up to date version from ClusterMetadata.current().directory
+    private final Directory directory;
+
+    // Supplies the Location for this node only during its initial startup. This location will be
+    // used to register the node with ClusterMetadata and is not used after that has occurred.
+    // See DatabaseDescriptor::getInitialLocationProvider
     private final InitialLocationProvider locationProvider;
 
-    // This is the Location used to register this node during its initial startup. It's lazily initialized
+    // This is the Location used to register this node during its initial startup. It is lazily initialized
     // using the supplied InitialLocationProvider and memoized here as that may be a non-trivial operation.
     // Some providers fetch location metadata from remote services etc. It should usually be unnecessary to
     // access the initialization location after a node's first startup.
@@ -65,65 +76,68 @@ public class Locator
         }
     }
 
-    public Locator(InetAddressAndPort localEndpoint, InitialLocationProvider provider)
+    public static Locator usingDirectory(Directory directory)
     {
-        this.localEndpoint = localEndpoint;
-        this.locationProvider = provider;
-        this.local = new VersionedLocation(Epoch.EMPTY, Location.UNKNOWN);
+        return new Locator(RegistrationStatus.instance,
+                           FBUtilities.getBroadcastAddressAndPort(),
+                           DatabaseDescriptor.getInitialLocationProvider(),
+                           directory);
     }
 
     public static Locator forClients()
     {
-        return new Locator(FBUtilities.getBroadcastAddressAndPort(), () -> Location.UNKNOWN);
+        return new Locator(RegistrationStatus.instance,
+                           FBUtilities.getBroadcastAddressAndPort(),
+                           () -> Location.UNKNOWN,
+                           null);
     }
 
-    @VisibleForTesting
-    public void resetState()
+    /**
+     * Creates a Locator instance which always uses the Directory from the most current ClusterMetadata.
+     * This means that the values returned from {@link this#location(InetAddressAndPort)} can change between
+     * invocations, if interleaved with the publication of updated cluster metadata.
+     */
+    public Locator(RegistrationStatus state,
+                   InetAddressAndPort localEndpoint,
+                   InitialLocationProvider provider)
     {
-        state.set(State.INITIAL);
+        this(state, localEndpoint, provider, null);
     }
 
-    public void onInitialized()
+    /**
+     * Creates a Locator instance which returns consistent results based on the supplied Directory instance.
+     * Changes to RegistrationStatus could still have an effect i.e. the node transitioned from UNREGISTERED to
+     * REGISTERED between two calls to local(), the first would return the Location according to
+     * DatabaseDescriptor.getInitialLocationProvider, but the second would consult the supplied Directory.
+     */
+    public Locator(RegistrationStatus state,
+                   InetAddressAndPort localEndpoint,
+                   InitialLocationProvider provider,
+                   Directory directory)
     {
-        logger.info("Node is initialized, moving snitch adapter PREREGISTED state");
-        if (!state.compareAndSet(State.INITIAL, State.UNREGISTERED))
-            throw new IllegalStateException(String.format("Cannot move snitch adapter to UNREGISTERED state (%s)", state.get()));
-    }
-
-    public void onRegistration()
-    {
-        // This may have been done already if the metadata log replay at start up included our registration
-        State current = state.get();
-        if (current == State.REGISTERED)
-            return;
-
-        logger.info("Node is registered, interrupting any previously established peer connections");
-        state.getAndSet(State.REGISTERED);
-        MessagingService.instance().channelManagers.keySet().forEach(MessagingService.instance()::interruptOutbound);
-    }
-
-    public void onPeerRegistration(InetAddressAndPort endpoint)
-    {
-        logger.info("Peer has registered, interrupting any previously established connections");
-        MessagingService.instance().interruptOutbound(endpoint);
+        this.state = state;
+        this.localEndpoint = localEndpoint;
+        this.locationProvider = provider;
+        this.directory = directory;
+        this.local = new VersionedLocation(Epoch.EMPTY, Location.UNKNOWN);
     }
 
     public Location location(InetAddressAndPort endpoint)
     {
-        switch (state.get())
+        switch (state.getCurrent())
         {
             case INITIAL:
                 return endpoint.equals(localEndpoint) ? initialLocation() : Location.UNKNOWN;
             case UNREGISTERED:
-                return endpoint.equals(localEndpoint) ? initialLocation() : fromClusterMetadata(endpoint);
+                return endpoint.equals(localEndpoint) ? initialLocation() : fromDirectory(endpoint);
             default:
-                return fromClusterMetadata(endpoint);
+                return fromDirectory(endpoint);
         }
     }
 
     public Location local()
     {
-        switch (state.get())
+        switch (state.getCurrent())
         {
             case INITIAL:
             case UNREGISTERED:
@@ -135,20 +149,41 @@ public class Locator
                 if (location.epoch.isAfter(Epoch.EMPTY))
                     return location.location;
 
-                ClusterMetadata metadata = ClusterMetadata.current();
-                Location registered = metadata.directory.location(metadata.myNodeId());
-                local = new VersionedLocation(metadata.epoch, registered);
-                return registered;
+                local = versionedFromDirectory(localEndpoint);
+                return local.location;
         }
     }
 
-    private Location fromClusterMetadata(InetAddressAndPort endpoint)
+    // The distinction between versioned and unversioned may be removed if/when we allow
+    // a node's Location to be modified after registration. This duplication should not
+    // be necessary then.
+    private VersionedLocation versionedFromDirectory(InetAddressAndPort endpoint)
     {
-        ClusterMetadata metadata = ClusterMetadata.currentNullable();
-        if (metadata == null)
-            return Location.UNKNOWN;
-        NodeId nodeId = metadata.directory.peerId(endpoint);
-        return nodeId != null ? metadata.directory.location(nodeId) : Location.UNKNOWN;
+        Directory source = directory;
+        if (source == null)
+        {
+            ClusterMetadata metadata = ClusterMetadata.currentNullable();
+            if (metadata == null)
+                return new VersionedLocation(Epoch.EMPTY, Location.UNKNOWN);
+            source = metadata.directory;
+        }
+        NodeId nodeId = source.peerId(endpoint);
+        Location location =  nodeId != null ? source.location(nodeId) : Location.UNKNOWN;
+        return new VersionedLocation(source.lastModified(), location);
+    }
+
+    private Location fromDirectory(InetAddressAndPort endpoint)
+    {
+        Directory source = directory;
+        if (source == null)
+        {
+            ClusterMetadata metadata = ClusterMetadata.currentNullable();
+            if (metadata == null)
+                return Location.UNKNOWN;
+            source = metadata.directory;
+        }
+        NodeId nodeId = source.peerId(endpoint);
+        return nodeId != null ? source.location(nodeId) : Location.UNKNOWN;
     }
 
     private Location initialLocation()

@@ -60,7 +60,7 @@ public final class ViewUtils
      */
     public static Optional<Replica> getViewNaturalEndpoint(ClusterMetadata metadata, String keyspace, Token baseToken, Token viewToken)
     {
-        Location local = metadata.directory.local();
+        Location local = metadata.locator.local();
         KeyspaceMetadata keyspaceMetadata = metadata.schema.getKeyspaces().getNullable(keyspace);
 
         EndpointsForToken naturalBaseReplicas = metadata.placements.get(keyspaceMetadata.params.replication).reads.forToken(baseToken).get();
@@ -73,7 +73,7 @@ public final class ViewUtils
         // We only select replicas from our own DC
         // TODO: this is poor encapsulation, leaking implementation details of replication strategy
         Predicate<Replica> isLocalDC = r -> !(keyspaceMetadata.replicationStrategy instanceof NetworkTopologyStrategy)
-                || metadata.directory.location(r.endpoint()).sameDatacenter(local);
+                || metadata.locator.location(r.endpoint()).sameDatacenter(local);
 
         // We have to remove any endpoint which is shared between the base and the view, as it will select itself
         // and throw off the counts otherwise.

@@ -46,7 +46,6 @@ import org.apache.cassandra.gms.FailureDetector;
 import org.apache.cassandra.io.util.FileInputStreamPlus;
 import org.apache.cassandra.io.util.FileOutputStreamPlus;
 import org.apache.cassandra.locator.InetAddressAndPort;
-import org.apache.cassandra.locator.Locator;
 import org.apache.cassandra.metrics.TCMMetrics;
 import org.apache.cassandra.net.IVerbHandler;
 import org.apache.cassandra.schema.DistributedSchema;
@@ -99,13 +98,9 @@ public class ClusterMetadataService
             throw new IllegalStateException(String.format("Cluster metadata is already initialized to %s.", instance),
                                             trace);
         instance = newInstance;
-        Locator locator = DatabaseDescriptor.getLocator();
-        if (locator != null)
-        {
-            locator.onInitialized();
-            if (newInstance.metadata().myNodeId() != null)
-                locator.onRegistration();
-        }
+        RegistrationStatus.instance.onInitialized();
+        if (newInstance.metadata().myNodeId() != null)
+            RegistrationStatus.instance.onRegistration();
         trace = new RuntimeException("Previously initialized trace");
     }
 
@@ -113,9 +108,7 @@ public class ClusterMetadataService
     public static ClusterMetadataService unsetInstance()
     {
         ClusterMetadataService tmp = instance();
-        Locator locator = DatabaseDescriptor.getLocator();
-        if (locator != null)
-            locator.resetState();
+        RegistrationStatus.instance.resetState();
         instance = null;
         return tmp;
     }

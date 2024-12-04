@@ -56,6 +56,7 @@ import org.apache.cassandra.tcm.Commit;
 import org.apache.cassandra.tcm.Epoch;
 import org.apache.cassandra.tcm.MetadataSnapshots;
 import org.apache.cassandra.tcm.Processor;
+import org.apache.cassandra.tcm.RegistrationStatus;
 import org.apache.cassandra.tcm.log.LocalLog;
 import org.apache.cassandra.tcm.log.LogStorage;
 import org.apache.cassandra.tcm.log.SystemKeyspaceStorage;
@@ -122,7 +123,7 @@ public final class ServerTestUtils
                                                                 tokens,
                                                                 ClusterMetadataService.instance().placementProvider()));
         SystemKeyspace.setLocalHostId(nodeId.toUUID());
-        DatabaseDescriptor.getLocator().onRegistration();
+        RegistrationStatus.instance.onRegistration();
         return nodeId;
     }
 

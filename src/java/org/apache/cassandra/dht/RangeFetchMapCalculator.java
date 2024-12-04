@@ -33,13 +33,13 @@ import com.google.common.collect.Multimap;
 import org.apache.cassandra.locator.EndpointsByRange;
 import org.apache.cassandra.locator.EndpointsForRange;
 import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.locator.Locator;
 import org.apache.cassandra.locator.Replica;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.locator.Replicas;
-import org.apache.cassandra.tcm.membership.Directory;
 import org.psjava.algo.graph.flownetwork.FordFulkersonAlgorithm;
 import org.psjava.algo.graph.flownetwork.MaximumFlowAlgorithm;
 import org.psjava.algo.graph.flownetwork.MaximumFlowAlgorithmResult;
@@ -82,17 +82,17 @@ public class RangeFetchMapCalculator
     private final Vertex sourceVertex = OuterVertex.getSourceVertex();
     private final Vertex destinationVertex = OuterVertex.getDestinationVertex();
     private final Set<Range<Token>> trivialRanges;
-    private final Directory directory;
+    private final Locator locator;
 
     public RangeFetchMapCalculator(EndpointsByRange rangesWithSources,
                                    Collection<RangeStreamer.SourceFilter> sourceFilters,
                                    String keyspace,
-                                   Directory directory)
+                                   Locator locator)
     {
         this.rangesWithSources = rangesWithSources;
         this.sourceFilters = Predicates.and(sourceFilters);
         this.keyspace = keyspace;
-        this.directory = directory;
+        this.locator = locator;
         this.trivialRanges = rangesWithSources.keySet()
                                               .stream()
                                               .filter(RangeFetchMapCalculator::isTrivial)
@@ -377,7 +377,7 @@ public class RangeFetchMapCalculator
 
     private boolean isInLocalDC(Replica replica)
     {
-        return directory.local().sameDatacenter(directory.location(replica.endpoint()));
+        return locator.local().sameDatacenter(locator.location(replica.endpoint()));
     }
 
     /**

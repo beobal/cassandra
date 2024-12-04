@@ -36,6 +36,7 @@ import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.tcm.ClusterMetadata;
+import org.apache.cassandra.tcm.RegistrationStatus;
 import org.apache.cassandra.tcm.membership.Location;
 import org.apache.cassandra.utils.OutputHandler;
 
@@ -57,6 +58,8 @@ public class OfflineTokenAllocator
         Preconditions.checkArgument(nodes >= rf,
                                     "not enough nodes %s for rf %s in %s", Arrays.stream(nodesPerRack).sum(), rf, Arrays.toString(nodesPerRack));
         DatabaseDescriptor.setPartitionerUnsafe(partitioner);
+        // Set RegistrationStatus to REGISTERED so that Locator works exclusively from ClusterMetadata
+        RegistrationStatus.instance.onRegistration();
 
         List<FakeNode> fakeNodes = new ArrayList<>(nodes);
         MultinodeAllocator allocator = new MultinodeAllocator(rf, numTokens, logger, partitioner);

@@ -111,10 +111,10 @@ public class Rebuild
                                                        rebuildMovements,
                                                        null);
             if (sourceDc != null)
-                streamer.addSourceFilter(new RangeStreamer.SingleDatacenterFilter(metadata.directory, sourceDc));
+                streamer.addSourceFilter(new RangeStreamer.SingleDatacenterFilter(metadata.locator, sourceDc));
 
             if (excludeLocalDatacenterNodes)
-                streamer.addSourceFilter(new RangeStreamer.ExcludeLocalDatacenterFilter(metadata.directory));
+                streamer.addSourceFilter(new RangeStreamer.ExcludeLocalDatacenterFilter(metadata.locator));
 
             if (keyspace == null)
             {

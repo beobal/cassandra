@@ -21,6 +21,7 @@ import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.function.ToLongFunction;
 
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.marshal.CompositeType;
 import org.apache.cassandra.db.marshal.InetAddressType;
@@ -33,7 +34,6 @@ import org.apache.cassandra.net.MessagingService;
 import org.apache.cassandra.net.OutboundConnection;
 import org.apache.cassandra.net.OutboundConnections;
 import org.apache.cassandra.schema.TableMetadata;
-import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.tcm.membership.Location;
 
 public final class InternodeOutboundTable extends AbstractVirtualTable
@@ -113,7 +113,7 @@ public final class InternodeOutboundTable extends AbstractVirtualTable
 
     private void addRow(SimpleDataSet dataSet, InetAddressAndPort addressAndPort, OutboundConnections connections)
     {
-        Location location = ClusterMetadata.current().directory.location(addressAndPort);
+        Location location = DatabaseDescriptor.getLocator().location(addressAndPort);
         long pendingBytes = sum(connections, OutboundConnection::pendingBytes);
         dataSet.row(addressAndPort.getAddress(), addressAndPort.getPort(), location.datacenter, location.rack)
                .column(USING_BYTES, pendingBytes)

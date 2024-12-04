@@ -120,6 +120,7 @@ import org.apache.cassandra.security.SSLFactory;
 import org.apache.cassandra.service.CacheService.CacheType;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.service.paxos.Paxos;
+import org.apache.cassandra.tcm.RegistrationStatus;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.MBeanWrapper;
 import org.apache.cassandra.utils.Pair;
@@ -193,6 +194,7 @@ public class DatabaseDescriptor
     private static Supplier<IFailureDetector> newFailureDetector;
     private static NodeProximity nodeProximity;
     private static Locator initializationLocator;
+    private static InitialLocationProvider initialLocationProvider;
     private static IEndpointStateChangeSubscriber localAddressReconnector;
     private static InetAddress listenAddress; // leave null so we can fall through to getLocalHost
     private static InetAddress broadcastAddress;
@@ -1491,7 +1493,6 @@ public class DatabaseDescriptor
             throw new ConfigurationException("Configuration must specify either node_proximity and " +
                                              "initial_location_provider or endpoint_snitch but not both. ");
 
-        InitialLocationProvider initialLocationProvider;
         NodeProximity proximity;
         NodeAddressConfig addressConfig;
         if (hasLegacyConfig)
@@ -1515,7 +1516,9 @@ public class DatabaseDescriptor
         // responsible for querying the cloud metadata service to get the public IP used for
         // broadcast_address and we only want to instantiate the snitch here.
         addressConfig.configureAddresses();
-        initializationLocator = new Locator(FBUtilities.getBroadcastAddressAndPort(), initialLocationProvider);
+        initializationLocator = new Locator(RegistrationStatus.instance,
+                                            FBUtilities.getBroadcastAddressAndPort(),
+                                            initialLocationProvider);
         nodeProximity = conf.dynamic_snitch ? new DynamicEndpointSnitch(proximity) : proximity;
         localAddressReconnector = addressConfig.preferLocalConnections()
                                   ? new ReconnectableSnitchHelper(initializationLocator, true)
@@ -2142,11 +2145,25 @@ public class DatabaseDescriptor
         return conf.prefer_local_connections;
     }
 
+    /**
+     * TODO
+     * @return
+     */
     public static Locator getLocator()
     {
         if (initializationLocator == null && isClientInitialized())
             return Locator.forClients();
         return initializationLocator;
+    }
+
+    /**
+     * Used to provide the location (dc/rack) of the local node during its initial startup
+     * for the purpose of registering it with ClusterMetadata.
+     * See: org.apache.cassandra.locator.Locator
+     */
+    public static InitialLocationProvider getInitialLocationProvider()
+    {
+        return initialLocationProvider;
     }
 
     public static NodeProximity getNodeProximity()
