@@ -782,13 +782,14 @@ public class EncryptionOptions
 
         public boolean shouldEncrypt(InetAddressAndPort endpoint)
         {
-            // TODO this is a bit inaccurate - reword it
-            // When a node comes up, the location information for any connections made prior to initialising cluster
-            // metadata is obtained from the snitch. This is a best effort as it's possible for local snitch config to
-            // be out of sync with the globally consistent cluster metadata. Any such connections, of which there should
-            // be relatively few, will be dropped and re-established as soon as cluster metadata is initialised.
-            // TODO expand on the pre-registered state vs connecting in response to an inbound connection while CM is
-            //      being initialised
+            // When a node is started for the very first time, it has no way to determine whether the seed nodes
+            // it makes its initial connections to are in a local or remote datacenter and/or rack. When the node is
+            // in this specific state, Locator will return the constant Location.UNKNOWN for any lookup of a peer's
+            // location. This is intended to ensure that _all_ peers are treated as remote during this initial phase and
+            // that the most strict encryption settings allowable by the internode_encryption settings are applied.
+            // Any connections established during this phase, of which there should be few, will be dropped and
+            // re-established as soon as the node initialises its local ClusterMetadata and so is able to get accurate
+            // topology information for peers.
             Locator locator = DatabaseDescriptor.getLocator();
             switch (internode_encryption)
             {
