@@ -19,6 +19,8 @@
 package org.apache.cassandra.cql3.statements.schema;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -35,6 +37,9 @@ import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.db.marshal.UserType;
 import org.apache.cassandra.db.marshal.VectorType;
 import org.apache.cassandra.exceptions.AlreadyExistsException;
+import org.apache.cassandra.index.sai.StorageAttachedIndex;
+import org.apache.cassandra.schema.ColumnMetadata;
+import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.schema.Indexes;
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.Keyspaces;
@@ -46,6 +51,7 @@ import org.apache.cassandra.schema.TableParams;
 import org.apache.cassandra.schema.Triggers;
 import org.apache.cassandra.schema.UserFunctions;
 import org.apache.cassandra.service.ClientState;
+import org.apache.cassandra.service.ClientWarn;
 import org.apache.cassandra.service.reads.repair.ReadRepairStrategy;
 import org.apache.cassandra.tcm.ClusterMetadata;
 import org.apache.cassandra.transport.Event.SchemaChange;
@@ -61,12 +67,14 @@ public final class CopyTableStatement extends AlterSchemaStatement
     private final String targetTableName;
     private final boolean ifNotExists;
     private final TableAttributes attrs;
+    private final CreateLikeOption createLikeOption;
 
     public CopyTableStatement(String sourceKeyspace,
                               String targetKeyspace,
                               String sourceTableName,
                               String targetTableName,
                               boolean ifNotExists,
+                              CreateLikeOption createLikeOption,
                               TableAttributes attrs)
     {
         super(targetKeyspace);
@@ -75,6 +83,7 @@ public final class CopyTableStatement extends AlterSchemaStatement
         this.sourceTableName = sourceTableName;
         this.targetTableName = targetTableName;
         this.ifNotExists = ifNotExists;
+        this.createLikeOption = createLikeOption;
         this.attrs = attrs;
     }
 
@@ -196,6 +205,7 @@ public final class CopyTableStatement extends AlterSchemaStatement
 
         TableParams originalParams = targetBuilder.build().params;
         TableParams newTableParams = attrs.asAlteredTableParams(originalParams);
+        maybeCopyIndexes(targetBuilder, sourceTableMeta, targetKeyspaceMeta);
 
         TableMetadata table = targetBuilder.params(newTableParams)
                                            .id(TableId.get(metadata))
@@ -229,12 +239,55 @@ public final class CopyTableStatement extends AlterSchemaStatement
         validateDefaultTimeToLive(attrs.asNewTableParams());
     }
 
+    private void maybeCopyIndexes(TableMetadata.Builder builder, TableMetadata sourceTableMeta, KeyspaceMetadata targetKeyspaceMeta)
+    {
+        if (createLikeOption != CreateLikeOption.INDEXES || sourceTableMeta.indexes.isEmpty())
+            return;
+
+        Set<String> customIndexes = Sets.newTreeSet();
+        List<IndexMetadata> indexesToCopy = new ArrayList<>();
+        for (IndexMetadata indexMetadata : sourceTableMeta.indexes)
+        {
+            // only sai and legacy secondary index is supported
+            if (indexMetadata.kind == IndexMetadata.Kind.CUSTOM && !StorageAttachedIndex.NAME.equals(indexMetadata.options.get("class_name")))
+            {
+                customIndexes.add(indexMetadata.name);
+                continue;
+            }
+
+            ColumnMetadata targetColumn = sourceTableMeta.getColumn(UTF8Type.instance.decompose(indexMetadata.options.get("target")));
+            String indexName;
+            if (indexMetadata.name.startsWith(sourceTableName + "_" + targetColumn.name + "_idx"))
+            {
+                String baseName = IndexMetadata.generateDefaultIndexName(targetTableName, targetColumn.name);
+                indexName = targetKeyspaceMeta.findAvailableIndexName(baseName);
+            }
+            else
+            {
+                indexName = targetKeyspaceMeta.findAvailableIndexName(indexMetadata.name);
+            }
+            indexesToCopy.add(IndexMetadata.fromSchemaMetadata(indexName, indexMetadata.kind, indexMetadata.options));
+        }
+
+        if (!indexesToCopy.isEmpty())
+            builder.indexes(Indexes.builder().add(indexesToCopy).build());
+
+        if (!customIndexes.isEmpty())
+            ClientWarn.instance.warn(String.format("Source table %s.%s to copy indexes from to %s.%s has custom indexes. These indexes were not copied: %s",
+                                                   sourceKeyspace,
+                                                   sourceTableName,
+                                                   targetKeyspace,
+                                                   targetTableName,
+                                                   customIndexes));
+    }
+
     public final static class Raw extends CQLStatement.Raw
     {
         private final QualifiedName oldName;
         private final QualifiedName newName;
         private final boolean ifNotExists;
         public final TableAttributes attrs = new TableAttributes();
+        private CreateLikeOption createLikeOption = null;
 
         public Raw(QualifiedName newName, QualifiedName oldName, boolean ifNotExists)
         {
@@ -248,7 +301,23 @@ public final class CopyTableStatement extends AlterSchemaStatement
         {
             String oldKeyspace = oldName.hasKeyspace() ? oldName.getKeyspace() : state.getKeyspace();
             String newKeyspace = newName.hasKeyspace() ? newName.getKeyspace() : state.getKeyspace();
-            return new CopyTableStatement(oldKeyspace, newKeyspace, oldName.getName(), newName.getName(), ifNotExists, attrs);
+            return new CopyTableStatement(oldKeyspace, newKeyspace, oldName.getName(), newName.getName(), ifNotExists, createLikeOption, attrs);
+        }
+
+        public void setLikeOptions(String option)
+        {
+            this.createLikeOption = CreateLikeOption.valueOf(option);
+        }
+    }
+
+    public enum CreateLikeOption
+    {
+        INDEXES("INDEXES");
+
+        public final String value;
+        CreateLikeOption(String value)
+        {
+            this.value = value;
         }
     }
 }

@@ -843,7 +843,7 @@ public class DescribeStatementTest extends CQLTester
         String targetTable = createTableLike("CREATE TABLE %s LIKE %s", souceTable, KEYSPACE_PER_TEST, KEYSPACE_PER_TEST);
         TableMetadata target = getTableMetadata(KEYSPACE_PER_TEST, currentTable());
         assertNotNull(target);
-        assertTrue(equalsWithoutTableNameAndDropCns(source, target, true, true, true));
+        assertTrue(equalsWithoutTableNameAndDropCns(source, target, true, true));
         assertNotEquals(source.id, target.id);
         assertNotEquals(source.name, target.name);
 
