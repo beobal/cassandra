@@ -304,20 +304,14 @@ public final class CopyTableStatement extends AlterSchemaStatement
             return new CopyTableStatement(oldKeyspace, newKeyspace, oldName.getName(), newName.getName(), ifNotExists, createLikeOption, attrs);
         }
 
-        public void setLikeOptions(String option)
+        public void withLikeOption(CreateLikeOption option)
         {
-            this.createLikeOption = CreateLikeOption.valueOf(option);
+            this.createLikeOption = option;
         }
     }
 
     public enum CreateLikeOption
     {
-        INDEXES("INDEXES");
-
-        public final String value;
-        CreateLikeOption(String value)
-        {
-            this.value = value;
-        }
+        INDEXES;
     }
 }

@@ -844,7 +844,7 @@ propertyOrOption[CopyTableStatement.Raw stmt]
     ;
 
 tableLikeSingleOption[CopyTableStatement.Raw stmt]
-    : K_ALL option=IDENT {$stmt.setLikeOptions($option.text);}
+    : K_ALL K_INDEXES {$stmt.withLikeOption(CopyTableStatement.CreateLikeOption.INDEXES);}
     ;
 
 /**
@@ -2092,5 +2092,6 @@ basic_unreserved_keyword returns [String str]
         | K_ANN
         | K_BETWEEN
         | K_CHECK
+        | K_INDEXES
         ) { $str = $k.text; }
     ;
