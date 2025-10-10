@@ -76,7 +76,8 @@ public class AuditLogEntryTest
     @Test
     public void testDefaultGetLogString()
     {
-        assertThat(entry.getLogString()).matches("user:cassandra_user\\|localHostId:" + StorageService.instance.getLocalHostId() +
+        assertThat(entry.getLogString()).matches("user:cassandra_user\\|host_id:" + StorageService.instance.getLocalHostId() +
+                                                 "\\|node_id:" + StorageService.instance.getNodeId().id() +
                                                  "\\|host:/127.0.0.1:9042\\|source:/127.0.0.1\\|port:9999\\|" +
                                                  "timestamp:\\d+\\|type:LOGIN_SUCCESS\\|category:AUTH\\|" +
                                                  "operation:LOGIN SUCCESSFUL\\|identity:cassandra_user_identity");
@@ -85,7 +86,9 @@ public class AuditLogEntryTest
     @Test
     public void testGetLogStringWithCustomSeparators()
     {
-        assertThat(entry.getLogString("=", " ")).matches("user=cassandra_user localHostId=" + StorageService.instance.getLocalHostId() +
+        assertThat(entry.getLogString("=", " ")).matches("user=cassandra_user host_id=" + StorageService.instance.getLocalHostId() +
+
+                                                         " node_id=" + StorageService.instance.getNodeId().id() +
                                                          " host=/127.0.0.1:9042 source=/127.0.0.1 port=9999 timestamp=\\d+ " +
                                                          "type=LOGIN_SUCCESS category=AUTH " +
                                                          "operation=LOGIN SUCCESSFUL identity=cassandra_user_identity");

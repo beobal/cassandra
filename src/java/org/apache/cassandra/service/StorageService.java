@@ -338,6 +338,8 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
                   || keyspace.metric.outOfRangeTokenWrites.getCount() > 0
                   || keyspace.metric.outOfRangeTokenPaxosRequests.getCount() > 0;
 
+    private NodeId nodeId;
+
     private long[] getOutOfRangeOperationCounts(Keyspace keyspace)
     {
         return new long[]
@@ -844,10 +846,10 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         }
         Gossiper.waitToSettle();
 
-        NodeId self = Register.maybeRegister();
-        AccordService.startup(self);
+        nodeId = Register.maybeRegister();
+        AccordService.startup(nodeId);
         RegistrationStatus.instance.onRegistration();
-        Startup.maybeExecuteStartupTransformation(self);
+        Startup.maybeExecuteStartupTransformation(nodeId);
 
         try
         {
@@ -1996,20 +1998,35 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         return mapString;
     }
 
+    public NodeId getNodeId()
+    {
+        // nodeId is memoized in initServer after registering, or fetching the existing id from local
+        // storage and checking it in cluster metadata
+        if (nodeId == null)
+        {
+            // Metadata collector requires using local host id, and flush of IndexInfo may race with
+            // creation and initialization of cluster metadata service. Metadata collector does accept
+            // null localhost ID values, it's just that TokenMetadata was created earlier.
+            // This is just a fallback for cases where the node id may be requested early in the startup
+            // sequence, before the memoization.
+            ClusterMetadata metadata = ClusterMetadata.currentNullable();
+            if (metadata == null || metadata.directory.peerId(getBroadcastAddressAndPort()) == null)
+                return null;
+            return metadata.directory.peerId(getBroadcastAddressAndPort());
+        }
+        return nodeId;
+    }
+
     public String getLocalHostId()
     {
-        return getLocalHostUUID().toString();
+        UUID id = getLocalHostUUID();
+        return id == null ? null : id.toString();
     }
 
     public UUID getLocalHostUUID()
     {
-        // Metadata collector requires using local host id, and flush of IndexInfo may race with
-        // creation and initialization of cluster metadata service. Metadata collector does accept
-        // null localhost ID values, it's just that TokenMetadata was created earlier.
-        ClusterMetadata metadata = ClusterMetadata.currentNullable();
-        if (metadata == null || metadata.directory.peerId(getBroadcastAddressAndPort()) == null)
-            return null;
-        return metadata.directory.peerId(getBroadcastAddressAndPort()).toUUID();
+        NodeId id = getNodeId();
+        return id == null ? null : id.toUUID();
     }
 
     public Map<String, String> getHostIdMap()
