@@ -32,6 +32,8 @@ import javax.annotation.Nullable;
 import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
+
+import org.apache.cassandra.db.marshal.BytesType;
 import org.apache.cassandra.tcm.serialization.Version;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -317,6 +319,48 @@ public abstract class AlterTableStatement extends AlterSchemaStatement
         @Override
         public boolean compatibleWith(ClusterMetadata metadata)
         {
+            // Special handling for a behaviour change when adding new blob columns with the same name as a previously
+            // dropped column, introduced by CASSANDRA-20982.
+            KeyspaceMetadata keyspace = metadata.schema.getKeyspaceMetadata(keyspaceName);
+            TableMetadata table = metadata.schema.getTableMetadata(keyspaceName, tableName);
+            CassandraVersion CASSANDRA_6_0_1 = new CassandraVersion("6.0.1");
+            CassandraVersion clusterMinVersion = metadata.directory.clusterMinVersion.cassandraVersion;
+            boolean hasOlderPeers = clusterMinVersion.compareTo(CASSANDRA_6_0_1) < 0;
+            for (Column column : newColumns)
+            {
+                // was there a previously dropped column with the same name as the new one?
+                ColumnMetadata droppedColumn = table.getDroppedColumn(column.name.bytes);
+                if (droppedColumn == null)
+                    continue;
+
+                // If there is a dropped column with the same name, validate type compatibility. Special casing is
+                // required if the new column is blob type. Prior to 6.0.1, this was permitted when the dropped column
+                // was a frozen collection or UDT. But from 6.0.1 onwards, this is not allowed. To ensure continuity in
+                // mixed-version clusters (i.e. during upgrade from 6.0.0 to 6.0.1), we only apply the new validation
+                // rules if all cluster members are running 6.0.1 or later.
+                // Returning false here will ensure that the AddColumns operation is not committed to the cluster
+                // metadata log.
+                AbstractType<?> newType = column.type.prepare(keyspaceName, keyspace.types).getType();
+                if (newType == BytesType.instance && hasOlderPeers)
+                {
+                    // the new column is a blob and there are pre-6.0.1 nodes in the cluster, apply the old validation
+                    boolean compatible =  newType.isValueCompatibleWith(droppedColumn.type)
+                           && newType.valueLengthIfFixed() == droppedColumn.type.valueLengthIfFixed()
+                           && newType.isMultiCell() == droppedColumn.type.isMultiCell();
+                    if (!compatible)
+                        return false;
+                }
+                else
+                {
+                    // either the new column is not blob type, or there are no pre-6.0.1 nodes in the cluster, so just
+                    // apply the latest type validation rules.
+                    // After #8099, not safe to re-add columns of incompatible types - until *maybe* deser logic with dropped
+                    // columns is pushed deeper down the line. The latter would still be problematic in cases of schema races.
+                    if (!newType.isCompatibleWith(droppedColumn.type))
+                        return false;
+                }
+            }
+
             return metadata.directory.commonSerializationVersion.isAtLeast(Version.V0);
         }
 
@@ -377,17 +421,6 @@ public abstract class AlterTableStatement extends AlterSchemaStatement
             ColumnMetadata droppedColumn = table.getDroppedColumn(name.bytes);
             if (null != droppedColumn)
             {
-                // After #8099, not safe to re-add columns of incompatible types - until *maybe* deser logic with dropped
-                // columns is pushed deeper down the line. The latter would still be problematic in cases of schema races.
-                if (!type.isSerializationCompatibleWith(droppedColumn.type))
-                {
-                    throw ire("Cannot add a column '%s' of type %s, incompatible with previously dropped column '%s' of type %s",
-                              name,
-                              type.asCQL3Type(),
-                              name,
-                              droppedColumn.type.asCQL3Type());
-                }
-
                 if (droppedColumn.isStatic() != isStatic)
                 {
                     throw ire("Cannot re-add previously dropped column '%s' of kind %s, incompatible with previous kind %s",
