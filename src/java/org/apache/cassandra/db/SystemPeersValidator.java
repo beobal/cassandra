@@ -86,7 +86,7 @@ public final class SystemPeersValidator
         {
             if (!knownEndpoints.containsKey(endpoint))
             {
-                logger.info("Removing stale peer {} from {}", endpoint, PEERS_V2);
+                logger.info("Removing stale peer {} from system.{}", endpoint, PEERS_V2);
                 executeInternal(DELETE_PEERS_V2_QUERY, endpoint.getAddress(), endpoint.getPort());
             }
         }
@@ -95,7 +95,7 @@ public final class SystemPeersValidator
         {
             if (!knownAddresses.contains(address))
             {
-                logger.info("Removing stale peer {} from {}", address, LEGACY_PEERS);
+                logger.info("Removing stale peer {} from system.{}", address, LEGACY_PEERS);
                 executeInternal(DELETE_PEERS_QUERY, address);
             }
         }
@@ -120,7 +120,7 @@ public final class SystemPeersValidator
     {
         if (row == null)
         {
-            logger.info("Adding missing peer {} to {}", endpoint, table);
+            logger.info("Adding missing peer {} to system.{}", endpoint, table);
             return true;
         }
         boolean isEquivalent = PEERS_V2.equals(table)
@@ -128,7 +128,7 @@ public final class SystemPeersValidator
                                : peersRowIsEquivalent(row, nodeId, metadata);
         if (!isEquivalent)
         {
-            logger.info("Repairing mismatched peer {} in {}: {}", endpoint, table, row);
+            logger.info("Repairing mismatched peer {} in system.{}: {}", endpoint, table, row);
             return true;
         }
         return false;
