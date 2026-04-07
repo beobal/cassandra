@@ -860,7 +860,8 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         RegistrationStatus.instance.onRegistration();
         Startup.maybeExecuteStartupTransformation(self);
 
-        SystemPeersValidator.validateAndRepair(ClusterMetadata.current());
+        if (CassandraRelevantProperties.SYNC_SYSTEM_PEERS_TABLES_AT_STARTUP.getBoolean())
+            SystemPeersValidator.validateAndRepair(ClusterMetadata.current());
 
         try
         {
