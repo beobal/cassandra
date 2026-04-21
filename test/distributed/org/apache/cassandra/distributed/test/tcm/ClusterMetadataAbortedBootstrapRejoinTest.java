@@ -74,6 +74,8 @@ public class ClusterMetadataAbortedBootstrapRejoinTest extends TestBaseImpl
                     Uninterruptibles.sleepUninterruptibly(1, TimeUnit.SECONDS);
             });
             cluster.get(1).nodetoolResult("abortbootstrap", "--ip", "127.0.0.3").asserts().success();
+            // A subsequent attempt to start the new node will fail as the local state (i.e. the data directory
+            // containing the system.local sstables) has not been wiped.
             Assertions.assertThatThrownBy(toBootstrap::startup)
                       .isInstanceOf(IllegalStateException.class)
                       .hasMessageContaining("but is not present in cluster metadata");
