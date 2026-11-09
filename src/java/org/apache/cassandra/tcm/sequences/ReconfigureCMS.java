@@ -254,7 +254,7 @@ public class ReconfigureCMS extends MultiStepOperation<AdvanceCMSReconfiguration
                                                       Function<ClusterMetadata, MultiStepOperation<?>> inProgressReconfiguration)
     {
         if (!metadata.fullCMSMembers().contains(toRemove))
-            return ClusterMetadata.current();
+            return metadata;
 
         long deadlineNanos = nanoTime() + DatabaseDescriptor.getCmsReconfigurationWaitTimeout().to(NANOSECONDS);
         RetryStrategy backoffWithJitter = DatabaseDescriptor.getCmsCommitRetryStrategy();
@@ -264,7 +264,7 @@ public class ReconfigureCMS extends MultiStepOperation<AdvanceCMSReconfiguration
         while (!retry.hasExpired())
         {
             if (!current.fullCMSMembers().contains(toRemove))
-                return ClusterMetadata.current();
+                return current;
 
             inProgress = inProgressReconfiguration.apply(current);
             if (inProgress != null)
@@ -287,19 +287,19 @@ public class ReconfigureCMS extends MultiStepOperation<AdvanceCMSReconfiguration
                 AtomicReference<ExceptionCode> failureCode = new AtomicReference<>();
                 AtomicReference<String> failureMessage = new AtomicReference<>();
                 // We can force removal from the CMS as it doesn't alter the size of the service
-                ClusterMetadata result = ClusterMetadataService.instance().commit(transformation,
-                                                                                  m -> m,
-                                                                                  (code, message) -> {
-                                                                                      failureCode.set(code);
-                                                                                      failureMessage.set(message);
-                                                                                      return null;
-                                                                                  });
-                if (result != null)
+                current = ClusterMetadataService.instance().commit(transformation,
+                                                                   m -> m,
+                                                                   (code, message) -> {
+                                                                     failureCode.set(code);
+                                                                     failureMessage.set(message);
+                                                                     return null;
+                                                                   });
+                if (current != null)
                 {
-                    InProgressSequences.finishInProgressSequences(SequenceKey.instance);
-                    if (ClusterMetadata.current().isCMSMember(toRemove))
+                    current = InProgressSequences.finishInProgressSequences(SequenceKey.instance);
+                    if (current.isCMSMember(toRemove))
                         throw new IllegalStateException(String.format("Could not remove %s from CMS", toRemove));
-                    return ClusterMetadata.current();
+                    return current;
                 }
 
                 current = ClusterMetadata.current();
